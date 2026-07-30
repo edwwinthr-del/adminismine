@@ -1,0 +1,42 @@
+# Data layer for local development (AdminisMine Finance Operations App).
+# Start with:  docker compose up -d   (requires Docker Desktop running)
+# The Laravel backend/.env points at these services (host localhost, default ports).
+
+# Pinned explicitly: Compose otherwise derives the project name from the folder,
+# which namespaces the volumes. A folder rename would then point at a fresh,
+# empty database instead of the one holding the real data.
+name: adminismine
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: adminismine_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: adminismine
+      POSTGRES_USER: adminismine
+      POSTGRES_PASSWORD: secret
+    # Host 5432 is already used by a native Postgres on this machine, so we
+    # publish on 5433 (loopback only) to avoid the clash. DB_PORT must match.
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adminismine -d adminismine"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: adminismine_redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  dbdata:
+  redisdata:

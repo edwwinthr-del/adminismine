@@ -1,0 +1,28 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+
+# Node (frontend nested ignores handle the rest)
+node_modules/
+
+# PHP
+/backend/vendor/
+
+# Local storage / build artifacts
+/backend/storage/*.key
+
+# Agents and md files
+AGENTS.md
+CLAUDE.md
+WORKER_PORTAL_FUTURE_FEATURES.md
+PROJECT_LLM_APP_PROMPT.md
+GLOBAL MINE DOO KASA-BANKA HAREKETLERİ-ET2.xlsx
+.agents
+.claude
+
