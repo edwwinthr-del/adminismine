@@ -15,7 +15,7 @@ export default function LoginPage() {
   const { t, locale, locales, setLocale } = useI18n();
   const router = useRouter();
 
-  const [email, setEmail] = useState("admin@adminismine.local");
+  const [email, setEmail] = useState("superadmin@test.test");
   const [password, setPassword] = useState("password");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);

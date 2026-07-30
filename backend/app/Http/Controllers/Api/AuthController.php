@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -51,7 +52,7 @@ class AuthController extends Controller
     public function updateLocale(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'locale' => ['required', 'string', 'in:en,sr,tr'],
+            'locale' => ['required', 'string', Rule::in(User::LOCALES)],
         ]);
 
         $user = $request->user();
