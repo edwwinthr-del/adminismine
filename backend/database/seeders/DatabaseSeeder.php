@@ -16,13 +16,19 @@ class DatabaseSeeder extends Seeder
         // Single-company: ensure the settings row exists.
         CompanySettings::current();
 
-        // Default Super Admin account. Password is 'password' (factory default).
-        $superAdmin = User::factory()->create([
-            'name' => 'Super Admin',
-            'email' => 'admin@adminismine.local',
-            'locale' => 'en',
-            'is_active' => true,
-        ]);
-        $superAdmin->assignRole('Super Admin');
+        // The only login a fresh database has. Stated explicitly rather than
+        // taken from the factory so the credentials are the same every time,
+        // and firstOrCreate so re-running `db:seed` on a live database never
+        // resets a password someone has since changed.
+        $superAdmin = User::firstOrCreate(
+            ['email' => 'superadmin@test.test'],
+            [
+                'name' => 'Super Admin',
+                'password' => 'password', // hashed by the model's `hashed` cast
+                'locale' => 'en',
+                'is_active' => true,
+            ],
+        );
+        $superAdmin->assignRole(User::SUPER_ADMIN);
     }
 }

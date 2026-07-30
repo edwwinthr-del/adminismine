@@ -48,12 +48,15 @@ use App\Http\Controllers\Api\UtilityBillController;
 use App\Http\Controllers\Api\WorkerNeedController;
 use App\Http\Controllers\Api\WorkingDayController;
 use App\Http\Controllers\Api\WorksiteController;
+use App\Http\Middleware\EnsureUserIsActive;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
 
-Route::middleware('auth:sanctum')->group(function () {
+// EnsureUserIsActive re-checks the flag on every request: a token issued before
+// the account was deactivated must stop working immediately, not at next login.
+Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/me/locale', [AuthController::class, 'updateLocale']);
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -425,9 +428,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('roles', RoleController::class)->middleware('can:roles.manage');
     Route::post('/roles/{role}/clone', [RoleController::class, 'clone'])->middleware('can:roles.manage');
 
+    // Logins are granted here, not self-registered — there is no register route.
     Route::middleware('can:users.manage')->group(function () {
         Route::get('/users', [UserAccessController::class, 'index']);
+        Route::post('/users', [UserAccessController::class, 'store']);
+        Route::put('/users/{user}', [UserAccessController::class, 'update']);
+        Route::put('/users/{user}/password', [UserAccessController::class, 'updatePassword']);
         Route::put('/users/{user}/roles', [UserAccessController::class, 'syncRoles']);
         Route::put('/users/{user}/extra-permissions', [UserAccessController::class, 'syncPermissions']);
+        // No delete: users are deactivated instead, so the created_by/updated_by
+        // stamps and audit rows pointing at them stay intact (rule 3).
     });
 });

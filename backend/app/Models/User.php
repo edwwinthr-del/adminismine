@@ -15,6 +15,12 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasRoles, Notifiable, Searchable;
 
+    /** UI languages a login may be set to (rule 4). */
+    public const LOCALES = ['en', 'sr', 'tr'];
+
+    /** Protected core role: the app must always keep one active holder. */
+    public const SUPER_ADMIN = 'Super Admin';
+
     /** @var list<string> */
     protected array $searchable = ['name', 'email'];
 

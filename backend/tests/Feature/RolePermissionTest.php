@@ -6,6 +6,7 @@ use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -114,5 +115,178 @@ class RolePermissionTest extends TestCase
         Sanctum::actingAs($outsider);
 
         $this->getJson('/api/users')->assertStatus(403);
+    }
+
+    public function test_admin_can_create_a_user_who_can_then_log_in(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $this->postJson('/api/users', [
+            'name' => 'Ayse Yilmaz',
+            'email' => 'ayse@adminismine.local',
+            'password' => 'first-password-1',
+            'locale' => 'tr',
+            'roles' => ['Viewer'],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.email', 'ayse@adminismine.local')
+            ->assertJsonPath('data.locale', 'tr')
+            ->assertJsonPath('data.is_active', true)
+            ->assertJsonPath('data.roles.0', 'Viewer');
+
+        $this->postJson('/api/login', [
+            'email' => 'ayse@adminismine.local',
+            'password' => 'first-password-1',
+        ])->assertOk()->assertJsonStructure(['token']);
+    }
+
+    public function test_creating_a_user_never_stores_the_password_in_the_audit_trail(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $this->postJson('/api/users', [
+            'name' => 'Audited',
+            'email' => 'audited@adminismine.local',
+            'password' => 'first-password-1',
+        ])->assertCreated();
+
+        $activity = Activity::where('description', 'user.created')->latest('id')->firstOrFail();
+        $this->assertStringNotContainsString('first-password-1', json_encode($activity->properties));
+    }
+
+    public function test_user_without_permission_cannot_create_a_user(): void
+    {
+        $user = User::factory()->create();
+        $user->assignRole('Viewer');
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/users', [
+            'name' => 'Sneaky',
+            'email' => 'sneaky@adminismine.local',
+            'password' => 'first-password-1',
+        ])->assertStatus(403);
+
+        $this->assertFalse(User::where('email', 'sneaky@adminismine.local')->exists());
+    }
+
+    public function test_duplicate_email_is_refused(): void
+    {
+        $this->actingAsSuperAdmin();
+        User::factory()->create(['email' => 'taken@adminismine.local']);
+
+        $this->postJson('/api/users', [
+            'name' => 'Second',
+            'email' => 'taken@adminismine.local',
+            'password' => 'first-password-1',
+        ])->assertStatus(422)->assertJsonValidationErrors('email');
+    }
+
+    public function test_deactivated_user_cannot_log_in(): void
+    {
+        $this->actingAsSuperAdmin();
+        $target = User::factory()->create(['password' => 'known-password-1']);
+
+        $this->putJson("/api/users/{$target->id}", ['is_active' => false])
+            ->assertOk()
+            ->assertJsonPath('data.is_active', false);
+
+        $this->postJson('/api/login', ['email' => $target->email, 'password' => 'known-password-1'])
+            ->assertStatus(422);
+    }
+
+    public function test_admin_cannot_deactivate_or_restrict_their_own_account(): void
+    {
+        $admin = $this->actingAsSuperAdmin();
+
+        $this->putJson("/api/users/{$admin->id}", ['is_active' => false])->assertStatus(422);
+        $this->putJson("/api/users/{$admin->id}/roles", ['roles' => []])->assertStatus(422);
+        $this->putJson("/api/users/{$admin->id}/extra-permissions", ['permissions' => []])->assertStatus(422);
+
+        $this->assertTrue($admin->fresh()->is_active);
+        $this->assertTrue($admin->fresh()->hasRole('Super Admin'));
+    }
+
+    public function test_the_last_active_super_admin_cannot_lose_the_role_or_be_deactivated(): void
+    {
+        // An Admin (has users.manage, is not a Super Admin) acting on the only
+        // Super Admin there is.
+        $lastSuperAdmin = User::factory()->create();
+        $lastSuperAdmin->assignRole('Super Admin');
+
+        $manager = User::factory()->create();
+        $manager->assignRole('Admin');
+        Sanctum::actingAs($manager);
+
+        $this->putJson("/api/users/{$lastSuperAdmin->id}/roles", ['roles' => ['Viewer']])->assertStatus(422);
+        $this->putJson("/api/users/{$lastSuperAdmin->id}", ['is_active' => false])->assertStatus(422);
+
+        $this->assertTrue($lastSuperAdmin->fresh()->hasRole('Super Admin'));
+        $this->assertTrue($lastSuperAdmin->fresh()->is_active);
+
+        // With a second holder the same edit goes through.
+        $spare = User::factory()->create();
+        $spare->assignRole('Super Admin');
+
+        $this->putJson("/api/users/{$lastSuperAdmin->id}/roles", ['roles' => ['Viewer']])->assertOk();
+    }
+
+    public function test_password_reset_replaces_the_password_and_revokes_old_tokens(): void
+    {
+        $this->actingAsSuperAdmin();
+        $target = User::factory()->create(['password' => 'known-password-1']);
+        $target->createToken('phone');
+
+        $this->putJson("/api/users/{$target->id}/password", ['password' => 'brand-new-password-2'])->assertOk();
+
+        $this->assertSame(0, $target->tokens()->count());
+        $this->postJson('/api/login', ['email' => $target->email, 'password' => 'known-password-1'])
+            ->assertStatus(422);
+        $this->postJson('/api/login', ['email' => $target->email, 'password' => 'brand-new-password-2'])
+            ->assertOk();
+    }
+
+    public function test_deactivation_ends_a_signed_in_session_immediately(): void
+    {
+        $this->actingAsSuperAdmin();
+        $target = User::factory()->create();
+        $target->assignRole('Viewer');
+        $target->createToken('laptop');
+
+        $this->putJson("/api/users/{$target->id}", ['is_active' => false])->assertOk();
+        $this->assertSame(0, $target->tokens()->count());
+    }
+
+    /**
+     * A token that outlives the deactivation — the flag flipped straight in the
+     * database, say — is refused on the next request, not at the next login.
+     * No Sanctum::actingAs here: that would override the bearer token.
+     */
+    public function test_a_token_issued_before_deactivation_stops_working(): void
+    {
+        $target = User::factory()->create();
+        $target->assignRole('Viewer');
+        $token = $target->createToken('laptop')->plainTextToken;
+
+        $this->withHeader('Authorization', "Bearer {$token}")->getJson('/api/me')->assertOk();
+
+        $target->forceFill(['is_active' => false])->save();
+
+        // The guard caches the user it resolved for the request above; a real
+        // request would resolve it again from scratch, so drop the cache.
+        $this->app['auth']->forgetGuards();
+
+        $this->withHeader('Authorization', "Bearer {$token}")->getJson('/api/me')->assertStatus(401);
+        $this->assertSame(0, $target->fresh()->tokens()->count());
+    }
+
+    public function test_weak_passwords_are_refused(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $this->postJson('/api/users', [
+            'name' => 'Weak',
+            'email' => 'weak@adminismine.local',
+            'password' => 'short',
+        ])->assertStatus(422)->assertJsonValidationErrors('password');
     }
 }

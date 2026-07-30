@@ -5,12 +5,14 @@ import { apiFetch, errorMessage } from "@/lib/api";
 import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
+import { LOCALES, LOCALE_LABELS } from "@/lib/i18n/dictionaries";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 
 interface Role {
   id: number;
@@ -24,6 +26,7 @@ interface UserRow {
   id: number;
   name: string;
   email: string;
+  locale: string;
   is_active: boolean;
   roles: string[];
   /** Permissions granted to this user directly, on top of their roles. */
@@ -31,6 +34,18 @@ interface UserRow {
 }
 
 type Tab = "roles" | "users";
+
+/**
+ * Initial passwords are typed by the admin and handed over — there is no mail
+ * transport to send an invite — so the field offers a generated one rather than
+ * inviting "password123". Kept out of any password manager's way by being plain
+ * text: the admin has to read it back to the person anyway.
+ */
+function generatePassword(): string {
+  const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.getRandomValues(new Uint32Array(16));
+  return [...bytes].map((byte) => alphabet[byte % alphabet.length]).join("");
+}
 
 /**
  * Permissions are named `module.action`, so grouping on the prefix gives the
@@ -367,9 +382,12 @@ function CloneModal({ role, onClose }: { role: Role; onClose: () => void }) {
 
 function UsersTab() {
   const { t } = useI18n();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user: currentUser } = useAuth();
   const [search, setSearch] = useState("");
-  const [editing, setEditing] = useState<UserRow | null>(null);
+  const [access, setAccess] = useState<UserRow | null>(null);
+  const [account, setAccount] = useState<UserRow | null>(null);
+  const [resetting, setResetting] = useState<UserRow | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const debouncedSearch = useDebouncedValue(search);
   const canManageUsers = hasPermission("users.manage");
@@ -386,15 +404,18 @@ function UsersTab() {
 
   return (
     <div className="space-y-4">
-      <Input
-        className="max-w-xs"
-        placeholder={t("roles.searchUsers")}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Input
+          className="max-w-xs"
+          placeholder={t("roles.searchUsers")}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Button onClick={() => setCreating(true)}>{t("users.new")}</Button>
+      </div>
 
       <Card className="overflow-x-auto p-0">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[960px] text-sm">
           <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
             <tr>
               <th className="px-4 py-3">{t("roles.user")}</th>
@@ -441,9 +462,23 @@ function UsersTab() {
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Button variant="secondary" className="h-8 px-3" onClick={() => setEditing(user)}>
-                      {t("roles.manageAccess")}
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="secondary" className="h-8 px-3" onClick={() => setAccount(user)}>
+                        {t("common.edit")}
+                      </Button>
+                      <Button variant="secondary" className="h-8 px-3" onClick={() => setResetting(user)}>
+                        {t("users.resetPassword")}
+                      </Button>
+                      {/* Your own access is another admin's job; the API refuses too. */}
+                      <Button
+                        variant="secondary"
+                        className="h-8 px-3"
+                        disabled={currentUser?.id === user.id}
+                        onClick={() => setAccess(user)}
+                      >
+                        {t("roles.manageAccess")}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -452,8 +487,200 @@ function UsersTab() {
         </table>
       </Card>
 
-      {editing && <UserAccessModal user={editing} onClose={() => setEditing(null)} />}
+      {creating && <UserModal onClose={() => setCreating(false)} />}
+      {account && <UserModal user={account} onClose={() => setAccount(null)} />}
+      {resetting && <PasswordModal user={resetting} onClose={() => setResetting(null)} />}
+      {access && <UserAccessModal user={access} onClose={() => setAccess(null)} />}
     </div>
+  );
+}
+
+/**
+ * The account itself — who the person is and whether they may sign in. Their
+ * roles and grants live in UserAccessModal: creating a login and deciding what
+ * it may reach are different decisions, often made by different people.
+ */
+function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
+  const { t } = useI18n();
+  const { user: currentUser } = useAuth();
+  const [name, setName] = useState(user?.name ?? "");
+  const [email, setEmail] = useState(user?.email ?? "");
+  const [locale, setLocale] = useState(user?.locale ?? "en");
+  const [isActive, setIsActive] = useState(user?.is_active ?? true);
+  const [password, setPassword] = useState("");
+  const [roles, setRoles] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const { data: rolesData } = useResource<{ data: Role[] }>("/roles", { enabled: !user });
+  const allRoles = rolesData?.data ?? [];
+  const isSelf = currentUser?.id === user?.id;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      if (user) {
+        await apiFetch(`/users/${user.id}`, {
+          method: "PUT",
+          json: { name: name.trim(), email: email.trim(), locale, ...(isSelf ? {} : { is_active: isActive }) },
+        });
+      } else {
+        await apiFetch("/users", {
+          method: "POST",
+          json: { name: name.trim(), email: email.trim(), password, locale, is_active: isActive, roles },
+        });
+      }
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+
+  return (
+    <Modal open onClose={onClose} title={user ? t("users.edit") : t("users.new")}>
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label className={label}>{t("roles.user")}</label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+        </div>
+
+        <div>
+          <label className={label}>{t("roles.email")}</label>
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </div>
+
+        {!user && (
+          <div>
+            <label className={label}>{t("users.password")}</label>
+            <div className="flex gap-2">
+              {/* Deliberately readable: the admin has to pass it on. */}
+              <Input value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+              <Button type="button" variant="secondary" onClick={() => setPassword(generatePassword())}>
+                {t("users.generate")}
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">{t("users.passwordHint")}</p>
+          </div>
+        )}
+
+        <div>
+          <label className={label}>{t("users.language")}</label>
+          <Select value={locale} onChange={(e) => setLocale(e.target.value)}>
+            {LOCALES.map((code) => (
+              <option key={code} value={code}>
+                {LOCALE_LABELS[code]}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        {!user && (
+          <div>
+            <label className={label}>{t("roles.assignedRoles")}</label>
+            <div className="grid gap-1 sm:grid-cols-2">
+              {allRoles.map((role) => (
+                <label key={role.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+                  <input
+                    type="checkbox"
+                    checked={roles.includes(role.name)}
+                    onChange={() =>
+                      setRoles((prev) =>
+                        prev.includes(role.name)
+                          ? prev.filter((value) => value !== role.name)
+                          : [...prev, role.name],
+                      )
+                    }
+                  />
+                  {role.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+            <input
+              type="checkbox"
+              checked={isActive}
+              disabled={isSelf}
+              onChange={(e) => setIsActive(e.target.checked)}
+            />
+            {t("users.activeAccount")}
+          </label>
+          <p className="mt-1 text-xs text-zinc-500">
+            {isSelf ? t("users.selfLocked") : t("users.activeHint")}
+          </p>
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? t("common.saving") : t("common.save")}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Administrative reset — for the person who cannot get in to change it themselves. */
+function PasswordModal({ user, onClose }: { user: UserRow; onClose: () => void }) {
+  const { t } = useI18n();
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await apiFetch(`/users/${user.id}/password`, { method: "PUT", json: { password } });
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`${t("users.resetPassword")} — ${user.name}`}>
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            {t("users.newPassword")}
+          </label>
+          <div className="flex gap-2">
+            <Input value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoFocus />
+            <Button type="button" variant="secondary" onClick={() => setPassword(generatePassword())}>
+              {t("users.generate")}
+            </Button>
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">{t("users.resetHint")}</p>
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? t("common.saving") : t("common.save")}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

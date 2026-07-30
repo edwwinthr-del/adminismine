@@ -52,7 +52,7 @@ npm run dev
 
 Then open <http://localhost:3000> and sign in.
 
-**Seeded login:** `admin@adminismine.local` / `password` (Super Admin).
+**Seeded login:** `superadmin@test.test` / `password` (Super Admin).
 Change it before anything resembling production.
 
 On Windows, prefix PHP commands with `XDEBUG_MODE=off` (PowerShell:
