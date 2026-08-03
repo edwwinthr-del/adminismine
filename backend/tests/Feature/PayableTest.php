@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\BankTransaction;
 use App\Models\PayableInvoice;
 use App\Models\Supplier;
 use App\Models\User;
@@ -13,6 +14,12 @@ use Tests\TestCase;
 class PayableTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * Every delete re-authenticates the person at the keyboard, so the request
+     * body carries the factory's password (see ConfirmsPassword).
+     */
+    private const CONFIRM = ['current_password' => 'password'];
 
     protected function setUp(): void
     {
@@ -223,7 +230,7 @@ class PayableTest extends TestCase
             'amount' => 500, 'payment_date' => '2026-07-05', 'method' => 'cash',
         ])->assertCreated();
 
-        $this->deleteJson("/api/payables/{$invoice->id}/payments/{$first}")
+        $this->deleteJson("/api/payables/{$invoice->id}/payments/{$first}", self::CONFIRM)
             ->assertOk()
             ->assertJsonPath('data.paid_amount', 500)
             ->assertJsonPath('data.status', 'partial')
@@ -236,6 +243,118 @@ class PayableTest extends TestCase
         [, $paymentId] = $this->paidInvoice();
         $other = PayableInvoice::factory()->create(['original_amount' => 500]);
 
-        $this->deleteJson("/api/payables/{$other->id}/payments/{$paymentId}")->assertNotFound();
+        $this->deleteJson("/api/payables/{$other->id}/payments/{$paymentId}", self::CONFIRM)
+            ->assertNotFound();
+    }
+
+    public function test_deleting_an_invoice_needs_the_right_password(): void
+    {
+        $this->actingAsAdmin();
+        $invoice = PayableInvoice::factory()->create(['original_amount' => 400]);
+        $invoice->recalculate();
+
+        $this->deleteJson("/api/payables/{$invoice->id}")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('current_password');
+
+        $this->deleteJson("/api/payables/{$invoice->id}", ['current_password' => 'wrong'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('current_password');
+
+        // Refused twice and still there — a wrong password cancels, it does not
+        // half-delete.
+        $this->assertDatabaseHas('payable_invoices', ['id' => $invoice->id]);
+
+        $this->deleteJson("/api/payables/{$invoice->id}", self::CONFIRM)->assertOk();
+        $this->assertDatabaseMissing('payable_invoices', ['id' => $invoice->id]);
+    }
+
+    public function test_removing_a_matched_payment_unpays_the_invoice_and_releases_the_movement(): void
+    {
+        $this->actingAsAdmin();
+        $invoice = PayableInvoice::factory()->create(['original_amount' => 500]);
+        $invoice->recalculate();
+
+        $transaction = BankTransaction::factory()->create([
+            'category' => 'expense', 'nlb_amount' => 500, 'cash_amount' => 0, 'lovcen_amount' => 0,
+        ]);
+
+        $this->postJson("/api/bank-transactions/{$transaction->id}/match", [
+            'target' => 'payable', 'invoice_id' => $invoice->id, 'amount' => 500,
+        ])->assertCreated();
+
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $paymentId = $invoice->fresh()->payments()->first()->id;
+
+        $this->deleteJson("/api/payables/{$invoice->id}/payments/{$paymentId}", self::CONFIRM)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'unpaid')
+            ->assertJsonPath('data.paid_amount', 0)
+            ->assertJsonPath('data.remaining_amount', 500);
+
+        // The movement is still there — the money left the bank whatever happens
+        // to the invoice — but nothing points at it any more.
+        $this->assertDatabaseHas('bank_transactions', ['id' => $transaction->id]);
+        $this->assertDatabaseMissing('payments', ['id' => $paymentId]);
+        $this->assertSame(1, BankTransaction::query()->unmatched()->count());
+    }
+
+    public function test_a_payment_can_take_its_bank_movement_with_it(): void
+    {
+        $this->actingAsAdmin();
+        $invoice = PayableInvoice::factory()->create(['original_amount' => 500]);
+        $invoice->recalculate();
+
+        $transaction = BankTransaction::factory()->create([
+            'category' => 'expense', 'nlb_amount' => 500, 'cash_amount' => 0, 'lovcen_amount' => 0,
+        ]);
+
+        $this->postJson("/api/bank-transactions/{$transaction->id}/match", [
+            'target' => 'payable', 'invoice_id' => $invoice->id, 'amount' => 500,
+        ])->assertCreated();
+
+        $paymentId = $invoice->fresh()->payments()->first()->id;
+
+        $this->deleteJson(
+            "/api/payables/{$invoice->id}/payments/{$paymentId}",
+            self::CONFIRM + ['delete_bank_transaction' => true],
+        )->assertOk()->assertJsonPath('data.status', 'unpaid');
+
+        $this->assertDatabaseMissing('bank_transactions', ['id' => $transaction->id]);
+        $this->assertDatabaseMissing('payments', ['id' => $paymentId]);
+    }
+
+    public function test_a_movement_settling_another_invoice_is_never_deleted_with_a_payment(): void
+    {
+        $this->actingAsAdmin();
+
+        $first = PayableInvoice::factory()->create(['original_amount' => 300]);
+        $second = PayableInvoice::factory()->create(['original_amount' => 200]);
+        $first->recalculate();
+        $second->recalculate();
+
+        $transaction = BankTransaction::factory()->create([
+            'category' => 'expense', 'nlb_amount' => 500, 'cash_amount' => 0, 'lovcen_amount' => 0,
+        ]);
+
+        // One movement paying two invoices — the ordinary case for a single
+        // bank line covering a supplier's whole month.
+        foreach ([[$first, 300], [$second, 200]] as [$invoice, $amount]) {
+            $this->postJson("/api/bank-transactions/{$transaction->id}/match", [
+                'target' => 'payable', 'invoice_id' => $invoice->id, 'amount' => $amount,
+            ])->assertCreated();
+        }
+
+        $paymentId = $first->fresh()->payments()->first()->id;
+
+        $this->deleteJson(
+            "/api/payables/{$first->id}/payments/{$paymentId}",
+            self::CONFIRM + ['delete_bank_transaction' => true],
+        )->assertStatus(422)->assertJsonValidationErrors('delete_bank_transaction');
+
+        // Refused whole: the second invoice is untouched and the payment stays.
+        $this->assertDatabaseHas('bank_transactions', ['id' => $transaction->id]);
+        $this->assertDatabaseHas('payments', ['id' => $paymentId]);
+        $this->assertSame('paid', $second->fresh()->status);
     }
 }

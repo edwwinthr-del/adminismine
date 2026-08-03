@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { PasswordConfirmModal } from "@/components/ui/password-confirm-modal";
 import { Select } from "@/components/ui/select";
 
 interface Role {
@@ -28,6 +29,8 @@ interface UserRow {
   email: string;
   locale: string;
   is_active: boolean;
+  /** The administrator who granted this login, if it records one. */
+  created_by: number | null;
   roles: string[];
   /** Permissions granted to this user directly, on top of their roles. */
   direct_permissions: string[];
@@ -387,10 +390,22 @@ function UsersTab() {
   const [access, setAccess] = useState<UserRow | null>(null);
   const [account, setAccount] = useState<UserRow | null>(null);
   const [resetting, setResetting] = useState<UserRow | null>(null);
+  const [deleting, setDeleting] = useState<UserRow | null>(null);
   const [creating, setCreating] = useState(false);
 
   const debouncedSearch = useDebouncedValue(search);
   const canManageUsers = hasPermission("users.manage");
+
+  /**
+   * Deactivating is the norm — it keeps the created_by stamps and audit rows
+   * pointing at the account. Deleting is offered only for the case it exists
+   * for: a Super Admin removing a login they granted themselves, usually one
+   * made in error. The API checks all of this again in
+   * UserAccessController::destroy, so this only decides what is worth showing.
+   */
+  const isSuperAdmin = currentUser?.roles?.includes("Super Admin") ?? false;
+  const canDelete = (user: UserRow) =>
+    isSuperAdmin && user.created_by === currentUser?.id && user.id !== currentUser?.id;
 
   const { data, loading } = useResource<{ data: UserRow[] }>(
     withQuery("/users", { search: debouncedSearch }),
@@ -478,6 +493,15 @@ function UsersTab() {
                       >
                         {t("roles.manageAccess")}
                       </Button>
+                      {canDelete(user) && (
+                        <Button
+                          variant="ghost"
+                          className="h-8 px-3 text-red-600"
+                          onClick={() => setDeleting(user)}
+                        >
+                          {t("common.delete")}
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -491,6 +515,16 @@ function UsersTab() {
       {account && <UserModal user={account} onClose={() => setAccount(null)} />}
       {resetting && <PasswordModal user={resetting} onClose={() => setResetting(null)} />}
       {access && <UserAccessModal user={access} onClose={() => setAccess(null)} />}
+      {deleting && (
+        <PasswordConfirmModal
+          title={t("users.delete")}
+          message={t("users.deleteConfirm", { name: deleting.name, email: deleting.email })}
+          onClose={() => setDeleting(null)}
+          onConfirm={(password) =>
+            apiFetch(`/users/${deleting.id}`, { method: "DELETE", json: { current_password: password } })
+          }
+        />
+      )}
     </div>
   );
 }
@@ -509,12 +543,32 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
   const [isActive, setIsActive] = useState(user?.is_active ?? true);
   const [password, setPassword] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
+  const [extras, setExtras] = useState<string[]>([]);
+  const [permissionFilter, setPermissionFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const { data: rolesData } = useResource<{ data: Role[] }>("/roles", { enabled: !user });
+  const { data: permissionsData } = useResource<{ data: string[] }>("/permissions", { enabled: !user });
   const allRoles = rolesData?.data ?? [];
   const isSelf = currentUser?.id === user?.id;
+
+  // What the chosen roles already grant. Shown ticked and locked, so an extra
+  // is never added for something the role covers anyway — the effective set is
+  // the union of the two, and the API computes it that way.
+  const fromRoles = useMemo(() => {
+    const granted = new Set<string>();
+    for (const role of allRoles) {
+      if (roles.includes(role.name)) role.permissions.forEach((permission) => granted.add(permission));
+    }
+    return granted;
+  }, [allRoles, roles]);
+
+  const permissionGroups = useMemo(() => {
+    const term = permissionFilter.trim().toLowerCase();
+    const all = permissionsData?.data ?? [];
+    return groupByModule(term === "" ? all : all.filter((p) => p.toLowerCase().includes(term)));
+  }, [permissionsData, permissionFilter]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -529,7 +583,17 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
       } else {
         await apiFetch("/users", {
           method: "POST",
-          json: { name: name.trim(), email: email.trim(), password, locale, is_active: isActive, roles },
+          json: {
+            name: name.trim(),
+            email: email.trim(),
+            password,
+            locale,
+            is_active: isActive,
+            roles,
+            // Only what the roles do not already cover — granting a duplicate
+            // would just be a second copy of the same permission.
+            permissions: extras.filter((permission) => !fromRoles.has(permission)),
+          },
         });
       }
       onClose();
@@ -581,27 +645,85 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
         </div>
 
         {!user && (
-          <div>
-            <label className={label}>{t("roles.assignedRoles")}</label>
-            <div className="grid gap-1 sm:grid-cols-2">
-              {allRoles.map((role) => (
-                <label key={role.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
-                  <input
-                    type="checkbox"
-                    checked={roles.includes(role.name)}
-                    onChange={() =>
-                      setRoles((prev) =>
-                        prev.includes(role.name)
-                          ? prev.filter((value) => value !== role.name)
-                          : [...prev, role.name],
-                      )
-                    }
-                  />
-                  {role.name}
-                </label>
-              ))}
+          <>
+            <div>
+              <label className={label}>{t("roles.assignedRoles")}</label>
+              {allRoles.length === 0 ? (
+                <p className="text-sm text-zinc-500">{t("roles.none")}</p>
+              ) : (
+                <div className="grid gap-1 sm:grid-cols-2">
+                  {allRoles.map((role) => (
+                    <label key={role.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+                      <input
+                        type="checkbox"
+                        checked={roles.includes(role.name)}
+                        onChange={() =>
+                          setRoles((prev) =>
+                            prev.includes(role.name)
+                              ? prev.filter((value) => value !== role.name)
+                              : [...prev, role.name],
+                          )
+                        }
+                      />
+                      {role.name}
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+
+            {/*
+              The spec's "one role plus additional permission parameters": the
+              role carries the defaults and anything this particular person
+              needs on top is granted here, while the login is being created.
+            */}
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className={label}>{t("roles.extraPermissions")}</label>
+                <Input
+                  className="h-8 max-w-[200px]"
+                  placeholder={t("roles.filterPermissions")}
+                  value={permissionFilter}
+                  onChange={(e) => setPermissionFilter(e.target.value)}
+                />
+              </div>
+              <p className="mb-2 text-xs text-zinc-500">{t("roles.extraHint")}</p>
+              <div className="max-h-56 space-y-3 overflow-y-auto rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+                {permissionGroups.map(([moduleName, modulePermissions]) => (
+                  <div key={moduleName}>
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">{moduleName}</p>
+                    <div className="grid gap-1 sm:grid-cols-2">
+                      {modulePermissions.map((permission) => {
+                        const covered = fromRoles.has(permission);
+                        return (
+                          <label
+                            key={permission}
+                            className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={covered || extras.includes(permission)}
+                              disabled={covered}
+                              onChange={() =>
+                                setExtras((prev) =>
+                                  prev.includes(permission)
+                                    ? prev.filter((value) => value !== permission)
+                                    : [...prev, permission],
+                                )
+                              }
+                            />
+                            <span className={covered ? "font-mono text-xs text-zinc-400" : "font-mono text-xs"}>
+                              {permission}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
 
         <div>

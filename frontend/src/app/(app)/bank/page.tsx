@@ -5,7 +5,7 @@ import { apiFetch, errorMessage } from "@/lib/api";
 import { usePage } from "@/lib/data/use-page";
 import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useI18n } from "@/lib/i18n/context";
-import { formatDate, formatMoney, todayISO } from "@/lib/format";
+import { amountTone, formatDate, formatMoney, formatSignedMoney, todayISO } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { AsyncSelect, type LookupOption } from "@/components/ui/async-select";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Pagination, type PageMeta } from "@/components/ui/pagination";
+import { PasswordConfirmModal } from "@/components/ui/password-confirm-modal";
 import { Select } from "@/components/ui/select";
 
 interface BankTransaction {
@@ -25,10 +26,13 @@ interface BankTransaction {
   nlb_amount: number;
   lovcen_amount: number;
   net_amount: number;
+  /** Balance of all three accounts as of this row, in ledger order. */
+  running_balance?: number;
   category: string | null;
   is_uncategorized: boolean;
   possible_duplicate: boolean;
   currency: string;
+  notes: string | null;
 }
 
 interface Balances {
@@ -40,11 +44,12 @@ interface Balances {
 
 const CATEGORIES = ["income", "expense", "transfer", "loan", "payroll", "housing", "travel", "other"] as const;
 
-function amountClass(value: number): string {
-  if (value > 0) return "text-green-600 dark:text-green-400";
-  if (value < 0) return "text-red-600 dark:text-red-400";
-  return "text-zinc-400";
-}
+/**
+ * The categories that fix a direction — the API forces the sign to match, so the
+ * form says so rather than letting someone type a number that will be flipped
+ * under them.
+ */
+const DIRECTIONAL: Record<string, "in" | "out"> = { income: "in", expense: "out" };
 
 const PER_PAGE = 50;
 
@@ -57,6 +62,10 @@ export default function BankPage() {
   const debouncedSearch = useDebouncedValue(search);
 
   const [page, setPage] = usePage([category, uncategorized, debouncedSearch]);
+
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<BankTransaction | null>(null);
+  const [deleting, setDeleting] = useState<BankTransaction | null>(null);
 
   const list = useResource<{ data: BankTransaction[]; meta: PageMeta }>(
     withQuery("/bank-transactions", {
@@ -79,14 +88,19 @@ export default function BankPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("bank.title")}</h1>
-        <NewTransactionButton />
+        <Button onClick={() => setCreating(true)}>{t("bank.new")}</Button>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {(["cash", "nlb", "lovcen", "total"] as const).map((k) => (
           <Card key={k}>
             <p className="text-sm text-zinc-500">{k === "total" ? t("bank.total") : t(`bank.${k}`)}</p>
-            <p className={`mt-1 text-xl font-semibold ${amountClass(balances?.[k] ?? 0)}`}>
+            {/*
+              A balance is a signed figure: money out has already been subtracted
+              from it, so it is shown and coloured by the same rule as any other
+              amount (lib/format).
+            */}
+            <p className={`mt-1 text-xl font-semibold ${amountTone(balances?.[k] ?? 0)}`}>
               {formatMoney(balances?.[k] ?? 0)}
             </p>
           </Card>
@@ -117,7 +131,7 @@ export default function BankPage() {
       </Card>
 
       <Card className="overflow-x-auto p-0">
-        <table className="w-full min-w-[920px] text-sm">
+        <table className="w-full min-w-[1080px] text-sm">
           <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
             <tr>
               <th className="px-4 py-3">{t("bank.date")}</th>
@@ -126,20 +140,21 @@ export default function BankPage() {
               <th className="px-4 py-3 text-right">{t("bank.nlb")}</th>
               <th className="px-4 py-3 text-right">{t("bank.lovcen")}</th>
               <th className="px-4 py-3 text-right">{t("bank.net")}</th>
+              <th className="px-4 py-3 text-right">{t("bank.runningBalance")}</th>
               <th className="px-4 py-3">{t("bank.category")}</th>
-              <th className="px-4 py-3 text-right">{t("bank.match")}</th>
+              <th className="px-4 py-3 text-right">{t("common.actions")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
                   {t("bank.none")}
                 </td>
               </tr>
@@ -153,17 +168,21 @@ export default function BankPage() {
                       {r.possible_duplicate && <Badge tone="amber">{t("bank.duplicate")}</Badge>}
                     </div>
                   </td>
-                  <td className={`px-4 py-3 text-right tabular-nums ${amountClass(r.cash_amount)}`}>
-                    {r.cash_amount ? formatMoney(r.cash_amount, r.currency) : "—"}
-                  </td>
-                  <td className={`px-4 py-3 text-right tabular-nums ${amountClass(r.nlb_amount)}`}>
-                    {r.nlb_amount ? formatMoney(r.nlb_amount, r.currency) : "—"}
-                  </td>
-                  <td className={`px-4 py-3 text-right tabular-nums ${amountClass(r.lovcen_amount)}`}>
-                    {r.lovcen_amount ? formatMoney(r.lovcen_amount, r.currency) : "—"}
-                  </td>
-                  <td className={`px-4 py-3 text-right font-medium tabular-nums ${amountClass(r.net_amount)}`}>
-                    {formatMoney(r.net_amount, r.currency)}
+                  <Amount value={r.cash_amount} currency={r.currency} />
+                  <Amount value={r.nlb_amount} currency={r.currency} />
+                  <Amount value={r.lovcen_amount} currency={r.currency} />
+                  <Amount value={r.net_amount} currency={r.currency} emphasis alwaysShow />
+                  {/*
+                    Not signed: this is where the account stands, not a movement.
+                    Coloured only when it has gone negative, which is the one
+                    thing about a balance that needs to be noticed.
+                  */}
+                  <td
+                    className={`px-4 py-3 text-right tabular-nums ${
+                      (r.running_balance ?? 0) < 0 ? "text-red-600 dark:text-red-400" : "text-zinc-500"
+                    }`}
+                  >
+                    {r.running_balance === undefined ? "—" : formatMoney(r.running_balance, r.currency)}
                   </td>
                   <td className="px-4 py-3">
                     {r.category ? (
@@ -175,7 +194,19 @@ export default function BankPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <MatchButton transaction={r} />
+                    <div className="flex justify-end gap-2">
+                      <MatchButton transaction={r} />
+                      <Button variant="secondary" className="h-8 px-3" onClick={() => setEditing(r)}>
+                        {t("common.edit")}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="h-8 px-3 text-red-600"
+                        onClick={() => setDeleting(r)}
+                      >
+                        {t("common.delete")}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -185,46 +216,100 @@ export default function BankPage() {
 
         <Pagination meta={list.data?.meta} onPageChange={setPage} disabled={list.refreshing} />
       </Card>
+
+      {creating && <TransactionModal onClose={() => setCreating(false)} />}
+      {editing && <TransactionModal transaction={editing} onClose={() => setEditing(null)} />}
+      {deleting && (
+        <PasswordConfirmModal
+          title={t("bank.remove")}
+          message={t("bank.removeConfirm", {
+            amount: formatSignedMoney(deleting.net_amount, deleting.currency),
+            date: formatDate(deleting.date),
+          })}
+          onClose={() => setDeleting(null)}
+          onConfirm={(password) =>
+            apiFetch(`/bank-transactions/${deleting.id}`, {
+              method: "DELETE",
+              json: { current_password: password },
+            })
+          }
+        />
+      )}
     </div>
   );
 }
 
-function NewTransactionButton() {
+/** One money cell: sign and colour from the shared helper, never per-table. */
+function Amount({
+  value,
+  currency,
+  emphasis,
+  alwaysShow,
+}: {
+  value: number;
+  currency: string;
+  emphasis?: boolean;
+  alwaysShow?: boolean;
+}) {
+  return (
+    <td
+      className={`px-4 py-3 text-right tabular-nums ${emphasis ? "font-medium" : ""} ${amountTone(value)}`}
+    >
+      {value || alwaysShow ? formatSignedMoney(value, currency) : "—"}
+    </td>
+  );
+}
+
+/** Record a movement, or correct one. The same form serves both. */
+function TransactionModal({
+  transaction,
+  onClose,
+}: {
+  transaction?: BankTransaction;
+  onClose: () => void;
+}) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const [date, setDate] = useState(todayISO());
-  const [desc1, setDesc1] = useState("");
-  const [desc2, setDesc2] = useState("");
-  const [cash, setCash] = useState("");
-  const [nlb, setNlb] = useState("");
-  const [lovcen, setLovcen] = useState("");
-  const [category, setCategory] = useState("expense");
+  const editing = transaction !== undefined;
+
+  const [date, setDate] = useState(transaction?.date ?? todayISO());
+  const [desc1, setDesc1] = useState(transaction?.description_1 ?? "");
+  const [desc2, setDesc2] = useState(transaction?.description_2 ?? "");
+  // Amounts open exactly as stored, signs and all. For income and expense the
+  // server settles the sign anyway, but for a transfer the sign *is* the
+  // movement — showing a magnitude there would turn "-500 out of cash" into
+  // "+500 into cash" the moment the row was saved again.
+  const [cash, setCash] = useState(amountField(transaction?.cash_amount));
+  const [nlb, setNlb] = useState(amountField(transaction?.nlb_amount));
+  const [lovcen, setLovcen] = useState(amountField(transaction?.lovcen_amount));
+  const [category, setCategory] = useState(transaction?.category ?? "expense");
+  const [notes, setNotes] = useState(transaction?.notes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const direction = DIRECTIONAL[category];
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
+
+    const body = {
+      date,
+      description_1: desc1 || null,
+      description_2: desc2 || null,
+      cash_amount: cash ? Number(cash) : 0,
+      nlb_amount: nlb ? Number(nlb) : 0,
+      lovcen_amount: lovcen ? Number(lovcen) : 0,
+      category,
+      notes: notes || null,
+    };
+
     try {
-      await apiFetch("/bank-transactions", {
-        method: "POST",
-        json: {
-          date,
-          description_1: desc1 || null,
-          description_2: desc2 || null,
-          cash_amount: cash ? Number(cash) : 0,
-          nlb_amount: nlb ? Number(nlb) : 0,
-          lovcen_amount: lovcen ? Number(lovcen) : 0,
-          category,
-        },
+      await apiFetch(editing ? `/bank-transactions/${transaction.id}` : "/bank-transactions", {
+        method: editing ? "PUT" : "POST",
+        json: body,
       });
-      setOpen(false);
-      setDesc1("");
-      setDesc2("");
-      setCash("");
-      setNlb("");
-      setLovcen("");
+      onClose();
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -232,71 +317,87 @@ function NewTransactionButton() {
     }
   }
 
+  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+
   return (
-    <>
-      <Button onClick={() => setOpen(true)}>{t("bank.new")}</Button>
-      <Modal open={open} onClose={() => setOpen(false)} title={t("bank.new")}>
-        <form onSubmit={submit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("bank.date")}</label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                {t("bank.category")}
-              </label>
-              <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {t(`category.${c}`)}
-                  </option>
-                ))}
-              </Select>
-            </div>
+    <Modal open onClose={onClose} title={editing ? t("bank.edit") : t("bank.new")}>
+      <form onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={label}>{t("bank.date")}</label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              {t("bank.description1")}
-            </label>
-            <Input value={desc1} onChange={(e) => setDesc1(e.target.value)} />
+            <label className={label}>{t("bank.category")}</label>
+            <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {t(`category.${c}`)}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+        <div>
+          <label className={label}>{t("bank.description1")}</label>
+          <Input value={desc1} onChange={(e) => setDesc1(e.target.value)} />
+        </div>
+        <div>
+          <label className={label}>{t("bank.description2")}</label>
+          <Input value={desc2} onChange={(e) => setDesc2(e.target.value)} />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className={label}>{t("bank.cash")}</label>
+            <Input type="number" step="0.01" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="0" />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              {t("bank.description2")}
-            </label>
-            <Input value={desc2} onChange={(e) => setDesc2(e.target.value)} />
+            <label className={label}>{t("bank.nlb")}</label>
+            <Input type="number" step="0.01" value={nlb} onChange={(e) => setNlb(e.target.value)} placeholder="0" />
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("bank.cash")}</label>
-              <Input type="number" step="0.01" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="0" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("bank.nlb")}</label>
-              <Input type="number" step="0.01" value={nlb} onChange={(e) => setNlb(e.target.value)} placeholder="0" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                {t("bank.lovcen")}
-              </label>
-              <Input type="number" step="0.01" value={lovcen} onChange={(e) => setLovcen(e.target.value)} placeholder="0" />
-            </div>
+          <div>
+            <label className={label}>{t("bank.lovcen")}</label>
+            <Input type="number" step="0.01" value={lovcen} onChange={(e) => setLovcen(e.target.value)} placeholder="0" />
           </div>
-          <p className="text-xs text-zinc-500">+ in, − out</p>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? t("common.saving") : t("bank.create")}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-    </>
+        </div>
+        {/*
+          Says which way the money will go before it is saved. For income and
+          expense the server settles the sign, so the figure typed here is a
+          magnitude; for everything else (a transfer is negative on one account
+          and positive on another) the sign entered is the sign stored.
+        */}
+        <p className="text-xs text-zinc-500">
+          {direction === "in"
+            ? t("bank.signIncomeHint")
+            : direction === "out"
+              ? t("bank.signExpenseHint")
+              : t("bank.signFreeHint")}
+        </p>
+        <div>
+          <label className={label}>{t("bank.notes")}</label>
+          <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? t("common.saving") : editing ? t("common.save") : t("bank.create")}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
+}
+
+/** An amount as a form value: blank for an untouched account, as stored otherwise. */
+function amountField(value: number | undefined): string {
+  if (value === undefined || value === 0) return "";
+
+  return String(value);
 }
 
 function MatchButton({ transaction }: { transaction: BankTransaction }) {

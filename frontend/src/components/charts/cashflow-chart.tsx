@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n/context";
-import { formatMoney } from "@/lib/format";
+import { amountTone, expenseAmount, formatSignedMoney } from "@/lib/format";
 
 export interface CashflowPoint {
   month: string;
@@ -198,17 +198,25 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
               }}
             >
               <p className="font-medium text-zinc-900 dark:text-zinc-50">{monthLabel(active.month)}</p>
+              {/*
+                The columns are drawn as magnitudes against one axis, which is
+                what a paired-column chart is; the numbers beside them carry the
+                sign, so the reader can see that Net is income minus expenses
+                rather than having to assume it. The figures are left in the
+                tooltip's own text colour — a green/red here would fight the
+                series colours the swatches and columns already use.
+              */}
               <p className="mt-1 flex justify-between gap-2 text-zinc-600 dark:text-zinc-300">
                 <span>{t("dashboard.income")}</span>
-                <span className="tabular-nums">{formatMoney(active.income)}</span>
+                <span className="tabular-nums">{formatSignedMoney(active.income)}</span>
               </p>
               <p className="flex justify-between gap-2 text-zinc-600 dark:text-zinc-300">
                 <span>{t("dashboard.expenses")}</span>
-                <span className="tabular-nums">{formatMoney(active.expenses)}</span>
+                <span className="tabular-nums">{formatSignedMoney(expenseAmount(active.expenses))}</span>
               </p>
               <p className="mt-1 flex justify-between gap-2 border-t border-zinc-200 pt-1 font-medium text-zinc-900 dark:border-zinc-700 dark:text-zinc-50">
                 <span>{t("dashboard.net")}</span>
-                <span className="tabular-nums">{formatMoney(active.net)}</span>
+                <span className={`tabular-nums ${amountTone(active.net)}`}>{formatSignedMoney(active.net)}</span>
               </p>
             </div>
           )}
@@ -280,9 +288,17 @@ function CashflowTable({
         {points.map((point) => (
           <tr key={point.month} className="text-zinc-800 dark:text-zinc-200">
             <td className="py-2">{monthLabel(point.month)}</td>
-            <td className="py-2 text-right tabular-nums">{formatMoney(point.income)}</td>
-            <td className="py-2 text-right tabular-nums">{formatMoney(point.expenses)}</td>
-            <td className="py-2 text-right tabular-nums">{formatMoney(point.net)}</td>
+            {/* A numeric readout, so every figure is signed and toned as it is
+                everywhere else in the app. */}
+            <td className={`py-2 text-right tabular-nums ${amountTone(point.income)}`}>
+              {formatSignedMoney(point.income)}
+            </td>
+            <td className={`py-2 text-right tabular-nums ${amountTone(expenseAmount(point.expenses))}`}>
+              {formatSignedMoney(expenseAmount(point.expenses))}
+            </td>
+            <td className={`py-2 text-right tabular-nums ${amountTone(point.net)}`}>
+              {formatSignedMoney(point.net)}
+            </td>
           </tr>
         ))}
       </tbody>

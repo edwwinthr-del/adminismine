@@ -85,7 +85,7 @@ class AssistantService
         $available = array_keys($this->reports->availableTo($user));
 
         $response = OpenAI::chat()->create([
-            'model' => config('services.openai.model', 'gpt-4o-mini'),
+            'model' => config('services.openai.model', 'llama-3.3-70b-versatile'),
             'response_format' => ['type' => 'json_object'],
             'temperature' => 0,
             'messages' => [

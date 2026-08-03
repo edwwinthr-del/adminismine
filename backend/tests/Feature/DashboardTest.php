@@ -49,9 +49,12 @@ class DashboardTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        BankTransaction::factory()->create(['cash_amount' => 1000, 'nlb_amount' => 0, 'lovcen_amount' => 0]);
-        BankTransaction::factory()->create(['cash_amount' => -250, 'nlb_amount' => 5000, 'lovcen_amount' => 0]);
-        BankTransaction::factory()->create(['cash_amount' => 0, 'nlb_amount' => 0, 'lovcen_amount' => 750]);
+        // Categories are explicit because they now fix the sign: `income` and
+        // `expense` state a direction, `other` leaves the signs as entered
+        // (BankTransaction::DIRECTIONS).
+        BankTransaction::factory()->create(['category' => 'income', 'cash_amount' => 1000, 'nlb_amount' => 0, 'lovcen_amount' => 0]);
+        BankTransaction::factory()->create(['category' => 'other', 'cash_amount' => -250, 'nlb_amount' => 5000, 'lovcen_amount' => 0]);
+        BankTransaction::factory()->create(['category' => 'income', 'cash_amount' => 0, 'nlb_amount' => 0, 'lovcen_amount' => 750]);
 
         $this->getJson('/api/dashboard')
             ->assertOk()
@@ -256,10 +259,13 @@ class DashboardTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        // Same date and same amounts entered twice.
+        // Same date and same amounts entered twice. The category is pinned
+        // because it now decides the sign (BankTransaction::DIRECTIONS), and two
+        // rows only count as the same movement if their amounts match.
         foreach (range(1, 2) as $ignored) {
             BankTransaction::factory()->create([
                 'date' => '2026-07-05',
+                'category' => 'expense',
                 'cash_amount' => 300,
                 'nlb_amount' => 0,
                 'lovcen_amount' => 0,

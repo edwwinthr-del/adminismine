@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth/context";
 import { useResource } from "@/lib/data/use-resource";
 import { useI18n } from "@/lib/i18n/context";
-import { formatDate, formatMoney, todayISO } from "@/lib/format";
+import { amountTone, expenseAmount, formatDate, formatMoney, formatSignedMoney, todayISO } from "@/lib/format";
 import { CashflowChart, type CashflowPoint } from "@/components/charts/cashflow-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -119,12 +119,30 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {dashboard?.balances && (
                 <>
-                  <Tile label={t("dashboard.cash")} value={formatMoney(dashboard.balances.cash)} />
-                  <Tile label={t("dashboard.nlb")} value={formatMoney(dashboard.balances.nlb)} />
-                  <Tile label={t("dashboard.lovcen")} value={formatMoney(dashboard.balances.lovcen)} />
+                  {/*
+                    Balances are signed sums — expenses have already been taken
+                    out of them — so they carry the same colour rule as any
+                    other figure, and an account in the red says so.
+                  */}
+                  <Tile
+                    label={t("dashboard.cash")}
+                    value={formatMoney(dashboard.balances.cash)}
+                    tone={amountTone(dashboard.balances.cash)}
+                  />
+                  <Tile
+                    label={t("dashboard.nlb")}
+                    value={formatMoney(dashboard.balances.nlb)}
+                    tone={amountTone(dashboard.balances.nlb)}
+                  />
+                  <Tile
+                    label={t("dashboard.lovcen")}
+                    value={formatMoney(dashboard.balances.lovcen)}
+                    tone={amountTone(dashboard.balances.lovcen)}
+                  />
                   <Tile
                     label={t("dashboard.totalBalance")}
                     value={formatMoney(dashboard.balances.total)}
+                    tone={amountTone(dashboard.balances.total)}
                     emphasis
                   />
                 </>
@@ -147,13 +165,30 @@ export default function DashboardPage() {
               )}
               {dashboard?.cashflow && (
                 <>
+                  {/*
+                    The three figures of one sum, shown so the arithmetic is
+                    visible: income adds, expenses subtract, net is what is left.
+                    `expenses` arrives as a positive magnitude (the total that
+                    went out) — expenseAmount puts back the minus it is rolled
+                    into Net with, so a reader never has to guess whether the
+                    number below was added or taken away.
+                  */}
                   <Tile
                     label={t("dashboard.monthlyIncome")}
-                    value={formatMoney(dashboard.cashflow.month.income)}
+                    value={formatSignedMoney(dashboard.cashflow.month.income)}
+                    tone={amountTone(dashboard.cashflow.month.income)}
                   />
                   <Tile
                     label={t("dashboard.monthlyExpenses")}
-                    value={formatMoney(dashboard.cashflow.month.expenses)}
+                    value={formatSignedMoney(expenseAmount(dashboard.cashflow.month.expenses))}
+                    tone={amountTone(expenseAmount(dashboard.cashflow.month.expenses))}
+                  />
+                  <Tile
+                    label={t("dashboard.monthlyNet")}
+                    hint={t("dashboard.netHint")}
+                    value={formatSignedMoney(dashboard.cashflow.month.net)}
+                    tone={amountTone(dashboard.cashflow.month.net)}
+                    emphasis
                   />
                 </>
               )}
@@ -269,8 +304,10 @@ export default function DashboardPage() {
                           <td className="px-5 py-3 text-zinc-600 dark:text-zinc-300">
                             {transaction.counterparty ?? "—"}
                           </td>
-                          <td className="px-5 py-3 text-right tabular-nums">
-                            {formatMoney(transaction.amount, transaction.currency)}
+                          <td
+                            className={`px-5 py-3 text-right tabular-nums ${amountTone(transaction.amount)}`}
+                          >
+                            {formatSignedMoney(transaction.amount, transaction.currency)}
                           </td>
                         </tr>
                       ))
@@ -292,23 +329,24 @@ function Tile({
   hint,
   href,
   emphasis,
+  tone,
 }: {
   label: string;
   value: string;
   hint?: string;
   href?: string;
   emphasis?: boolean;
+  /** Colour for a figure that has a direction; from lib/format's amountTone. */
+  tone?: string;
 }) {
   const body = (
     <Card className={href ? "h-full p-4 transition-colors hover:border-indigo-300" : "h-full p-4"}>
       <p className="text-xs uppercase tracking-wider text-zinc-500">{label}</p>
       {/* Proportional figures: tabular-nums would make a standalone value look loose. */}
       <p
-        className={
-          emphasis
-            ? "mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50"
-            : "mt-1 text-xl font-semibold text-zinc-900 dark:text-zinc-50"
-        }
+        className={`mt-1 font-semibold ${emphasis ? "text-2xl" : "text-xl"} ${
+          tone ?? "text-zinc-900 dark:text-zinc-50"
+        }`}
       >
         {value}
       </p>

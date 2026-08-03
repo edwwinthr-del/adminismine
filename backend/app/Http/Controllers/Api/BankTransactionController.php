@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\ConfirmsPassword;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Bank\MatchTransactionRequest;
 use App\Http\Requests\Bank\StoreBankTransactionRequest;
@@ -18,9 +19,15 @@ use Illuminate\Support\Facades\DB;
 
 class BankTransactionController extends Controller
 {
+    use ConfirmsPassword;
+
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = BankTransaction::query()->with(['supplier', 'client']);
+        // withRunningBalance() is what makes the ledger read like a bank
+        // statement: each row carries the balance *as of* itself, so an expense
+        // visibly subtracts in sequence instead of being a number the reader has
+        // to add up. See BankTransaction::scopeWithRunningBalance.
+        $query = BankTransaction::query()->withRunningBalance()->with(['supplier', 'client']);
 
         if ($request->filled('category')) {
             $query->where('category', $request->input('category'));
@@ -76,13 +83,34 @@ class BankTransactionController extends Controller
         return new BankTransactionResource($bankTransaction->load('supplier', 'client'));
     }
 
+    /**
+     * Remove a movement, password-confirmed (ConfirmsPassword).
+     *
+     * Any invoice payment matched to it is *released*, not deleted: the money
+     * really was settled, and un-paying an invoice because its bank line was
+     * corrected would be a second error on top of the first. The link lives on
+     * the payment row, so releasing it and deleting the movement happen in one
+     * transaction — the payment can never be left pointing at a row that is gone.
+     */
     public function destroy(Request $request, BankTransaction $bankTransaction): JsonResponse
     {
-        $bankTransaction->delete();
+        $this->confirmPassword($request);
 
-        activity()->performedOn($bankTransaction)->causedBy($request->user())->log('bank_transaction.deleted');
+        $released = $bankTransaction->payments()->pluck('id')->all();
 
-        return response()->json(['message' => 'Transaction deleted.']);
+        DB::transaction(function () use ($bankTransaction) {
+            $bankTransaction->payments()->update(['bank_transaction_id' => null]);
+            $bankTransaction->delete();
+        });
+
+        activity()->performedOn($bankTransaction)->causedBy($request->user())
+            ->withProperties(['released_payments' => $released])
+            ->log('bank_transaction.deleted');
+
+        return response()->json([
+            'message' => 'Transaction deleted.',
+            'released_payments' => count($released),
+        ]);
     }
 
     /** Current balance of each account (sum of signed movements). */

@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Pagination, type PageMeta } from "@/components/ui/pagination";
+import { PasswordConfirmModal } from "@/components/ui/password-confirm-modal";
 import { Select } from "@/components/ui/select";
 
 interface Payment {
@@ -68,6 +69,7 @@ export default function PayablesPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PayableInvoice | null>(null);
   const [settling, setSettling] = useState<PayableInvoice | null>(null);
+  const [deleting, setDeleting] = useState<PayableInvoice | null>(null);
 
   // A new filter always starts at the first page: page 4 of the old filter is
   // rarely page 4 of the new one.
@@ -177,6 +179,20 @@ export default function PayablesPage() {
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setSettling(inv)}>
                         {t("payables.manage")}
                       </Button>
+                      {/*
+                        Removing the record entirely, behind a password. Hiding
+                        the button from someone without payables.approve is a
+                        courtesy — the route refuses them regardless.
+                      */}
+                      {canDelete && (
+                        <Button
+                          variant="ghost"
+                          className="h-8 px-3 text-red-600"
+                          onClick={() => setDeleting(inv)}
+                        >
+                          {t("common.delete")}
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -189,9 +205,34 @@ export default function PayablesPage() {
       </Card>
 
       {creating && <InvoiceModal onClose={() => setCreating(false)} />}
-      {editing && <InvoiceModal invoice={editing} canDelete={canDelete} onClose={() => setEditing(null)} />}
+      {editing && (
+        <InvoiceModal
+          invoice={editing}
+          canDelete={canDelete}
+          onClose={() => setEditing(null)}
+          onRequestDelete={(invoice) => {
+            setEditing(null);
+            setDeleting(invoice);
+          }}
+        />
+      )}
       {settling && (
         <SettlementModal invoiceId={settling.id} canDelete={canDelete} onClose={() => setSettling(null)} />
+      )}
+      {deleting && (
+        <PasswordConfirmModal
+          title={t("payables.remove")}
+          message={t("payables.removeConfirm")}
+          onClose={() => setDeleting(null)}
+          onConfirm={(password) =>
+            apiFetch(`/payables/${deleting.id}`, {
+              method: "DELETE",
+              // The password rides on the DELETE itself, so the server verifies
+              // it in the same request that removes the row.
+              json: { current_password: password },
+            })
+          }
+        />
       )}
     </div>
   );
@@ -202,10 +243,13 @@ function InvoiceModal({
   invoice,
   canDelete,
   onClose,
+  onRequestDelete,
 }: {
   invoice?: PayableInvoice;
   canDelete?: boolean;
   onClose: () => void;
+  /** Hands the invoice to the page's password gate — the form never deletes. */
+  onRequestDelete?: (invoice: PayableInvoice) => void;
 }) {
   const { t } = useI18n();
   const editing = invoice !== undefined;
@@ -263,19 +307,6 @@ function InvoiceModal({
     } catch (err) {
       setError(errorMessage(err));
     } finally {
-      setSaving(false);
-    }
-  }
-
-  async function remove() {
-    if (!editing || !window.confirm(t("payables.removeConfirm"))) return;
-
-    setSaving(true);
-    try {
-      await apiFetch(`/payables/${invoice.id}`, { method: "DELETE" });
-      onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
       setSaving(false);
     }
   }
@@ -355,8 +386,8 @@ function InvoiceModal({
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex justify-between gap-2">
-          {editing && canDelete ? (
-            <Button type="button" variant="danger" disabled={saving} onClick={() => void remove()}>
+          {editing && canDelete && onRequestDelete ? (
+            <Button type="button" variant="danger" disabled={saving} onClick={() => onRequestDelete(invoice)}>
               {t("payables.remove")}
             </Button>
           ) : (
@@ -396,23 +427,8 @@ function SettlementModal({
   const invoice = data?.data;
 
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [removingPayment, setRemovingPayment] = useState<Payment | null>(null);
   const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function removePayment(payment: Payment) {
-    if (!window.confirm(t("payables.removePaymentConfirm"))) return;
-
-    setBusy(true);
-    setError(null);
-    try {
-      await apiFetch(`/payables/${invoiceId}/payments/${payment.id}`, { method: "DELETE" });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <Modal open onClose={onClose} title={t("payables.paymentsTitle")}>
@@ -442,20 +458,14 @@ function SettlementModal({
                     </span>
                   </span>
                   <span className="flex gap-2">
-                    <Button
-                      variant="secondary"
-                      className="h-8 px-3"
-                      disabled={busy}
-                      onClick={() => setEditingPayment(payment)}
-                    >
+                    <Button variant="secondary" className="h-8 px-3" onClick={() => setEditingPayment(payment)}>
                       {t("common.edit")}
                     </Button>
                     {canDelete && (
                       <Button
                         variant="ghost"
                         className="h-8 px-3 text-red-600"
-                        disabled={busy}
-                        onClick={() => void removePayment(payment)}
+                        onClick={() => setRemovingPayment(payment)}
                       >
                         {t("payables.removePayment")}
                       </Button>
@@ -465,8 +475,6 @@ function SettlementModal({
               ))}
             </ul>
           )}
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex justify-between gap-2">
             <Button
@@ -488,6 +496,13 @@ function SettlementModal({
               onClose={() => setAdding(false)}
             />
           )}
+          {removingPayment && (
+            <RemovePaymentModal
+              invoiceId={invoiceId}
+              payment={removingPayment}
+              onClose={() => setRemovingPayment(null)}
+            />
+          )}
           {editingPayment && (
             <PaymentForm
               invoice={invoice}
@@ -498,6 +513,67 @@ function SettlementModal({
         </div>
       )}
     </Modal>
+  );
+}
+
+/**
+ * Undoing a settlement — the two sides of it come apart together.
+ *
+ * Removing the payment always does two things on the server, in one database
+ * transaction: the invoice's status is recomputed from the lines that are left
+ * (so the last payment leaving puts it back to unpaid), and the bank movement it
+ * was matched to stops being matched.
+ *
+ * Whether that movement is also *deleted* is asked here rather than assumed. A
+ * matched movement is usually a line copied from a real bank statement: the
+ * money left the account whatever happens to the invoice, so deleting it by
+ * default would put the app's balance out of step with the bank's. The box is
+ * for the other case — a movement entered only to record this payment, which
+ * means nothing once the payment is gone.
+ */
+function RemovePaymentModal({
+  invoiceId,
+  payment,
+  onClose,
+}: {
+  invoiceId: number;
+  payment: Payment;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const [deleteMovement, setDeleteMovement] = useState(false);
+  const matched = payment.bank_transaction_id !== null;
+
+  return (
+    <PasswordConfirmModal
+      title={t("payables.removePayment")}
+      message={matched ? t("payables.removePaymentMatchedConfirm") : t("payables.removePaymentConfirm")}
+      onClose={onClose}
+      onConfirm={(password) =>
+        apiFetch(`/payables/${invoiceId}/payments/${payment.id}`, {
+          method: "DELETE",
+          json: {
+            current_password: password,
+            delete_bank_transaction: matched && deleteMovement,
+          },
+        })
+      }
+    >
+      {matched && (
+        <div>
+          <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={deleteMovement}
+              onChange={(e) => setDeleteMovement(e.target.checked)}
+            />
+            {t("payables.alsoDeleteMovement")}
+          </label>
+          <p className="mt-1 text-xs text-zinc-500">{t("payables.alsoDeleteMovementHint")}</p>
+        </div>
+      )}
+    </PasswordConfirmModal>
   );
 }
 

@@ -26,6 +26,10 @@ class StoreUserRequest extends FormRequest
             'is_active' => ['sometimes', 'boolean'],
             'roles' => ['array'],
             'roles.*' => ['string', 'exists:roles,name'],
+            // Granted on top of whatever the roles already carry — the effective
+            // set is the union of the two, and Spatie computes it that way.
+            'permissions' => ['array'],
+            'permissions.*' => ['string', 'exists:permissions,name'],
         ];
     }
 }

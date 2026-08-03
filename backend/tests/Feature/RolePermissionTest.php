@@ -289,4 +289,172 @@ class RolePermissionTest extends TestCase
             'password' => 'short',
         ])->assertStatus(422)->assertJsonValidationErrors('password');
     }
+
+    /**
+     * The roles list itself, which nothing covered before.
+     *
+     * It used to 500 on every call: counting holders through Spatie's `users`
+     * relation resolves the model from `config('auth.defaults.guard')`, and
+     * `auth:sanctum` sets that to a guard this app never defines — so the list
+     * that the Roles screen and the create-user role picker both read was
+     * unreachable, while the POST that creates a role worked. That is the whole
+     * "I can't add a new role": roles were being saved into a list that could
+     * not be displayed.
+     */
+    public function test_the_roles_list_loads_with_its_headcount(): void
+    {
+        $admin = $this->actingAsSuperAdmin();
+
+        $holder = User::factory()->create();
+        $holder->assignRole('Viewer');
+
+        $roles = collect($this->getJson('/api/roles')->assertOk()->json('data'));
+
+        $this->assertTrue($roles->contains('name', 'Super Admin'));
+        $this->assertSame(1, $roles->firstWhere('name', 'Viewer')['users_count']);
+        $this->assertSame(1, $roles->firstWhere('name', 'Super Admin')['users_count']);
+        $this->assertSame(0, $roles->firstWhere('name', 'Worker')['users_count']);
+        $this->assertTrue($admin->hasRole('Super Admin'));
+    }
+
+    public function test_a_created_role_appears_in_the_list_with_its_permissions(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $this->postJson('/api/roles', [
+            'name' => 'Payments Officer',
+            'permissions' => ['payables.view', 'payables.create'],
+        ])->assertCreated();
+
+        $created = collect($this->getJson('/api/roles')->assertOk()->json('data'))
+            ->firstWhere('name', 'Payments Officer');
+
+        $this->assertNotNull($created);
+        $this->assertEqualsCanonicalizing(['payables.view', 'payables.create'], $created['permissions']);
+        $this->assertFalse($created['is_system']);
+    }
+
+    public function test_a_role_can_be_edited_and_then_deleted(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $roleId = $this->postJson('/api/roles', ['name' => 'Temp', 'permissions' => ['payables.view']])
+            ->assertCreated()->json('data.id');
+
+        $this->putJson("/api/roles/{$roleId}", [
+            'name' => 'Temp Renamed',
+            'permissions' => ['payables.view', 'receivables.manage'],
+        ])->assertOk()->assertJsonPath('data.name', 'Temp Renamed');
+
+        $this->deleteJson("/api/roles/{$roleId}")->assertOk();
+        $this->assertFalse(Role::where('name', 'Temp Renamed')->exists());
+    }
+
+    /**
+     * Effective permissions are the role's plus the user's own, and both are
+     * settled when the login is created.
+     */
+    public function test_a_new_user_gets_their_role_plus_any_extra_permissions(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $this->postJson('/api/roles', ['name' => 'Site Clerk', 'permissions' => ['attendance.submit']])
+            ->assertCreated();
+
+        $this->postJson('/api/users', [
+            'name' => 'Clerk',
+            'email' => 'clerk@adminismine.local',
+            'password' => 'first-password-1',
+            'roles' => ['Site Clerk'],
+            'permissions' => ['payables.view'],
+        ])->assertCreated()
+            ->assertJsonPath('data.roles.0', 'Site Clerk')
+            ->assertJsonPath('data.direct_permissions.0', 'payables.view');
+
+        $clerk = User::where('email', 'clerk@adminismine.local')->first();
+
+        // The union, not one or the other.
+        $this->assertTrue($clerk->can('attendance.submit'));
+        $this->assertTrue($clerk->can('payables.view'));
+        $this->assertFalse($clerk->can('payables.approve'));
+    }
+
+    /** Enforced by the API, not by which buttons the frontend draws. */
+    public function test_extra_permissions_are_enforced_on_the_backend(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $this->postJson('/api/users', [
+            'name' => 'Reader',
+            'email' => 'reader@adminismine.local',
+            'password' => 'first-password-1',
+            'permissions' => ['payables.view'],
+        ])->assertCreated();
+
+        Sanctum::actingAs(User::where('email', 'reader@adminismine.local')->first());
+
+        $this->getJson('/api/payables')->assertOk();
+        // Granted the view, never the approval that deleting an invoice needs.
+        $this->getJson('/api/bank-transactions')->assertStatus(403);
+    }
+
+    public function test_super_admin_can_delete_a_user_they_created(): void
+    {
+        $admin = $this->actingAsSuperAdmin();
+
+        $id = $this->postJson('/api/users', [
+            'name' => 'Mistake',
+            'email' => 'mistake@adminismine.local',
+            'password' => 'first-password-1',
+        ])->assertCreated()->json('data.id');
+
+        $this->assertSame($admin->id, User::find($id)->created_by);
+
+        // The password is required every time, and a wrong one changes nothing.
+        $this->deleteJson("/api/users/{$id}")->assertStatus(422)->assertJsonValidationErrors('current_password');
+        $this->deleteJson("/api/users/{$id}", ['current_password' => 'nope'])->assertStatus(422);
+        $this->assertDatabaseHas('users', ['id' => $id]);
+
+        $this->deleteJson("/api/users/{$id}", ['current_password' => 'password'])->assertOk();
+        $this->assertDatabaseMissing('users', ['id' => $id]);
+    }
+
+    public function test_a_user_someone_else_created_cannot_be_deleted(): void
+    {
+        $otherAdmin = User::factory()->create();
+        $otherAdmin->assignRole('Super Admin');
+        Sanctum::actingAs($otherAdmin);
+
+        $id = $this->postJson('/api/users', [
+            'name' => 'Theirs',
+            'email' => 'theirs@adminismine.local',
+            'password' => 'first-password-1',
+        ])->assertCreated()->json('data.id');
+
+        $this->actingAsSuperAdmin();
+
+        $this->deleteJson("/api/users/{$id}", ['current_password' => 'password'])->assertStatus(403);
+        $this->assertDatabaseHas('users', ['id' => $id]);
+    }
+
+    public function test_an_admin_who_is_not_super_admin_cannot_delete_a_user(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('Admin');
+        Sanctum::actingAs($admin);
+
+        $target = User::factory()->create(['created_by' => $admin->id]);
+
+        $this->deleteJson("/api/users/{$target->id}", ['current_password' => 'password'])->assertStatus(403);
+        $this->assertDatabaseHas('users', ['id' => $target->id]);
+    }
+
+    public function test_you_cannot_delete_your_own_account(): void
+    {
+        $admin = $this->actingAsSuperAdmin();
+        $admin->forceFill(['created_by' => $admin->id])->save();
+
+        $this->deleteJson("/api/users/{$admin->id}", ['current_password' => 'password'])->assertStatus(422);
+        $this->assertDatabaseHas('users', ['id' => $admin->id]);
+    }
 }

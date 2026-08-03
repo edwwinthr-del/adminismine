@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
 import { LOCALE_LABELS, type Locale } from "@/lib/i18n/dictionaries";
+import { ChangePasswordModal } from "./change-password-modal";
 import { NotificationBell } from "./notification-bell";
 
 export function Topbar() {
   const { locale, locales, setLocale, t } = useI18n();
   const { user, logout, setLocaleRemote } = useAuth();
+  const [changingPassword, setChangingPassword] = useState(false);
 
   function onLocaleChange(next: Locale) {
     setLocale(next);
@@ -36,12 +39,26 @@ export function Topbar() {
         <div className="text-xs text-zinc-500">{user?.roles?.[0]}</div>
       </div>
 
+      {/*
+        Deliberately gated on nothing but being signed in. Every role reaches
+        this, because an account's password belongs to the account holder — the
+        reset on the Users screen is for someone who has already lost access.
+      */}
+      <button
+        onClick={() => setChangingPassword(true)}
+        className="text-sm font-medium text-zinc-600 transition-colors hover:text-indigo-600 dark:text-zinc-300"
+      >
+        {t("account.changePassword")}
+      </button>
+
       <button
         onClick={() => void logout()}
         className="text-sm font-medium text-zinc-600 transition-colors hover:text-red-600 dark:text-zinc-300"
       >
         {t("common.logout")}
       </button>
+
+      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
     </header>
   );
 }

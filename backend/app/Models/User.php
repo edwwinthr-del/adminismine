@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\Searchable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -30,6 +31,7 @@ class User extends Authenticatable
         'password',
         'locale',
         'is_active',
+        'created_by',
     ];
 
     protected $hidden = [
@@ -44,5 +46,16 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
         ];
+    }
+
+    /** The administrator who granted this login, if the account records one. */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'created_by');
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole(self::SUPER_ADMIN);
     }
 }

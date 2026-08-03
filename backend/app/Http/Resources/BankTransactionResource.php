@@ -18,6 +18,12 @@ class BankTransactionResource extends JsonResource
             'nlb_amount' => (float) $this->nlb_amount,
             'lovcen_amount' => (float) $this->lovcen_amount,
             'net_amount' => $this->net_amount,
+            // Present only on the ledger list, which asks for it explicitly
+            // (BankTransaction::scopeWithRunningBalance).
+            'running_balance' => $this->when(
+                $this->running_balance !== null,
+                fn (): float => round((float) $this->running_balance, 2),
+            ),
             'category' => $this->category,
             'is_uncategorized' => $this->is_uncategorized,
             'possible_duplicate' => (bool) ($this->possible_duplicate ?? false),

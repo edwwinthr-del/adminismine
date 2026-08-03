@@ -59,6 +59,9 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/me/locale', [AuthController::class, 'updateLocale']);
+    // Changing your own password needs no permission — it is the one account
+    // action that belongs to the account holder whatever their role.
+    Route::put('/me/password', [AuthController::class, 'updatePassword']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', fn (Request $request) => $request->user());
 
@@ -436,7 +439,11 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::put('/users/{user}/password', [UserAccessController::class, 'updatePassword']);
         Route::put('/users/{user}/roles', [UserAccessController::class, 'syncRoles']);
         Route::put('/users/{user}/extra-permissions', [UserAccessController::class, 'syncPermissions']);
-        // No delete: users are deactivated instead, so the created_by/updated_by
-        // stamps and audit rows pointing at them stay intact (rule 3).
+        // Deactivation stays the norm — it keeps the created_by/updated_by
+        // stamps and audit rows pointing at the account intact (rule 3). Delete
+        // is the narrow exception: a Super Admin removing a login they granted
+        // themselves, password-confirmed. UserAccessController::destroy holds
+        // every one of those conditions.
+        Route::delete('/users/{user}', [UserAccessController::class, 'destroy']);
     });
 });

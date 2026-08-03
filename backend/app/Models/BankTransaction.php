@@ -19,6 +19,28 @@ class BankTransaction extends Model
     /** Canonical movement categories — stored as-is, translated only for display (rule 4). */
     public const CATEGORIES = ['income', 'expense', 'transfer', 'loan', 'payroll', 'housing', 'travel', 'other'];
 
+    /**
+     * The categories that state a direction, and the sign an amount must carry
+     * to mean it.
+     *
+     * Direction in this table is the **sign of the amount**, not the category:
+     * `net_amount`, every balance and the dashboard's income/expense split all
+     * read the sign and nothing else. Category was only ever a label, so nothing
+     * stopped an expense being typed as +300 — and a positive "expense" is added
+     * to the balance and to income, which is exactly the "expenses are added
+     * instead of subtracted" symptom. Below is the one place the two are tied
+     * together; {@see normalizeAmountSigns()} applies it on every save.
+     *
+     * The other categories are left alone on purpose: a transfer is negative on
+     * one account and positive on another *within the same row*, and loan,
+     * payroll, housing, travel and other legitimately run both ways (a loan
+     * received is money in, a repayment is money out).
+     */
+    public const DIRECTIONS = ['income' => 1, 'expense' => -1];
+
+    /** The three account columns whose signed sum is the movement. */
+    public const AMOUNT_COLUMNS = ['cash_amount', 'nlb_amount', 'lovcen_amount'];
+
     /** @var list<string> */
     protected array $searchable = ['description_1', 'description_2'];
 
@@ -49,6 +71,40 @@ class BankTransaction extends Model
             'nlb_amount' => 'decimal:2',
             'lovcen_amount' => 'decimal:2',
         ];
+    }
+
+    /**
+     * Normalisation happens on the model, not in a form request, so it holds for
+     * every way a row is written — the API, the Excel importer, a seeder or a
+     * console command. There is no path that can store a movement whose sign
+     * contradicts its category.
+     */
+    protected static function booted(): void
+    {
+        static::saving(fn (self $transaction) => $transaction->normalizeAmountSigns());
+    }
+
+    /**
+     * Force the account amounts to agree with the category's direction.
+     *
+     * Zeroes are left as they are (an untouched account is not a direction), and
+     * the magnitude the operator typed is never changed — only its sign.
+     */
+    public function normalizeAmountSigns(): void
+    {
+        $sign = self::DIRECTIONS[$this->category] ?? null;
+
+        if ($sign === null) {
+            return;
+        }
+
+        foreach (self::AMOUNT_COLUMNS as $column) {
+            $amount = (float) $this->{$column};
+
+            if ($amount !== 0.0) {
+                $this->{$column} = $sign * abs($amount);
+            }
+        }
     }
 
     public function supplier(): BelongsTo
@@ -181,5 +237,35 @@ class BankTransaction extends Model
     public function scopeUnmatched(Builder $query): Builder
     {
         return $query->doesntHave('payments');
+    }
+
+    /**
+     * Add `running_balance`: the balance of all three accounts as of each row,
+     * in ledger order (oldest first, id breaking ties on the same day).
+     *
+     * The cumulative sum is computed by a window function over the *whole*
+     * table inside a subquery, and the page's filters are applied outside it.
+     * That matters: a running balance is only meaningful against the complete
+     * ledger, so filtering to one category must not make the column read as
+     * though the other movements never happened. The alias is the table's own
+     * name, so every existing filter, the search scope and the relation
+     * subqueries keep resolving unchanged.
+     *
+     * It stays one query — the alternative, walking rows in PHP to accumulate,
+     * would have to read the whole table to render a single page.
+     */
+    public function scopeWithRunningBalance(Builder $query): Builder
+    {
+        $table = $this->getTable();
+        $net = implode(' + ', self::AMOUNT_COLUMNS);
+
+        $ledger = static::query()
+            ->select("{$table}.*")
+            ->selectRaw(
+                "SUM({$net}) OVER (ORDER BY {$table}.date, {$table}.id "
+                .'ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as running_balance',
+            );
+
+        return $query->fromSub($ledger, $table);
     }
 }

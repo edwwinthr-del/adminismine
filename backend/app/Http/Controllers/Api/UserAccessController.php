@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\ConfirmsPassword;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\User\StoreUserRequest;
 use App\Http\Requests\User\UpdateUserPasswordRequest;
@@ -9,10 +10,13 @@ use App\Http\Requests\User\UpdateUserRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class UserAccessController extends Controller
 {
+    use ConfirmsPassword;
+
     /** Logins with their roles — used by pickers (e.g. linking a master to a login). */
     public function index(Request $request): JsonResponse
     {
@@ -40,26 +44,100 @@ class UserAccessController extends Controller
      */
     public function store(StoreUserRequest $request): JsonResponse
     {
-        $user = User::create([
-            'name' => $request->input('name'),
-            'email' => $request->input('email'),
-            // The `hashed` cast on the model does the hashing.
-            'password' => $request->input('password'),
-            'locale' => $request->input('locale', 'en'),
-            'is_active' => $request->boolean('is_active', true),
-        ]);
-
         $roles = $request->input('roles', []);
-        $user->syncRoles($roles);
+        // The spec's "one role plus additional permission parameters": a role
+        // carries the defaults, and anything this particular person needs on top
+        // is granted directly. Both are settled while the account is created, so
+        // a new login does not have to be opened a second time to be usable.
+        $extraPermissions = $request->input('permissions', []);
+
+        $user = DB::transaction(function () use ($request, $roles, $extraPermissions): User {
+            $user = User::create([
+                'name' => $request->input('name'),
+                'email' => $request->input('email'),
+                // The `hashed` cast on the model does the hashing.
+                'password' => $request->input('password'),
+                'locale' => $request->input('locale', 'en'),
+                'is_active' => $request->boolean('is_active', true),
+                // Who granted the login — what makes "accounts you created"
+                // answerable from the record rather than from memory.
+                'created_by' => $request->user()?->getKey(),
+            ]);
+
+            $user->syncRoles($roles);
+            $user->syncPermissions($extraPermissions);
+
+            return $user;
+        });
 
         // The password is never logged, here or anywhere else.
         activity()
             ->performedOn($user)
             ->causedBy($request->user())
-            ->withProperties(['email' => $user->email, 'roles' => $roles])
+            ->withProperties(['email' => $user->email, 'roles' => $roles, 'permissions' => $extraPermissions])
             ->log('user.created');
 
         return response()->json(['data' => $this->row($user->load(['roles', 'permissions']))], 201);
+    }
+
+    /**
+     * Delete a login a Super Admin granted.
+     *
+     * The app's default is still deactivation — a disabled account keeps the
+     * created_by/updated_by stamps and the audit rows that point at it, which is
+     * why `update` exists and why this route refuses far more than it accepts.
+     * Deletion is allowed only for the narrow case it was asked for: a Super
+     * Admin removing an account they created themselves, typically one made in
+     * error. Everything is checked here rather than in the UI:
+     *
+     * - only a Super Admin may call it at all;
+     * - only accounts stamped with that Super Admin's own id (an account created
+     *   before the stamp existed, or by someone else, cannot be deleted);
+     * - never your own account, and never the last active Super Admin;
+     * - and only behind a re-entered password.
+     *
+     * The audit row keeps the deleted account's name and email, because the
+     * user rows that referenced it will be nulled by the FK and would otherwise
+     * leave the trail pointing at nobody.
+     */
+    public function destroy(Request $request, User $user): JsonResponse
+    {
+        $this->confirmPassword($request);
+
+        $actor = $request->user();
+
+        if (! $actor?->isSuperAdmin()) {
+            return response()->json(['message' => 'Only a Super Admin may delete a login.'], 403);
+        }
+
+        if ($actor->is($user)) {
+            return response()->json(['message' => 'You cannot delete your own account.'], 422);
+        }
+
+        if ((int) $user->created_by !== (int) $actor->getKey()) {
+            return response()->json([
+                'message' => 'You can only delete accounts you created. Deactivate this one instead.',
+            ], 403);
+        }
+
+        if ($this->isLastActiveSuperAdmin($user)) {
+            return response()->json(['message' => 'At least one active Super Admin must remain.'], 422);
+        }
+
+        $identity = ['id' => $user->id, 'name' => $user->name, 'email' => $user->email];
+
+        activity()->performedOn($user)->causedBy($actor)
+            ->withProperties(['deleted' => $identity])
+            ->log('user.deleted');
+
+        DB::transaction(function () use ($user) {
+            $user->tokens()->delete();
+            $user->syncRoles([]);
+            $user->syncPermissions([]);
+            $user->delete();
+        });
+
+        return response()->json(['message' => 'User deleted.']);
     }
 
     public function update(UpdateUserRequest $request, User $user): JsonResponse
@@ -213,6 +291,11 @@ class UserAccessController extends Controller
             'email' => $user->email,
             'locale' => $user->locale,
             'is_active' => $user->is_active,
+            // Who granted the login. The Users screen only offers Delete for
+            // accounts the signed-in Super Admin created; the API enforces the
+            // same rule in destroy(), so hiding the button is a convenience and
+            // never the check itself.
+            'created_by' => $user->created_by,
             'roles' => $user->getRoleNames()->values(),
             'direct_permissions' => $user->getDirectPermissions()->pluck('name')->values(),
         ];

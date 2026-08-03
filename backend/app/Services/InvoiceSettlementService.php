@@ -71,14 +71,60 @@ class InvoiceSettlementService
         });
     }
 
-    /** Remove a payment — the way a duplicate or misapplied entry is undone. */
-    public function deletePayment(PayableInvoice|ReceivableInvoice $invoice, Payment $payment): void
-    {
+    /**
+     * Remove a payment — the way a duplicate or misapplied entry is undone.
+     *
+     * Both halves of the settlement come apart together, inside one transaction:
+     * the invoice's paid/remaining/status are recomputed from the lines that are
+     * left (so the last payment leaving flips it back to unpaid), and the bank
+     * movement this payment was matched to stops being matched — the link lives
+     * on the payment row, so it goes with it rather than being cleaned up
+     * afterwards by a second write that could fail on its own.
+     *
+     * Whether that movement is also *deleted* is the caller's decision, and it
+     * defaults to no. A matched movement is usually a line the operator entered
+     * from a real bank statement: the money did leave the account whatever
+     * happens to the invoice it was pointed at, and erasing it would put the
+     * app's balance out of step with the bank's. `$deleteBankTransaction` is for
+     * the other case — the movement was only ever entered to record this
+     * payment, and without it the row means nothing.
+     *
+     * @param  bool  $deleteBankTransaction  also remove the matched bank movement
+     *
+     * @throws ValidationException when that movement still settles other invoices
+     */
+    public function deletePayment(
+        PayableInvoice|ReceivableInvoice $invoice,
+        Payment $payment,
+        bool $deleteBankTransaction = false,
+    ): void {
         $this->assertBelongsTo($invoice, $payment);
 
-        DB::transaction(function () use ($invoice, $payment): void {
+        DB::transaction(function () use ($invoice, $payment, $deleteBankTransaction): void {
+            // Resolved before the payment goes: afterwards there is nothing left
+            // to read the link from.
+            $transaction = $payment->bankTransaction;
+
             $payment->delete();
             $invoice->recalculate();
+
+            if (! $deleteBankTransaction || ! $transaction) {
+                return;
+            }
+
+            // Any payment still pointing at it is another invoice this movement
+            // settles. Deleting it would silently unpay that one too, so the
+            // request is refused and the whole transaction rolls back.
+            if ($transaction->payments()->exists()) {
+                throw ValidationException::withMessages([
+                    'delete_bank_transaction' => [
+                        'That bank movement still settles other invoices. Remove those payments first, or '
+                        .'keep the movement and only remove this payment.',
+                    ],
+                ]);
+            }
+
+            $transaction->delete();
         });
     }
 
