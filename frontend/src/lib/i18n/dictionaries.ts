@@ -1259,6 +1259,21 @@ export const dictionaries: Record<Locale, Dict> = {
     "payables.notes": "Notes",
     "payables.correctable": "A paid invoice can still be corrected — edit the invoice, or the payment that was wrong.",
     "payables.matchedTo": "matched to a movement",
+    "payables.bankRecord": "Bank & Cash record",
+    "payables.bankRecordBook": "Record a new movement for this payment",
+    "payables.bankRecordBookHint":
+      "A movement is added to Bank & Cash, so this payment shows up in the account balances, the cashflow and on the dashboard. It is corrected and removed together with the payment.",
+    "payables.bankRecordMatch": "Match a movement already entered",
+    "payables.bankRecordMatchHint":
+      "Point this payment at a movement you entered from a bank statement. Nothing is added, and the movement is never changed to follow the invoice.",
+    "payables.bankRecordNone": "No Bank & Cash record",
+    "payables.bankRecordNoneHint":
+      "The invoice is settled, but no money is recorded as having moved through cash, NLB or Lovćen — so it will not appear in the balances or on the dashboard.",
+    "payables.bankRecordKeep": "Leave as it is",
+    "payables.bankRecordKeepHint":
+      "The payment's Bank & Cash link is left untouched. A movement recorded from this payment still follows the amount, date and account you set above.",
+    "payables.bankRecordNoAccount": "Choose cash, NLB or Lovćen to record a movement for this payment.",
+    "payables.bankRecordSelect": "Search movements…",
     "receivables.edit": "Edit",
     "receivables.editInvoice": "Edit invoice",
     "receivables.manage": "Settlement",
@@ -2589,6 +2604,21 @@ export const dictionaries: Record<Locale, Dict> = {
     "payables.notes": "Napomene",
     "payables.correctable": "Plaćena faktura se i dalje može ispraviti — izmenite fakturu ili pogrešnu uplatu.",
     "payables.matchedTo": "povezano sa transakcijom",
+    "payables.bankRecord": "Evidencija u Banci i kasi",
+    "payables.bankRecordBook": "Zabeleži novu stavku za ovu uplatu",
+    "payables.bankRecordBookHint":
+      "Stavka se dodaje u Banku i kasu, pa se ova uplata vidi u stanju računa, u toku novca i na kontrolnoj tabli. Ispravlja se i briše zajedno sa uplatom.",
+    "payables.bankRecordMatch": "Poveži sa već unetom stavkom",
+    "payables.bankRecordMatchHint":
+      "Uputite ovu uplatu na stavku koju ste uneli sa bankovnog izvoda. Ništa se ne dodaje i stavka se nikada ne menja da bi pratila fakturu.",
+    "payables.bankRecordNone": "Bez evidencije u Banci i kasi",
+    "payables.bankRecordNoneHint":
+      "Faktura je namirena, ali se ne beleži da je novac prošao kroz kasu, NLB ili Lovćen — pa se neće pojaviti u stanju računa ni na kontrolnoj tabli.",
+    "payables.bankRecordKeep": "Ostavi kako jeste",
+    "payables.bankRecordKeepHint":
+      "Veza uplate sa Bankom i kasom se ne dira. Stavka zabeležena iz ove uplate i dalje prati iznos, datum i račun koje ste gore postavili.",
+    "payables.bankRecordNoAccount": "Izaberite kasu, NLB ili Lovćen da biste zabeležili stavku za ovu uplatu.",
+    "payables.bankRecordSelect": "Pretraga stavki…",
     "receivables.edit": "Izmeni",
     "receivables.editInvoice": "Izmena fakture",
     "receivables.manage": "Namirenje",
@@ -3919,6 +3949,21 @@ export const dictionaries: Record<Locale, Dict> = {
     "payables.notes": "Notlar",
     "payables.correctable": "Ödenmiş bir fatura yine de düzeltilebilir — faturayı ya da hatalı ödemeyi düzenleyin.",
     "payables.matchedTo": "bir harekete eşlendi",
+    "payables.bankRecord": "Banka ve Kasa kaydı",
+    "payables.bankRecordBook": "Bu ödeme için yeni hareket kaydet",
+    "payables.bankRecordBookHint":
+      "Banka ve Kasa'ya bir hareket eklenir, böylece bu ödeme hesap bakiyelerinde, nakit akışında ve panoda görünür. Ödemeyle birlikte düzeltilir ve silinir.",
+    "payables.bankRecordMatch": "Zaten girilmiş bir hareketle eşleştir",
+    "payables.bankRecordMatchHint":
+      "Bu ödemeyi banka ekstresinden girdiğiniz bir harekete bağlayın. Hiçbir şey eklenmez ve hareket faturayı izlemek için asla değiştirilmez.",
+    "payables.bankRecordNone": "Banka ve Kasa kaydı yok",
+    "payables.bankRecordNoneHint":
+      "Fatura kapatılır, ancak paranın kasadan, NLB'den veya Lovćen'den geçtiği kaydedilmez — bu yüzden bakiyelerde ve panoda görünmez.",
+    "payables.bankRecordKeep": "Olduğu gibi bırak",
+    "payables.bankRecordKeepHint":
+      "Ödemenin Banka ve Kasa bağlantısına dokunulmaz. Bu ödemeden kaydedilen bir hareket, yukarıda belirlediğiniz tutarı, tarihi ve hesabı izlemeye devam eder.",
+    "payables.bankRecordNoAccount": "Bu ödeme için hareket kaydetmek üzere kasa, NLB veya Lovćen seçin.",
+    "payables.bankRecordSelect": "Hareketlerde ara…",
     "receivables.edit": "Düzenle",
     "receivables.editInvoice": "Faturayı düzenle",
     "receivables.manage": "Kapanış",

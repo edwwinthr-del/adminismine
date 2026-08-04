@@ -7,6 +7,12 @@ import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, formatMoney, todayISO } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import {
+  BankRecordField,
+  bankRecordPayload,
+  canBook,
+  type BankRecordMode,
+} from "@/components/bank-record-field";
 import { AsyncSelect } from "@/components/ui/async-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -594,6 +600,25 @@ function SettleForm({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  /*
+   * A receipt only reaches the balances, the cashflow and the dashboard if a
+   * bank movement records it — those figures are summed from that table alone.
+   * So a new payment defaults to booking one, which is what the operator means
+   * by choosing cash/NLB/Lovćen; an edit defaults to changing nothing.
+   */
+  const [bankMode, setBankMode] = useState<BankRecordMode>(
+    editing ? "keep" : canBook(method) ? "book" : "none",
+  );
+  const [movementId, setMovementId] = useState<number | null>(payment?.bank_transaction_id ?? null);
+
+  function changeMethod(next: string) {
+    setMethod(next);
+
+    // `other` names no account, so there is nothing to book into.
+    if (!canBook(next) && bankMode === "book") setBankMode("none");
+    if (canBook(next) && bankMode === "none" && !editing) setBankMode("book");
+  }
+
   const title = editing
     ? isPayment
       ? t("receivables.editPayment")
@@ -609,7 +634,12 @@ function SettleForm({
 
     const segment = isPayment ? "payments" : "deductions";
     const body = isPayment
-      ? { amount: Number(amount), payment_date: date, method }
+      ? {
+          amount: Number(amount),
+          payment_date: date,
+          method,
+          ...bankRecordPayload(bankMode, movementId),
+        }
       : { amount: Number(amount), deduction_date: date, reason: reason || null };
 
     try {
@@ -653,16 +683,26 @@ function SettleForm({
         </div>
 
         {isPayment ? (
-          <div>
-            <label className={label}>{t("payables.method")}</label>
-            <Select value={method} onChange={(e) => setMethod(e.target.value)}>
-              {METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {t(`method.${m}`)}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <>
+            <div>
+              <label className={label}>{t("payables.method")}</label>
+              <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
+                {METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {t(`method.${m}`)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <BankRecordField
+              mode={bankMode}
+              onModeChange={setBankMode}
+              movementId={movementId}
+              onMovementChange={setMovementId}
+              method={method}
+              editing={editing}
+            />
+          </>
         ) : (
           <div>
             <label className={label}>{t("receivables.reason")}</label>

@@ -113,9 +113,14 @@ class PayableController extends Controller
                 ->all(),
         ];
 
-        DB::transaction(function () use ($payable) {
-            $payable->payments()->delete();
+        // Movements generated from these payments are the exception: nothing
+        // would explain them once the invoice is gone, and they would go on
+        // counting against every balance the dashboard shows.
+        $removed['removed_bank_transactions'] = DB::transaction(function () use ($payable): array {
+            $generated = $this->settlements->releasePayments($payable);
             $payable->delete();
+
+            return $generated;
         });
 
         activity()->performedOn($payable)->causedBy($request->user())
@@ -125,14 +130,26 @@ class PayableController extends Controller
         return response()->json(['message' => 'Payable deleted.']);
     }
 
+    /**
+     * Record money paid out. When the payment is itself the record that the
+     * money left, `book_bank_transaction` writes the matching bank/cash
+     * movement — without it the payment never reaches the balances, the
+     * cashflow or the dashboard, all of which are summed from that table.
+     */
     public function recordPayment(RecordPaymentRequest $request, PayableInvoice $payable): JsonResponse
     {
-        $data = $request->validated();
+        $data = $request->paymentData();
+        $booking = $request->boolean('book_bank_transaction');
 
-        $this->settlements->recordPayment($payable, $data);
+        $payment = $this->settlements->recordPayment($payable, $data, $booking);
 
         activity()->performedOn($payable)->causedBy($request->user())
-            ->withProperties(['amount' => $data['amount'], 'method' => $data['method']])
+            ->withProperties([
+                'amount' => $data['amount'],
+                'method' => $data['method'],
+                'bank_transaction_id' => $payment->fresh()->bank_transaction_id,
+                'booked_bank_transaction' => $booking,
+            ])
             ->log('payable.payment_recorded');
 
         return response()->json([

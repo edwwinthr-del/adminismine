@@ -23,23 +23,40 @@ use Illuminate\Validation\ValidationException;
  * The one invariant everything here defends: the lines settling an invoice can
  * never add up to more than the invoice. Paid/remaining/status stay derived
  * (rule 1) — they are recomputed from the lines after every change, never set.
+ *
+ * A settlement may also be the record that money moved through an account, in
+ * which case the bank/cash movement is written, corrected and removed alongside
+ * the payment, inside the same transaction — see {@see PaymentBankMovement} for
+ * why that is opt-in per payment rather than automatic.
  */
 class InvoiceSettlementService
 {
     /** Rounding slack, so 0.1 + 0.2 never reads as an overpayment. */
     private const TOLERANCE = 0.001;
 
+    public function __construct(private readonly PaymentBankMovement $movements) {}
+
     /**
      * Record a new payment against an invoice.
      *
      * @param  array<string, mixed>  $data
+     * @param  bool  $bookMovement  also write the bank/cash movement this payment
+     *                              records, and match the payment to it
      */
-    public function recordPayment(PayableInvoice|ReceivableInvoice $invoice, array $data): Payment
-    {
+    public function recordPayment(
+        PayableInvoice|ReceivableInvoice $invoice,
+        array $data,
+        bool $bookMovement = false,
+    ): Payment {
         $this->assertFits($invoice, (float) $data['amount'], $this->settled($invoice));
 
-        return DB::transaction(function () use ($invoice, $data): Payment {
+        return DB::transaction(function () use ($invoice, $data, $bookMovement): Payment {
             $payment = $invoice->payments()->create($data);
+
+            if ($bookMovement) {
+                $this->movements->create($invoice, $payment);
+            }
+
             $invoice->recalculate();
 
             return $payment;
@@ -64,7 +81,12 @@ class InvoiceSettlementService
         $this->assertFits($invoice, $amount, $this->settled($invoice) - (float) $payment->amount);
 
         return DB::transaction(function () use ($invoice, $payment, $data): Payment {
+            $before = $this->movements->linked($payment);
+
             $payment->update($data);
+            // A movement this payment generated follows the correction; one the
+            // operator typed off a statement is left exactly as the bank has it.
+            $this->movements->sync($invoice, $payment, $before);
             $invoice->recalculate();
 
             return $payment->refresh();
@@ -81,15 +103,20 @@ class InvoiceSettlementService
      * on the payment row, so it goes with it rather than being cleaned up
      * afterwards by a second write that could fail on its own.
      *
-     * Whether that movement is also *deleted* is the caller's decision, and it
-     * defaults to no. A matched movement is usually a line the operator entered
-     * from a real bank statement: the money did leave the account whatever
-     * happens to the invoice it was pointed at, and erasing it would put the
-     * app's balance out of step with the bank's. `$deleteBankTransaction` is for
-     * the other case — the movement was only ever entered to record this
-     * payment, and without it the row means nothing.
+     * Whether that movement is also *deleted* depends on where it came from:
      *
-     * @param  bool  $deleteBankTransaction  also remove the matched bank movement
+     * - One this app generated from the payment ({@see PaymentBankMovement})
+     *   always goes with it. It was never independent evidence — it existed to
+     *   say "this payment moved money", and a movement left behind after its
+     *   payment is removed would keep inflating every balance on the dashboard
+     *   with money nothing accounts for.
+     * - One the operator typed off a real bank statement stays by default. The
+     *   money did leave the account whatever happens to the invoice it was
+     *   pointed at, and erasing it would put the app's balance out of step with
+     *   the bank's. `$deleteBankTransaction` is the caller's override for when
+     *   that row was only ever entered to record this payment.
+     *
+     * @param  bool  $deleteBankTransaction  also remove a hand-entered matched movement
      *
      * @throws ValidationException when that movement still settles other invoices
      */
@@ -104,11 +131,12 @@ class InvoiceSettlementService
             // Resolved before the payment goes: afterwards there is nothing left
             // to read the link from.
             $transaction = $payment->bankTransaction;
+            $remove = $deleteBankTransaction || PaymentBankMovement::isGenerated($transaction);
 
             $payment->delete();
             $invoice->recalculate();
 
-            if (! $deleteBankTransaction || ! $transaction) {
+            if (! $remove || ! $transaction) {
                 return;
             }
 
@@ -126,6 +154,34 @@ class InvoiceSettlementService
 
             $transaction->delete();
         });
+    }
+
+    /**
+     * Drop every payment settling an invoice, on the way to deleting it.
+     *
+     * The movements those payments generated go with them, for the reason above
+     * — otherwise deleting an invoice would leave money on the dashboard that
+     * no record explains. Movements the operator typed off a statement are only
+     * released (the FK nulls the link), because they are the bank's record and
+     * not this invoice's to erase.
+     *
+     * @return list<int> ids of the generated movements that were removed
+     */
+    public function releasePayments(PayableInvoice|ReceivableInvoice $invoice): array
+    {
+        $removed = [];
+
+        foreach ($invoice->payments()->get() as $payment) {
+            $id = $this->movements->discard($payment);
+
+            if ($id !== null) {
+                $removed[] = $id;
+            }
+
+            $payment->delete();
+        }
+
+        return $removed;
     }
 
     /** @param array<string, mixed> $data */

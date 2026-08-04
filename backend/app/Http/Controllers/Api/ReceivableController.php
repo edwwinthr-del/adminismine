@@ -88,25 +88,46 @@ class ReceivableController extends Controller
 
     public function destroy(Request $request, ReceivableInvoice $receivable): JsonResponse
     {
-        DB::transaction(function () use ($receivable) {
-            $receivable->payments()->delete();
+        // The movements those payments generated go with them — a bank row left
+        // behind after the invoice that explains it is gone would keep adding
+        // money to every balance on the dashboard. Movements typed off a real
+        // statement are only released; they are the bank's record, not this
+        // invoice's to erase.
+        $removedMovements = DB::transaction(function () use ($receivable): array {
+            $removed = $this->settlements->releasePayments($receivable);
             $receivable->deductions()->delete();
             $receivable->delete();
+
+            return $removed;
         });
 
-        activity()->performedOn($receivable)->causedBy($request->user())->log('receivable.deleted');
+        activity()->performedOn($receivable)->causedBy($request->user())
+            ->withProperties(['removed_bank_transactions' => $removedMovements])
+            ->log('receivable.deleted');
 
         return response()->json(['message' => 'Receivable deleted.']);
     }
 
+    /**
+     * Record money received. When the payment is itself the record that the
+     * money arrived, `book_bank_transaction` writes the matching bank/cash
+     * movement — without it the receipt never reaches the balances, the
+     * cashflow or the dashboard, all of which are summed from that table.
+     */
     public function recordPayment(RecordPaymentRequest $request, ReceivableInvoice $receivable): JsonResponse
     {
-        $data = $request->validated();
+        $data = $request->paymentData();
+        $booking = $request->boolean('book_bank_transaction');
 
-        $this->settlements->recordPayment($receivable, $data);
+        $payment = $this->settlements->recordPayment($receivable, $data, $booking);
 
         activity()->performedOn($receivable)->causedBy($request->user())
-            ->withProperties(['amount' => $data['amount'], 'method' => $data['method']])
+            ->withProperties([
+                'amount' => $data['amount'],
+                'method' => $data['method'],
+                'bank_transaction_id' => $payment->fresh()->bank_transaction_id,
+                'booked_bank_transaction' => $booking,
+            ])
             ->log('receivable.payment_recorded');
 
         return response()->json([
@@ -130,6 +151,11 @@ class ReceivableController extends Controller
         return $this->fresh($receivable);
     }
 
+    /**
+     * Undo a receipt. A movement this app generated from the payment goes with
+     * it; one typed off a bank statement is only released, unless
+     * `delete_bank_transaction` says it too was only ever this payment's record.
+     */
     public function deletePayment(
         Request $request,
         ReceivableInvoice $receivable,
@@ -137,7 +163,7 @@ class ReceivableController extends Controller
     ): ReceivableInvoiceResource {
         $removed = $payment->only(['amount', 'payment_date', 'method', 'bank_transaction_id']);
 
-        $this->settlements->deletePayment($receivable, $payment);
+        $this->settlements->deletePayment($receivable, $payment, $request->boolean('delete_bank_transaction'));
 
         activity()->performedOn($receivable)->causedBy($request->user())
             ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
