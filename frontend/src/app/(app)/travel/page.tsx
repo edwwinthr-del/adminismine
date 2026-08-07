@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { ApiError, apiFetch, errorMessage } from "@/lib/api";
+import { useResource, withQuery } from "@/lib/data/use-resource";
+import { useEmployeeOptions, type EmployeeOption } from "@/lib/data/use-options";
 import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, formatMoney, todayISO } from "@/lib/format";
@@ -13,11 +15,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-
-interface EmployeeOption {
-  id: number;
-  full_name: string;
-}
 
 interface FlightTicket {
   id: number;
@@ -139,32 +136,22 @@ function statusTone(status: string): "gray" | "amber" | "green" {
   return "gray";
 }
 
-const labelClass = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+const labelClass = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
 export default function TravelPage() {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("tickets");
   const [month, setMonth] = useState(currentMonth);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadSummary = useCallback(async () => {
-    try {
-      const res = await apiFetch<{ data: Summary }>(`/travel/summary?month=${month}`);
-      setSummary(res.data);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
-    }
-  }, [month]);
-
-  useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
+  // The tabs used to be handed an `onChanged` callback so a write inside one
+  // could refresh these totals. They no longer need to: every write goes through
+  // apiFetch, whose markMutated() revalidates this resource wherever it happened.
+  const { data, error } = useResource<{ data: Summary }>(`/travel/summary?month=${month}`);
+  const summary = data?.data ?? null;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("travel.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("travel.title")}</h1>
         <Input className="w-[10rem]" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
       </div>
 
@@ -189,15 +176,15 @@ export default function TravelPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex flex-wrap gap-2 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="control-surface inline-flex flex-wrap gap-1 rounded-full p-1">
         {TABS.map((value) => (
           <button
             key={value}
             onClick={() => setTab(value)}
             className={
               tab === value
-                ? "-mb-px border-b-2 border-zinc-900 px-3 py-2 text-sm font-medium text-zinc-900 dark:border-zinc-100 dark:text-zinc-50"
-                : "-mb-px border-b-2 border-transparent px-3 py-2 text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                ? "rounded-full bg-white px-4 py-1.5 text-sm font-medium text-zinc-900 shadow-[0_1px_2px_rgb(13_12_11/0.06),0_4px_12px_-6px_rgb(13_12_11/0.25)] dark:bg-white/15 dark:text-zinc-50"
+                : "rounded-full px-4 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-white/60 hover:text-zinc-800 dark:hover:bg-white/10 dark:hover:text-zinc-200"
             }
           >
             {t(`travel.tab.${value}`)}
@@ -205,9 +192,9 @@ export default function TravelPage() {
         ))}
       </div>
 
-      {tab === "tickets" && <TicketsTab month={month} onChanged={loadSummary} />}
-      {tab === "expenses" && <ExpensesTab month={month} onChanged={loadSummary} />}
-      {tab === "assistance" && <AssistanceTab month={month} onChanged={loadSummary} />}
+      {tab === "tickets" && <TicketsTab month={month} />}
+      {tab === "expenses" && <ExpensesTab month={month} />}
+      {tab === "assistance" && <AssistanceTab month={month} />}
     </div>
   );
 }
@@ -222,24 +209,9 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-/** The workers list is shared by all three tabs' forms. */
-function useEmployees(): EmployeeOption[] {
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-
-  useEffect(() => {
-    void apiFetch<{ data: EmployeeOption[] }>("/employees?status=active&per_page=200")
-      .then((res) => setEmployees(res.data))
-      .catch(() => setEmployees([]));
-  }, []);
-
-  return employees;
-}
-
-function TicketsTab({ month, onChanged }: { month: string; onChanged: () => Promise<void> }) {
+function TicketsTab({ month }: { month: string }) {
   const { t } = useI18n();
-  const employees = useEmployees();
-  const [tickets, setTickets] = useState<FlightTicket[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { options: employees } = useEmployeeOptions();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<FlightTicket | null>(null);
   const [paying, setPaying] = useState<FlightTicket | null>(null);
@@ -247,28 +219,15 @@ function TicketsTab({ month, onChanged }: { month: string; onChanged: () => Prom
   const [onlyUnwritten, setOnlyUnwritten] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const query = new URLSearchParams({ month });
-      if (onlyUnwritten) query.set("unwritten", "1");
-      const res = await apiFetch<{ data: FlightTicket[] }>(`/travel/tickets?${query.toString()}`);
-      setTickets(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [month, onlyUnwritten]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data, loading } = useResource<{ data: FlightTicket[] }>(
+    withQuery("/travel/tickets", { month, unwritten: onlyUnwritten }),
+  );
+  const tickets = data?.data ?? [];
 
   async function remove(ticket: FlightTicket) {
     if (!window.confirm(t("travel.removeTicketConfirm"))) return;
     try {
       await apiFetch(`/travel/tickets/${ticket.id}`, { method: "DELETE" });
-      await load();
-      await onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     }
@@ -290,9 +249,9 @@ function TicketsTab({ month, onChanged }: { month: string; onChanged: () => Prom
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1040px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("travel.traveller")}</th>
               <th className="px-4 py-3">{t("travel.ticketDate")}</th>
@@ -305,16 +264,16 @@ function TicketsTab({ month, onChanged }: { month: string; onChanged: () => Prom
               <th className="px-4 py-3 text-right">{t("travel.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : tickets.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("travel.noTickets")}
                 </td>
               </tr>
@@ -387,10 +346,6 @@ function TicketsTab({ month, onChanged }: { month: string; onChanged: () => Prom
             setCreating(false);
             setEditing(null);
           }}
-          onSaved={async () => {
-            await load();
-            await onChanged();
-          }}
         />
       )}
       {paying && (
@@ -399,10 +354,6 @@ function TicketsTab({ month, onChanged }: { month: string; onChanged: () => Prom
           endpoint={`/travel/tickets/${paying.id}/payments`}
           remaining={paying.remaining_amount}
           onClose={() => setPaying(null)}
-          onSaved={async () => {
-            await load();
-            await onChanged();
-          }}
         />
       )}
       {files && (
@@ -411,7 +362,6 @@ function TicketsTab({ month, onChanged }: { month: string; onChanged: () => Prom
           basePath={`/travel/tickets/${files.id}/attachments`}
           defaultKind="invoice"
           onClose={() => setFiles(null)}
-          onChanged={load}
         />
       )}
     </div>
@@ -422,12 +372,10 @@ function TicketModal({
   ticket,
   employees,
   onClose,
-  onSaved,
 }: {
   ticket?: FlightTicket;
   employees: EmployeeOption[];
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [employeeId, setEmployeeId] = useState(ticket?.employee_id ? String(ticket.employee_id) : "");
@@ -468,7 +416,6 @@ function TicketModal({
           notes: notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -589,37 +536,22 @@ function TicketModal({
   );
 }
 
-function ExpensesTab({ month, onChanged }: { month: string; onChanged: () => Promise<void> }) {
+function ExpensesTab({ month }: { month: string }) {
   const { t } = useI18n();
-  const employees = useEmployees();
-  const [expenses, setExpenses] = useState<TravelExpense[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { options: employees } = useEmployeeOptions();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<TravelExpense | null>(null);
   const [paying, setPaying] = useState<TravelExpense | null>(null);
   const [files, setFiles] = useState<TravelExpense | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch<{ data: TravelExpense[] }>(`/travel/expenses?month=${month}`);
-      setExpenses(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [month]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data, loading } = useResource<{ data: TravelExpense[] }>(`/travel/expenses?month=${month}`);
+  const expenses = data?.data ?? [];
 
   async function remove(expense: TravelExpense) {
     if (!window.confirm(t("travel.removeExpenseConfirm"))) return;
     try {
       await apiFetch(`/travel/expenses/${expense.id}`, { method: "DELETE" });
-      await load();
-      await onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     }
@@ -632,9 +564,9 @@ function ExpensesTab({ month, onChanged }: { month: string; onChanged: () => Pro
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[980px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("travel.traveller")}</th>
               <th className="px-4 py-3">{t("travel.expenseDate")}</th>
@@ -647,16 +579,16 @@ function ExpensesTab({ month, onChanged }: { month: string; onChanged: () => Pro
               <th className="px-4 py-3 text-right">{t("travel.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : expenses.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("travel.noExpenses")}
                 </td>
               </tr>
@@ -714,10 +646,6 @@ function ExpensesTab({ month, onChanged }: { month: string; onChanged: () => Pro
             setCreating(false);
             setEditing(null);
           }}
-          onSaved={async () => {
-            await load();
-            await onChanged();
-          }}
         />
       )}
       {paying && (
@@ -726,10 +654,6 @@ function ExpensesTab({ month, onChanged }: { month: string; onChanged: () => Pro
           endpoint={`/travel/expenses/${paying.id}/payments`}
           remaining={paying.remaining_amount}
           onClose={() => setPaying(null)}
-          onSaved={async () => {
-            await load();
-            await onChanged();
-          }}
         />
       )}
       {files && (
@@ -738,7 +662,6 @@ function ExpensesTab({ month, onChanged }: { month: string; onChanged: () => Pro
           basePath={`/travel/expenses/${files.id}/attachments`}
           defaultKind="invoice"
           onClose={() => setFiles(null)}
-          onChanged={load}
         />
       )}
     </div>
@@ -750,13 +673,11 @@ function ExpenseModal({
   employees,
   month,
   onClose,
-  onSaved,
 }: {
   expense?: TravelExpense;
   employees: EmployeeOption[];
   month: string;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [employeeId, setEmployeeId] = useState(expense?.employee_id ? String(expense.employee_id) : "");
@@ -792,7 +713,6 @@ function ExpenseModal({
           notes: notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -905,15 +825,12 @@ function ExpenseModal({
   );
 }
 
-function AssistanceTab({ month, onChanged }: { month: string; onChanged: () => Promise<void> }) {
+function AssistanceTab({ month }: { month: string }) {
   const { t } = useI18n();
   const { hasPermission } = useAuth();
-  const employees = useEmployees();
+  const { options: employees } = useEmployeeOptions();
   const year = Number(month.slice(0, 4));
 
-  const [payments, setPayments] = useState<AssistancePayment[]>([]);
-  const [summary, setSummary] = useState<AssistanceSummary | null>(null);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AssistancePayment | null>(null);
@@ -926,33 +843,23 @@ function AssistanceTab({ month, onChanged }: { month: string; onChanged: () => P
   // permission, so that is what decides whether they are offered at all.
   const canManage = hasPermission("travel.manage");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({ year: String(year) });
-    if (debouncedSearch) params.set("search", debouncedSearch);
+  // Two resources: the year's entitlement totals do not narrow with the search,
+  // so typing in the box no longer refetches them.
+  const { data: list, loading } = useResource<{ data: AssistancePayment[] }>(
+    withQuery("/travel/social-assistance", { year, search: debouncedSearch }),
+  );
 
-    try {
-      const [list, totals] = await Promise.all([
-        apiFetch<{ data: AssistancePayment[] }>(`/travel/social-assistance?${params.toString()}`),
-        apiFetch<{ data: AssistanceSummary }>(`/travel/social-assistance/summary?year=${year}`),
-      ]);
-      setPayments(list.data);
-      setSummary(totals.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [year, debouncedSearch]);
+  const { data: totals } = useResource<{ data: AssistanceSummary }>(
+    `/travel/social-assistance/summary?year=${year}`,
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const payments = list?.data ?? [];
+  const summary = totals?.data ?? null;
 
   async function remove(payment: AssistancePayment) {
     if (!window.confirm(t("travel.removeAssistanceConfirm"))) return;
     try {
       await apiFetch(`/travel/social-assistance/${payment.id}`, { method: "DELETE" });
-      await load();
-      await onChanged();
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -985,9 +892,9 @@ function AssistanceTab({ month, onChanged }: { month: string; onChanged: () => P
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("travel.recipient")}</th>
               <th className="px-4 py-3 text-right">{t("travel.assistancePaid")}</th>
@@ -995,7 +902,7 @@ function AssistanceTab({ month, onChanged }: { month: string; onChanged: () => P
               <th className="px-4 py-3 text-right">{t("travel.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {outstanding.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
@@ -1029,9 +936,9 @@ function AssistanceTab({ month, onChanged }: { month: string; onChanged: () => P
         </table>
       </Card>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("travel.recipient")}</th>
               <th className="px-4 py-3">{t("travel.paymentDate")}</th>
@@ -1042,16 +949,16 @@ function AssistanceTab({ month, onChanged }: { month: string; onChanged: () => P
               <th className="px-4 py-3 text-right">{t("travel.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : payments.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("travel.noAssistance")}
                 </td>
               </tr>
@@ -1117,10 +1024,6 @@ function AssistanceTab({ month, onChanged }: { month: string; onChanged: () => P
             setCreating(false);
             setEditing(null);
             setPrefillEmployee(null);
-          }}
-          onSaved={async () => {
-            await load();
-            await onChanged();
           }}
         />
       )}
@@ -1194,7 +1097,6 @@ function AssistanceModal({
   year,
   defaultEmployeeId,
   onClose,
-  onSaved,
 }: {
   payment?: AssistancePayment;
   employees: EmployeeOption[];
@@ -1202,7 +1104,6 @@ function AssistanceModal({
   /** Pre-selected worker when the form is opened from a summary row. */
   defaultEmployeeId?: number | null;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [employeeId, setEmployeeId] = useState(
@@ -1240,7 +1141,6 @@ function AssistanceModal({
           notes: notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -1359,13 +1259,11 @@ function PaymentModal({
   endpoint,
   remaining,
   onClose,
-  onSaved,
 }: {
   title: string;
   endpoint: string;
   remaining: number;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [amount, setAmount] = useState(String(remaining));
@@ -1389,7 +1287,6 @@ function PaymentModal({
           notes: notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");

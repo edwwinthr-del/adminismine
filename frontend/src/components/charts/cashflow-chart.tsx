@@ -61,22 +61,41 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
   return (
     <div className="cashflow-chart">
       <style>{`
+        /*
+         * Re-validated for the warm redesign with the skill's validator against
+         * the surface this chart actually renders on. The card is translucent,
+         * so that surface is the composite, not #ffffff:
+         *   light  white 62% over the sand wash  -> #f8f7f5
+         *   dark   #2e2c27 60% over #14130f      -> #24221d
+         *
+         *   node scripts/validate_palette.js "#2a78d6,#e05f2a" --mode light  --surface "#f8f7f5"
+         *   node scripts/validate_palette.js "#3987e5,#d95926" --mode dark   --surface "#24221d"
+         * Both: all six checks PASS.
+         *
+         * The expenses orange moved #eb6834 -> #e05f2a because the lighter
+         * surface pushed the old value to 2.99:1, just under the 3:1 floor.
+         *
+         * The series stay blue/orange rather than taking the brand yellow: that
+         * yellow is a *surface* colour — as a thin mark on a near-white card it
+         * cannot reach 3:1 against anything. It earns its keep on the solid
+         * cards, not in here.
+         */
         .cashflow-chart {
           --series-income: #2a78d6;
-          --series-expenses: #eb6834;
-          --chart-grid: #e1e0d9;
-          --chart-axis: #c3c2b7;
-          --chart-muted: #898781;
-          --chart-surface: #ffffff;
+          --series-expenses: #e05f2a;
+          --chart-grid: #e3e0d6;
+          --chart-axis: #c6c2b4;
+          --chart-muted: #8a8579;
+          --chart-surface: #f8f7f5;
         }
         @media (prefers-color-scheme: dark) {
           .cashflow-chart {
             --series-income: #3987e5;
             --series-expenses: #d95926;
-            --chart-grid: #2c2c2a;
-            --chart-axis: #383835;
-            --chart-muted: #898781;
-            --chart-surface: #18181b;
+            --chart-grid: #33302a;
+            --chart-axis: #403c35;
+            --chart-muted: #8a8579;
+            --chart-surface: #24221d;
           }
         }
       `}</style>

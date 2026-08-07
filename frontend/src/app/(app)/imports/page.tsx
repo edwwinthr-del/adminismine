@@ -153,7 +153,7 @@ export default function ImportsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("imports.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("imports.title")}</h1>
         <p className="text-sm text-zinc-500">{t("imports.subtitle")}</p>
       </div>
 
@@ -227,9 +227,9 @@ export default function ImportsPage() {
         )}
       </Card>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("imports.file")}</th>
               <th className="px-4 py-3">{t("imports.entityColumn")}</th>
@@ -239,10 +239,10 @@ export default function ImportsPage() {
               <th className="px-4 py-3 text-right">{t("imports.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {batches.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={6} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("imports.none")}
                 </td>
               </tr>
@@ -451,9 +451,9 @@ function BatchPreview({ batchId }: { batchId: number }) {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("imports.source")}</th>
               <th className="px-4 py-3">{t("imports.target")}</th>
@@ -462,10 +462,10 @@ function BatchPreview({ batchId }: { batchId: number }) {
               <th className="px-4 py-3 text-right">{t("imports.import")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("imports.noRows")}
                 </td>
               </tr>

@@ -123,13 +123,13 @@ export default function WorkerNeedsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("needs.title")}</h1>
+          <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("needs.title")}</h1>
           {archive && <p className="text-sm text-zinc-500">{t("needs.archiveSubtitle")}</p>}
         </div>
         <Button onClick={() => setCreating(true)}>{t("needs.new")}</Button>
       </div>
 
-      <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="control-surface inline-flex flex-wrap gap-1 rounded-full p-1">
         {(["active", "archive"] as const).map((tab) => (
           <button
             key={tab}
@@ -137,8 +137,8 @@ export default function WorkerNeedsPage() {
             onClick={() => setView(tab)}
             className={
               view === tab
-                ? "-mb-px border-b-2 border-indigo-600 px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300"
-                : "-mb-px border-b-2 border-transparent px-4 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800 dark:hover:text-zinc-200"
+                ? "rounded-full bg-white px-4 py-1.5 text-sm font-medium text-zinc-900 shadow-[0_1px_2px_rgb(13_12_11/0.06),0_4px_12px_-6px_rgb(13_12_11/0.25)] dark:bg-white/15 dark:text-zinc-50"
+                : "rounded-full px-4 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-white/60 hover:text-zinc-800 dark:hover:bg-white/10 dark:hover:text-zinc-200"
             }
           >
             {tab === "active" ? t("needs.tabActive") : t("needs.tabArchive")}
@@ -146,7 +146,7 @@ export default function WorkerNeedsPage() {
         ))}
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Input
             className="max-w-xs"
@@ -200,9 +200,9 @@ export default function WorkerNeedsPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1000px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("needs.date")}</th>
               <th className="px-4 py-3">{t("needs.worker")}</th>
@@ -218,18 +218,18 @@ export default function WorkerNeedsPage() {
             className={
               refreshing
                 ? "divide-y divide-zinc-100 opacity-60 dark:divide-zinc-800"
-                : "divide-y divide-zinc-100 dark:divide-zinc-800"
+                : "divide-y divide-zinc-900/5 dark:divide-white/8"
             }
           >
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : needs.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {archive ? t("needs.noArchive") : t("needs.none")}
                 </td>
               </tr>
@@ -435,7 +435,7 @@ function NeedModal({ need, onClose }: { need?: WorkerNeed; onClose: () => void }
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={need ? t("needs.edit") : t("needs.new")}>

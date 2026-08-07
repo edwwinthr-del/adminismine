@@ -23,6 +23,15 @@ interface Options {
   staleAfter?: number;
   /** Refetch when the tab is focused again. On by default. */
   revalidateOnFocus?: boolean;
+  /**
+   * Keep the cached value when this component unmounts, instead of dropping it.
+   *
+   * For the small shared catalogues behind dropdowns, which several pages each
+   * want and which would otherwise be re-fetched once per page per visit. Writes
+   * still invalidate it. Not for a page's own filtered list — those should be
+   * dropped, which is the default.
+   */
+  keepAlive?: boolean;
 }
 
 /**
@@ -40,7 +49,12 @@ interface Options {
  *   reports `refreshing`, instead of dropping back to a loading state.
  */
 export function useResource<T>(path: string | null, options: Options = {}): ResourceState<T> {
-  const { enabled = true, staleAfter = STALE_AFTER_MS, revalidateOnFocus = true } = options;
+  const {
+    enabled = true,
+    staleAfter = STALE_AFTER_MS,
+    revalidateOnFocus = true,
+    keepAlive = false,
+  } = options;
   const key = enabled ? path : null;
 
   const [, forceRender] = useState(0);
@@ -72,14 +86,14 @@ export function useResource<T>(path: string | null, options: Options = {}): Reso
   useEffect(() => {
     if (!key) return;
 
-    const unsubscribe = subscribe(key, rerender);
+    const unsubscribe = subscribe(key, rerender, keepAlive);
 
     if (isStale(key, staleAfter)) {
       void run(false);
     }
 
     return unsubscribe;
-  }, [key, staleAfter, run, rerender]);
+  }, [key, staleAfter, keepAlive, run, rerender]);
 
   // A write anywhere means what is on screen may no longer be true.
   useEffect(() => {

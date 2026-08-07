@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, apiFetch, downloadToDisk } from "@/lib/api";
+import { useResource } from "@/lib/data/use-resource";
 import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, formatMoney, todayISO } from "@/lib/format";
@@ -32,7 +33,14 @@ interface ReportData {
   row_count: number;
 }
 
-const labelClass = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+/*
+ * Filters sit in one row of pills with the actions on the same line, the way the
+ * reference lays a toolbar out — rather than a form grid with the buttons
+ * stranded on a row of their own. The label is a small cap above each control:
+ * a report can take a month, a year, a date range or a party, and unlike a
+ * search box those are not self-describing from their contents alone.
+ */
+const labelClass = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
 function currentMonth(): string {
   return todayISO().slice(0, 7);
@@ -41,7 +49,6 @@ function currentMonth(): string {
 export default function ReportsPage() {
   const { t } = useI18n();
   const { hasPermission } = useAuth();
-  const [reports, setReports] = useState<ReportMeta[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [data, setData] = useState<ReportData | null>(null);
@@ -50,16 +57,22 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const canExport = hasPermission("reports.export");
-  const report = useMemo(() => reports.find((r) => r.key === selected) ?? null, [reports, selected]);
 
-  useEffect(() => {
-    void apiFetch<{ data: ReportMeta[] }>("/reports")
-      .then((res) => {
-        setReports(res.data);
-        if (res.data.length > 0) setSelected(res.data[0].key);
-      })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Error"));
-  }, []);
+  // The catalogue of available reports is a fixed list, so it goes through the
+  // cache. Running a report (below) stays an explicit user action and is
+  // deliberately *not* a resource — it should fire when the button is pressed,
+  // not whenever a filter changes.
+  const { data: catalogue } = useResource<{ data: ReportMeta[] }>("/reports");
+  const reports = useMemo(() => catalogue?.data ?? [], [catalogue]);
+
+  // The first report is the default, derived rather than written into state on
+  // arrival: storing it would mean an extra render pass, and `selected` only has
+  // to hold a value once the user has actually picked one.
+  const selectedKey = selected || reports[0]?.key || "";
+  const report = useMemo(
+    () => reports.find((r) => r.key === selectedKey) ?? null,
+    [reports, selectedKey],
+  );
 
   // Each report declares which filters it understands, so switching report
   // resets to sensible defaults rather than carrying stale ones across.
@@ -134,17 +147,17 @@ export default function ReportsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("reports.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("reports.title")}</h1>
         <p className="text-sm text-zinc-500">{t("reports.subtitle")}</p>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="sm:col-span-2">
+      <Card className="p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[16rem] flex-1">
             <label className={labelClass}>{t("reports.report")}</label>
-            <Select value={selected} onChange={(e) => setSelected(e.target.value)}>
+            <Select value={selectedKey} onChange={(e) => setSelected(e.target.value)}>
               {reports.map((row) => (
                 <option key={row.key} value={row.key}>
                   {t(`report.${row.key}`)}
@@ -154,7 +167,7 @@ export default function ReportsPage() {
           </div>
 
           {report?.filters.includes("month") && (
-            <div>
+            <div className="w-[11rem]">
               <label className={labelClass}>{t("reports.month")}</label>
               <Input
                 type="month"
@@ -164,7 +177,7 @@ export default function ReportsPage() {
             </div>
           )}
           {report?.filters.includes("year") && (
-            <div>
+            <div className="w-[8rem]">
               <label className={labelClass}>{t("reports.year")}</label>
               <Input
                 type="number"
@@ -176,7 +189,7 @@ export default function ReportsPage() {
             </div>
           )}
           {report?.filters.includes("date_from") && (
-            <div>
+            <div className="w-[10.5rem]">
               <label className={labelClass}>{t("reports.from")}</label>
               <Input
                 type="date"
@@ -186,7 +199,7 @@ export default function ReportsPage() {
             </div>
           )}
           {report?.filters.includes("date_to") && (
-            <div>
+            <div className="w-[10.5rem]">
               <label className={labelClass}>{t("reports.to")}</label>
               <Input
                 type="date"
@@ -197,7 +210,7 @@ export default function ReportsPage() {
           )}
           {(report?.filters.includes("supplier_id") || report?.filters.includes("client_id")) &&
             report.parties && (
-              <div className="sm:col-span-2">
+              <div className="min-w-[14rem] flex-1">
                 <label className={labelClass}>
                   {report.filters.includes("supplier_id") ? t("reports.supplier") : t("reports.client")}
                 </label>
@@ -219,40 +232,71 @@ export default function ReportsPage() {
                 </Select>
               </div>
             )}
-        </div>
 
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button onClick={() => void run()} disabled={loading || !report}>
-            {loading ? t("reports.running") : t("reports.run")}
-          </Button>
-          {canExport && (
-            <>
-              <Button
-                variant="secondary"
-                disabled={exporting || !data}
-                onClick={() => void exportAs("xlsx")}
-              >
-                {t("reports.exportExcel")}
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={exporting || !data}
-                onClick={() => void exportAs("pdf")}
-              >
-                {t("reports.exportPdf")}
-              </Button>
-            </>
-          )}
+          {/* Actions ride on the same line as the filters they act on. */}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {canExport && (
+              <>
+                <Button
+                  variant="secondary"
+                  disabled={exporting || !data}
+                  onClick={() => void exportAs("xlsx")}
+                >
+                  {t("reports.exportExcel")}
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={exporting || !data}
+                  onClick={() => void exportAs("pdf")}
+                >
+                  {t("reports.exportPdf")}
+                </Button>
+              </>
+            )}
+            {/* The one yellow thing on the screen: what the page is for. */}
+            <Button onClick={() => void run()} disabled={loading || !report}>
+              {loading ? t("reports.running") : t("reports.run")}
+            </Button>
+          </div>
         </div>
       </Card>
 
+      {/* Before anything has been run the page would otherwise be a toolbar over
+          empty space; say what to do instead of showing nothing. */}
+      {!data && !loading && (
+        <Card className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-zinc-900/[0.05] text-zinc-400 dark:bg-white/10">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-6 w-6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M4 20V10m5 10V4m5 16v-7m5 7V7" />
+            </svg>
+          </span>
+          <p className="max-w-sm text-sm text-zinc-500">{t("reports.emptyHint")}</p>
+        </Card>
+      )}
+
       {data && (
-        <Card className="overflow-x-auto p-0">
-          <p className="px-5 pb-3 pt-5 text-sm text-zinc-500">
-            {t("reports.rowCount", { count: data.row_count })}
-          </p>
+        <Card className="table-quiet overflow-x-auto p-0">
+          {/* The result gets its own header naming what was run, so an exported
+              sheet and the screen it came from are recognisably the same thing. */}
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-4 pt-5">
+            <h2 className="text-lg font-medium tracking-tight text-zinc-900 dark:text-zinc-50">
+              {report ? t(`report.${report.key}`) : ""}
+            </h2>
+            <span className="text-xs uppercase tracking-[0.08em] text-zinc-500">
+              {t("reports.rowCount", { count: data.row_count })}
+            </span>
+          </div>
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+            <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
               <tr>
                 {data.columns.map((column) => (
                   <th
@@ -268,10 +312,10 @@ export default function ReportsPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
               {data.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={data.columns.length} className="px-4 py-8 text-center text-zinc-500">
+                  <td colSpan={data.columns.length} className="px-4 py-14 text-center text-sm text-zinc-500">
                     {t("reports.noRows")}
                   </td>
                 </tr>
@@ -294,16 +338,19 @@ export default function ReportsPage() {
                 ))
               )}
             </tbody>
+            {/* The total is set apart by weight and a tinted band rather than a
+                heavier rule — the same way the reference separates a summary row
+                from the rows it sums. */}
             {Object.keys(data.totals).length > 0 && data.rows.length > 0 && (
-              <tfoot className="border-t border-zinc-300 dark:border-zinc-700">
-                <tr className="font-medium text-zinc-900 dark:text-zinc-50">
+              <tfoot className="border-t border-zinc-900/10 bg-zinc-900/[0.03] dark:border-white/15 dark:bg-white/5">
+                <tr className="font-semibold text-zinc-900 dark:text-zinc-50">
                   {data.columns.map((column, index) => (
                     <td
                       key={column.key}
                       className={
                         column.type === "money" || column.type === "number"
-                          ? "px-4 py-3 text-right tabular-nums"
-                          : "px-4 py-3"
+                          ? "px-4 py-3.5 text-right tabular-nums"
+                          : "px-4 py-3.5"
                       }
                     >
                       {column.key in data.totals

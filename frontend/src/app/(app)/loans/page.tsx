@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { usePage } from "@/lib/data/use-page";
+import { useResource, withQuery } from "@/lib/data/use-resource";
+import { useClientOptions, useEmployeeOptions, useSupplierOptions } from "@/lib/data/use-options";
 import { ApiError, apiFetch, errorMessage } from "@/lib/api";
 import { useI18n } from "@/lib/i18n/context";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -13,16 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Pagination, type PageMeta } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
-
-interface NamedOption {
-  id: number;
-  name: string;
-}
-
-interface EmployeeOption {
-  id: number;
-  full_name: string;
-}
 
 interface Repayment {
   id: number;
@@ -74,7 +66,7 @@ const DIRECTIONS = ["received", "given"] as const;
 const METHODS = ["cash", "nlb", "lovcen", "other"] as const;
 const CURRENCIES = ["EUR", "TRY"] as const;
 
-const labelClass = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+const labelClass = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
 function statusTone(status: string): "gray" | "amber" | "green" {
   if (status === "repaid") return "green";
@@ -84,9 +76,6 @@ function statusTone(status: string): "gray" | "amber" | "green" {
 
 export default function LoansPage() {
   const { t } = useI18n();
-  const [loans, setLoans] = useState<Loan[]>([]);
-  const [totals, setTotals] = useState<LoanListResponse["meta"] | null>(null);
-  const [loading, setLoading] = useState(true);
   const [onlyOutstanding, setOnlyOutstanding] = useState(false);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -99,32 +88,24 @@ export default function LoansPage() {
 
   const [page, setPage] = usePage([onlyOutstanding, debouncedSearch]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({ page: String(page), per_page: "25" });
-    if (onlyOutstanding) params.set("outstanding", "1");
-    if (debouncedSearch) params.set("search", debouncedSearch);
+  const { data, loading, error: listError } = useResource<LoanListResponse>(
+    withQuery("/loans", {
+      page,
+      per_page: 25,
+      outstanding: onlyOutstanding,
+      search: debouncedSearch,
+    }),
+  );
 
-    try {
-      const res = await apiFetch<LoanListResponse>(`/loans?${params.toString()}`);
-      setLoans(res.data);
-      setTotals(res.meta);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [onlyOutstanding, debouncedSearch, page]);
+  const loans = data?.data ?? [];
+  const totals = data?.meta ?? null;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
+  // No manual refetch: apiFetch's markMutated() revalidates every mounted
+  // resource, this list included.
   async function remove(loan: Loan) {
     if (!window.confirm(t("loans.removeConfirm"))) return;
     try {
       await apiFetch(`/loans/${loan.id}`, { method: "DELETE" });
-      await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     }
@@ -136,7 +117,7 @@ export default function LoansPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("loans.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("loans.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("loans.new")}</Button>
       </div>
 
@@ -150,7 +131,7 @@ export default function LoansPage() {
         />
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Input
             className="max-w-xs"
@@ -170,11 +151,11 @@ export default function LoansPage() {
         </div>
       </Card>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(error ?? listError) && <p className="text-sm text-red-600">{error ?? listError}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1040px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("loans.counterparty")}</th>
               <th className="px-4 py-3">{t("loans.loanDate")}</th>
@@ -186,16 +167,16 @@ export default function LoansPage() {
               <th className="px-4 py-3 text-right">{t("loans.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : loans.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("loans.none")}
                 </td>
               </tr>
@@ -269,14 +250,14 @@ export default function LoansPage() {
             setCreating(false);
             setEditing(null);
           }}
-          onSaved={load}
+         
         />
       )}
       {repaying && (
         <RepaymentModal
           loan={repaying}
           onClose={() => setRepaying(null)}
-          onSaved={load}
+         
         />
       )}
       {history && <HistoryModal loan={history} onClose={() => setHistory(null)} />}
@@ -297,16 +278,14 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
 function LoanModal({
   loan,
   onClose,
-  onSaved,
 }: {
   loan?: Loan;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [suppliers, setSuppliers] = useState<NamedOption[]>([]);
-  const [clients, setClients] = useState<NamedOption[]>([]);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const { options: suppliers } = useSupplierOptions();
+  const { options: clients } = useClientOptions();
+  const { options: employees } = useEmployeeOptions();
   const [counterparty, setCounterparty] = useState(loan?.counterparty ?? "");
   const [direction, setDirection] = useState(loan?.direction ?? "received");
   const [referenceNumber, setReferenceNumber] = useState(loan?.reference_number ?? "");
@@ -321,18 +300,6 @@ function LoanModal({
   const [notes, setNotes] = useState(loan?.notes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    void apiFetch<{ data: NamedOption[] }>("/suppliers?per_page=200")
-      .then((res) => setSuppliers(res.data))
-      .catch(() => setSuppliers([]));
-    void apiFetch<{ data: NamedOption[] }>("/clients?per_page=200")
-      .then((res) => setClients(res.data))
-      .catch(() => setClients([]));
-    void apiFetch<{ data: EmployeeOption[] }>("/employees?status=active&per_page=200")
-      .then((res) => setEmployees(res.data))
-      .catch(() => setEmployees([]));
-  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -356,7 +323,6 @@ function LoanModal({
           notes: notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -499,11 +465,9 @@ function LoanModal({
 function RepaymentModal({
   loan,
   onClose,
-  onSaved,
 }: {
   loan: Loan;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [amount, setAmount] = useState(String(loan.remaining_amount));
@@ -529,7 +493,6 @@ function RepaymentModal({
           notes: notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -597,15 +560,11 @@ function RepaymentModal({
 
 function HistoryModal({ loan, onClose }: { loan: Loan; onClose: () => void }) {
   const { t } = useI18n();
-  const [repayments, setRepayments] = useState<Repayment[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    void apiFetch<{ data: Loan }>(`/loans/${loan.id}`)
-      .then((res) => setRepayments(res.data.repayments ?? []))
-      .catch(() => setRepayments([]))
-      .finally(() => setLoading(false));
-  }, [loan.id]);
+  // Read-only, so it can render the cache directly — there is no draft here that
+  // a revalidation could overwrite.
+  const { data, loading } = useResource<{ data: Loan }>(`/loans/${loan.id}`);
+  const repayments = data?.data.repayments ?? [];
 
   return (
     <Modal open onClose={onClose} title={`${t("loans.history")} — ${loan.counterparty}`}>
@@ -616,7 +575,7 @@ function HistoryModal({ loan, onClose }: { loan: Loan; onClose: () => void }) {
           <p className="text-sm text-zinc-500">{t("loans.noRepayments")}</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+            <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
               <tr>
                 <th className="py-2">{t("loans.repaymentDate")}</th>
                 <th className="py-2">{t("loans.method")}</th>
@@ -624,7 +583,7 @@ function HistoryModal({ loan, onClose }: { loan: Loan; onClose: () => void }) {
                 <th className="py-2 text-right">{t("loans.amount")}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
               {repayments.map((repayment) => (
                 <tr key={repayment.id} className="text-zinc-800 dark:text-zinc-200">
                   <td className="py-2">{formatDate(repayment.payment_date)}</td>

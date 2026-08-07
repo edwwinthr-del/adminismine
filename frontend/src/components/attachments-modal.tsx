@@ -120,7 +120,7 @@ export function AttachmentsModal({
     }
   }
 
-  const labelClass = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const labelClass = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={title}>

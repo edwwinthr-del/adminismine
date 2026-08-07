@@ -5,11 +5,12 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth/context";
 import { useResource } from "@/lib/data/use-resource";
 import { useI18n } from "@/lib/i18n/context";
+import { cn } from "@/lib/cn";
 import { amountTone, expenseAmount, formatDate, formatMoney, formatSignedMoney, todayISO } from "@/lib/format";
 import { CashflowChart, type CashflowPoint } from "@/components/charts/cashflow-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, FeatureCard } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 interface RecentTransaction {
@@ -92,7 +93,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("dashboard.title")}</h1>
+          <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("dashboard.title")}</h1>
           <p className="text-sm text-zinc-500">{t("dashboard.welcome", { name: user?.name ?? "" })}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -144,6 +145,7 @@ export default function DashboardPage() {
                     value={formatMoney(dashboard.balances.total)}
                     tone={amountTone(dashboard.balances.total)}
                     emphasis
+                    feature="yellow"
                   />
                 </>
               )}
@@ -189,6 +191,7 @@ export default function DashboardPage() {
                     value={formatSignedMoney(dashboard.cashflow.month.net)}
                     tone={amountTone(dashboard.cashflow.month.net)}
                     emphasis
+                    feature="ink"
                   />
                 </>
               )}
@@ -269,12 +272,12 @@ export default function DashboardPage() {
             </div>
 
             {dashboard?.recent_transactions && (
-              <Card className="overflow-x-auto p-0">
+              <Card className="table-quiet overflow-x-auto p-0">
                 <p className="px-5 pb-3 pt-5 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   {t("dashboard.recentTransactions")}
                 </p>
                 <table className="w-full min-w-[640px] text-sm">
-                  <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+                  <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
                     <tr>
                       <th className="px-5 py-3">{t("dashboard.date")}</th>
                       <th className="px-5 py-3">{t("dashboard.description")}</th>
@@ -282,7 +285,7 @@ export default function DashboardPage() {
                       <th className="px-5 py-3 text-right">{t("dashboard.amount")}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
                     {dashboard.recent_transactions.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="px-5 py-8 text-center text-zinc-500">
@@ -330,6 +333,7 @@ function Tile({
   href,
   emphasis,
   tone,
+  feature,
 }: {
   label: string;
   value: string;
@@ -338,19 +342,62 @@ function Tile({
   emphasis?: boolean;
   /** Colour for a figure that has a direction; from lib/format's amountTone. */
   tone?: string;
+  /**
+   * Paint this tile as one of the reference's solid colour cards. Reserved for
+   * the two or three figures a reader is actually here for — the whole point of
+   * the loud fill is that most tiles do not have it.
+   */
+  feature?: "yellow" | "ink";
 }) {
-  const body = (
-    <Card className={href ? "h-full p-4 transition-colors hover:border-indigo-300" : "h-full p-4"}>
-      <p className="text-xs uppercase tracking-wider text-zinc-500">{label}</p>
+  /*
+   * A feature tile drops the directional `tone` colour: red-on-yellow does not
+   * read, and on these two the sign is already carried by the `+`/`−` that
+   * formatSignedMoney puts in front of the figure.
+   */
+  const body = feature ? (
+    <FeatureCard
+      tone={feature}
+      className={cn("h-full p-5", href && "transition-transform duration-150 hover:-translate-y-0.5")}
+    >
+      <p
+        className={cn(
+          "text-[11px] uppercase tracking-[0.1em]",
+          feature === "ink" ? "text-zinc-400 dark:text-zinc-500" : "text-ink/55",
+        )}
+      >
+        {label}
+      </p>
+      <p className="mt-2 text-[2rem] font-light leading-none tracking-tight">{value}</p>
+      {hint && (
+        <p
+          className={cn(
+            "mt-2 text-xs",
+            feature === "ink" ? "text-zinc-400 dark:text-zinc-500" : "text-ink/55",
+          )}
+        >
+          {hint}
+        </p>
+      )}
+    </FeatureCard>
+  ) : (
+    <Card
+      className={cn(
+        "h-full p-5",
+        href && "transition-transform duration-150 hover:-translate-y-0.5",
+      )}
+    >
+      <p className="text-[11px] uppercase tracking-[0.1em] text-zinc-500">{label}</p>
       {/* Proportional figures: tabular-nums would make a standalone value look loose. */}
       <p
-        className={`mt-1 font-semibold ${emphasis ? "text-2xl" : "text-xl"} ${
-          tone ?? "text-zinc-900 dark:text-zinc-50"
-        }`}
+        className={cn(
+          "mt-2 font-light leading-none tracking-tight",
+          emphasis ? "text-[2rem]" : "text-2xl",
+          tone ?? "text-zinc-900 dark:text-zinc-50",
+        )}
       >
         {value}
       </p>
-      {hint && <p className="mt-1 text-xs text-zinc-500">{hint}</p>}
+      {hint && <p className="mt-2 text-xs text-zinc-500">{hint}</p>}
     </Card>
   );
 

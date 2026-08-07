@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useResource, withQuery } from "@/lib/data/use-resource";
+import { useEmployeeOptions, type EmployeeOption } from "@/lib/data/use-options";
 import { useI18n } from "@/lib/i18n/context";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { AsyncSelect } from "@/components/ui/async-select";
@@ -10,12 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-
-interface EmployeeOption {
-  id: number;
-  full_name: string;
-  job_role: string | null;
-}
 
 interface Worksite {
   id: number;
@@ -36,9 +32,6 @@ interface Worksite {
 
 export default function WorksitesPage() {
   const { t } = useI18n();
-  const [worksites, setWorksites] = useState<Worksite[]>([]);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Worksite | null>(null);
@@ -46,42 +39,28 @@ export default function WorksitesPage() {
 
   const debouncedSearch = useDebouncedValue(search);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    try {
-      const res = await apiFetch<{ data: Worksite[] }>(`/worksites?${params.toString()}`);
-      setWorksites(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearch]);
+  const { data, loading } = useResource<{ data: Worksite[] }>(
+    withQuery("/worksites", { search: debouncedSearch }),
+  );
+  const worksites = data?.data ?? [];
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { options: employees } = useEmployeeOptions();
 
-  useEffect(() => {
-    void apiFetch<{ data: EmployeeOption[] }>("/employees?status=active&per_page=200")
-      .then((res) => setEmployees(res.data))
-      .catch(() => setEmployees([]));
-  }, []);
-
+  // No manual refetch: apiFetch's markMutated() revalidates every mounted
+  // resource, this list included.
   async function remove(worksite: Worksite) {
     if (!window.confirm(t("worksites.removeConfirm", { name: worksite.name }))) return;
     await apiFetch(`/worksites/${worksite.id}`, { method: "DELETE" });
-    await load();
   }
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("worksites.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("worksites.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("worksites.new")}</Button>
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <Input
           className="max-w-xs"
           placeholder={t("worksites.search")}
@@ -90,9 +69,9 @@ export default function WorksitesPage() {
         />
       </Card>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("worksites.name")}</th>
               <th className="px-4 py-3">{t("worksites.location")}</th>
@@ -105,16 +84,16 @@ export default function WorksitesPage() {
               <th className="px-4 py-3 text-right">{t("worksites.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : worksites.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("worksites.none")}
                 </td>
               </tr>
@@ -153,14 +132,13 @@ export default function WorksitesPage() {
         </table>
       </Card>
 
-      {creating && <WorksiteModal onClose={() => setCreating(false)} onSaved={load} />}
-      {editing && <WorksiteModal worksite={editing} onClose={() => setEditing(null)} onSaved={load} />}
+      {creating && <WorksiteModal onClose={() => setCreating(false)} />}
+      {editing && <WorksiteModal worksite={editing} onClose={() => setEditing(null)} />}
       {assigning && (
         <RosterModal
           worksite={assigning}
           employees={employees}
           onClose={() => setAssigning(null)}
-          onSaved={load}
         />
       )}
     </div>
@@ -170,11 +148,9 @@ export default function WorksitesPage() {
 function WorksiteModal({
   worksite,
   onClose,
-  onSaved,
 }: {
   worksite?: Worksite;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [name, setName] = useState(worksite?.name ?? "");
@@ -204,7 +180,6 @@ function WorksiteModal({
           notes: notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -213,7 +188,7 @@ function WorksiteModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={worksite ? t("worksites.edit") : t("worksites.new")}>
@@ -283,24 +258,29 @@ function RosterModal({
   worksite,
   employees,
   onClose,
-  onSaved,
 }: {
   worksite: Worksite;
   employees: EmployeeOption[];
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [selected, setSelected] = useState<number[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { data, loading } = useResource<{ data: Worksite }>(`/worksites/${worksite.id}`);
+
+  // Seed the draft from the server exactly once. `useResource` revalidates — on
+  // refocus, or after any write — and re-seeding on each of those would discard
+  // the ticks the user has made but not yet saved.
+  const seeded = useRef(false);
+
   useEffect(() => {
-    void apiFetch<{ data: Worksite }>(`/worksites/${worksite.id}`)
-      .then((res) => setSelected((res.data.employees ?? []).map((employee) => employee.id)))
-      .finally(() => setLoading(false));
-  }, [worksite.id]);
+    if (seeded.current || !data) return;
+
+    seeded.current = true;
+    setSelected((data.data.employees ?? []).map((employee) => employee.id));
+  }, [data]);
 
   function toggle(id: number) {
     setSelected((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]));
@@ -314,7 +294,6 @@ function RosterModal({
         method: "PUT",
         json: { employees: selected.map((id) => ({ employee_id: id })) },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");

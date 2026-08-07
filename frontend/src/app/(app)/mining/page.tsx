@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useResource, withQuery } from "@/lib/data/use-resource";
+import { useEmployeeOptions, useWorksiteOptions, type EmployeeOption, type WorksiteOption } from "@/lib/data/use-options";
 import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, todayISO } from "@/lib/format";
@@ -11,16 +13,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-
-interface WorksiteOption {
-  id: number;
-  name: string;
-}
-
-interface EmployeeOption {
-  id: number;
-  full_name: string;
-}
 
 interface ProductionRecord {
   id: number;
@@ -83,73 +75,50 @@ export default function MiningPage() {
   const [periodType, setPeriodType] = useState("");
   const [approvedOnly, setApprovedOnly] = useState(false);
 
-  const [records, setRecords] = useState<ProductionRecord[]>([]);
-  const [totals, setTotals] = useState<Totals | null>(null);
-  const [worksites, setWorksites] = useState<WorksiteOption[]>([]);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<ProductionRecord | null>(null);
   const [rejecting, setRejecting] = useState<ProductionRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const params = new URLSearchParams({ month, per_page: "200" });
-    const totalsParams = new URLSearchParams({ month });
-    for (const [key, value] of [
-      ["worksite_id", worksiteId],
-      ["material_type", material],
-    ] as const) {
-      if (value) {
-        params.set(key, value);
-        totalsParams.set(key, value);
-      }
-    }
-    if (periodType) params.set("period_type", periodType);
-    if (approvedOnly) {
-      params.set("approved_only", "1");
-      totalsParams.set("approved_only", "1");
-    }
+  // The totals deliberately ignore `period_type`: filtering the list to daily or
+  // monthly entries changes which rows are shown, not how much was produced in
+  // the month. Keeping them as separate resources preserves that — and means
+  // switching the period no longer refetches the totals.
+  const { data: list, loading, error: listError } = useResource<{ data: ProductionRecord[] }>(
+    withQuery("/production", {
+      month,
+      per_page: 200,
+      worksite_id: worksiteId,
+      material_type: material,
+      period_type: periodType,
+      approved_only: approvedOnly,
+    }),
+  );
 
-    try {
-      const [list, sums] = await Promise.all([
-        apiFetch<{ data: ProductionRecord[] }>(`/production?${params.toString()}`),
-        apiFetch<{ data: Totals }>(`/production/totals?${totalsParams.toString()}`),
-      ]);
-      setRecords(list.data);
-      setTotals(sums.data);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
-    } finally {
-      setLoading(false);
-    }
-  }, [month, worksiteId, material, periodType, approvedOnly]);
+  const { data: sums } = useResource<{ data: Totals }>(
+    withQuery("/production/totals", {
+      month,
+      worksite_id: worksiteId,
+      material_type: material,
+      approved_only: approvedOnly,
+    }),
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const records = list?.data ?? [];
+  const totals = sums?.data ?? null;
 
-  useEffect(() => {
-    void apiFetch<{ data: WorksiteOption[] }>("/worksites?active_only=1")
-      .then((res) => setWorksites(res.data))
-      .catch(() => setWorksites([]));
-    void apiFetch<{ data: EmployeeOption[] }>("/employees?status=active&per_page=200")
-      .then((res) => setEmployees(res.data))
-      .catch(() => setEmployees([]));
-  }, []);
+  const { options: worksites } = useWorksiteOptions();
+  const { options: employees } = useEmployeeOptions();
 
+  // No manual refetch: apiFetch's markMutated() revalidates both resources above.
   async function approve(record: ProductionRecord) {
     await apiFetch(`/production/${record.id}/approve`, { method: "POST" });
-    await load();
   }
 
   async function remove(record: ProductionRecord) {
     if (!window.confirm(t("mining.deleteConfirm"))) return;
     try {
       await apiFetch(`/production/${record.id}`, { method: "DELETE" });
-      await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     }
@@ -160,7 +129,7 @@ export default function MiningPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("mining.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("mining.title")}</h1>
         <div className="flex items-center gap-3">
           <Input className="w-[10rem]" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           <Button onClick={() => setCreating(true)}>{t("mining.new")}</Button>
@@ -184,7 +153,7 @@ export default function MiningPage() {
         <Tile label={t("mining.pendingApproval")} value={String(totals?.pending_approval ?? 0)} />
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Select className="max-w-[13rem]" value={worksiteId} onChange={(e) => setWorksiteId(e.target.value)}>
             <option value="">{t("mining.allWorksites")}</option>
@@ -217,7 +186,7 @@ export default function MiningPage() {
         </div>
       </Card>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(error ?? listError) && <p className="text-sm text-red-600">{error ?? listError}</p>}
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="p-4 lg:col-span-1">
@@ -258,9 +227,9 @@ export default function MiningPage() {
           )}
         </Card>
 
-        <Card className="overflow-x-auto p-0 lg:col-span-2">
+        <Card className="table-quiet overflow-x-auto p-0 lg:col-span-2">
           <table className="w-full min-w-[820px] text-sm">
-            <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+            <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
               <tr>
                 <th className="px-4 py-3">{t("mining.period")}</th>
                 <th className="px-4 py-3">{t("mining.worksite")}</th>
@@ -271,16 +240,16 @@ export default function MiningPage() {
                 <th className="px-4 py-3 text-right">{t("mining.actions")}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                  <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
                     {t("common.loading")}
                   </td>
                 </tr>
               ) : records.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                  <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
                     {t("mining.none")}
                   </td>
                 </tr>
@@ -375,7 +344,6 @@ export default function MiningPage() {
           employees={employees}
           defaultMonth={month}
           onClose={() => setCreating(false)}
-          onSaved={load}
         />
       )}
       {editing && (
@@ -385,19 +353,9 @@ export default function MiningPage() {
           employees={employees}
           defaultMonth={month}
           onClose={() => setEditing(null)}
-          onSaved={load}
         />
       )}
-      {rejecting && (
-        <RejectModal
-          record={rejecting}
-          onClose={() => setRejecting(null)}
-          onSaved={async () => {
-            setRejecting(null);
-            await load();
-          }}
-        />
-      )}
+      {rejecting && <RejectModal record={rejecting} onClose={() => setRejecting(null)} />}
     </div>
   );
 }
@@ -418,14 +376,12 @@ function RecordModal({
   employees,
   defaultMonth,
   onClose,
-  onSaved,
 }: {
   record?: ProductionRecord;
   worksites: WorksiteOption[];
   employees: EmployeeOption[];
   defaultMonth: string;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [periodType, setPeriodType] = useState(record?.period_type ?? "daily");
@@ -473,7 +429,6 @@ function RecordModal({
         method: record ? "PUT" : "POST",
         json: body,
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -482,7 +437,7 @@ function RecordModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={record ? t("mining.edit") : t("mining.new")}>
@@ -598,11 +553,9 @@ function RecordModal({
 function RejectModal({
   record,
   onClose,
-  onSaved,
 }: {
   record: ProductionRecord;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [reason, setReason] = useState("");
@@ -615,7 +568,7 @@ function RejectModal({
     setError(null);
     try {
       await apiFetch(`/production/${record.id}/reject`, { method: "POST", json: { reason: reason.trim() } });
-      await onSaved();
+      onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -627,7 +580,7 @@ function RejectModal({
     <Modal open onClose={onClose} title={t("mining.reject")}>
       <form onSubmit={submit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
             {t("mining.rejectReason")}
           </label>
           <Input value={reason} onChange={(e) => setReason(e.target.value)} required />

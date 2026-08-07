@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useResource } from "@/lib/data/use-resource";
+import { useWorksiteOptions } from "@/lib/data/use-options";
 import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
 import { formatMoney, todayISO } from "@/lib/format";
@@ -11,11 +13,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-
-interface WorksiteOption {
-  id: number;
-  name: string;
-}
 
 interface AttendanceRecord {
   id: number;
@@ -88,51 +85,48 @@ export default function AttendancePage() {
   const { hasPermission } = useAuth();
   const canApprove = hasPermission("attendance.approve");
 
-  const [worksites, setWorksites] = useState<WorksiteOption[]>([]);
   const [worksiteId, setWorksiteId] = useState("");
   const [date, setDate] = useState(todayISO);
-  const [rows, setRows] = useState<RosterRow[]>([]);
-  const [meta, setMeta] = useState<RosterMeta | null>(null);
   const [drafts, setDrafts] = useState<Record<number, DraftRow>>({});
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [overriding, setOverriding] = useState(false);
 
-  useEffect(() => {
-    void apiFetch<{ data: WorksiteOption[] }>("/worksites?active_only=1")
-      .then((res) => {
-        setWorksites(res.data);
-        if (res.data.length > 0) setWorksiteId((current) => current || String(res.data[0].id));
-      })
-      .catch(() => setWorksites([]));
-  }, []);
-
-  const loadRoster = useCallback(async () => {
-    if (!worksiteId || !date) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiFetch<{ data: RosterRow[]; meta: RosterMeta }>(
-        `/attendance/roster?worksite_id=${worksiteId}&date=${date}`,
-      );
-      setRows(res.data);
-      setMeta(res.meta);
-      setDrafts(Object.fromEntries(res.data.map((row) => [row.employee_id, draftFrom(row)])));
-    } catch (err) {
-      setRows([]);
-      setMeta(null);
-      setError(err instanceof ApiError ? err.message : "Error");
-    } finally {
-      setLoading(false);
-    }
-  }, [worksiteId, date]);
+  const { options: worksites } = useWorksiteOptions();
 
   useEffect(() => {
-    void loadRoster();
-  }, [loadRoster]);
+    if (worksites.length > 0) setWorksiteId((current) => current || String(worksites[0].id));
+  }, [worksites]);
+
+  // `revalidateOnFocus` is off here alone: this screen is a data-entry grid, and
+  // a tab-switch mid-entry must not pull a fresh roster out from under the hours
+  // someone has typed but not yet saved.
+  const {
+    data,
+    loading,
+    error: rosterError,
+    updatedAt,
+  } = useResource<{ data: RosterRow[]; meta: RosterMeta }>(
+    worksiteId && date ? `/attendance/roster?worksite_id=${worksiteId}&date=${date}` : null,
+    { revalidateOnFocus: false },
+  );
+
+  const rows = data?.data ?? [];
+  const meta = data?.meta ?? null;
+
+  // Re-seed the drafts on each genuinely new response — a different worksite or
+  // date, and the refetch that follows this page's own save, which is how the
+  // server's normalised values and locked rows come back onto the screen.
+  const seededAt = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!data || updatedAt === null || seededAt.current === updatedAt) return;
+
+    seededAt.current = updatedAt;
+    setDrafts(Object.fromEntries(data.data.map((row) => [row.employee_id, draftFrom(row)])));
+  }, [data, updatedAt]);
 
   function setDraft(employeeId: number, patch: Partial<DraftRow>) {
     setDrafts((prev) => ({ ...prev, [employeeId]: { ...prev[employeeId], ...patch } }));
@@ -185,7 +179,6 @@ export default function AttendancePage() {
       });
       const locked = res.meta.locked_employee_ids.length;
       setMessage(locked > 0 ? t("attendance.savedWithLocked", { count: locked }) : t("attendance.saved"));
-      await loadRoster();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -203,7 +196,6 @@ export default function AttendancePage() {
         json: { date, worksite_id: Number(worksiteId), ...(reason ? { reason } : {}) },
       });
       setMessage(t(action === "submit" ? "attendance.submitted" : "attendance.approved"));
-      await loadRoster();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -221,7 +213,6 @@ export default function AttendancePage() {
       });
       setMessage(t("attendance.rejected"));
       setRejecting(false);
-      await loadRoster();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -232,9 +223,12 @@ export default function AttendancePage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("attendance.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("attendance.title")}</h1>
         <div className="flex flex-wrap items-center gap-3">
-          <Select className="max-w-[14rem]" value={worksiteId} onChange={(e) => setWorksiteId(e.target.value)}>
+          {/* An explicit width, not `max-w-`: this group is content-sized, so a
+              full-width control would claim the whole line and push the date
+              picker onto a second row. */}
+          <Select className="w-[14rem]" value={worksiteId} onChange={(e) => setWorksiteId(e.target.value)}>
             <option value="">{t("attendance.selectWorksite")}</option>
             {worksites.map((worksite) => (
               <option key={worksite.id} value={worksite.id}>
@@ -283,11 +277,11 @@ export default function AttendancePage() {
       </Card>
 
       {message && <p className="text-sm text-green-700 dark:text-green-400">{message}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(error ?? rosterError) && <p className="text-sm text-red-600">{error ?? rosterError}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1040px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-3 py-3">{t("attendance.worker")}</th>
               <th className="px-3 py-3">{t("attendance.status")}</th>
@@ -299,22 +293,22 @@ export default function AttendancePage() {
               <th className="px-3 py-3">{t("attendance.approval")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : !worksiteId ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("attendance.pickWorksite")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("attendance.emptyRoster")}
                 </td>
               </tr>
@@ -443,14 +437,7 @@ export default function AttendancePage() {
 
       {rejecting && <RejectModal onClose={() => setRejecting(false)} onReject={reject} saving={saving} />}
       {overriding && (
-        <WorkingDaysModal
-          date={date}
-          onClose={() => setOverriding(false)}
-          onSaved={async () => {
-            setOverriding(false);
-            await loadRoster();
-          }}
-        />
+        <WorkingDaysModal date={date} onClose={() => setOverriding(false)} />
       )}
     </div>
   );
@@ -478,7 +465,7 @@ function RejectModal({
         }}
       >
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
             {t("attendance.rejectReason")}
           </label>
           <Input value={reason} onChange={(e) => setReason(e.target.value)} required />
@@ -497,15 +484,7 @@ function RejectModal({
 }
 
 /** Overriding the month's working days changes every daily rate in that month. */
-function WorkingDaysModal({
-  date,
-  onClose,
-  onSaved,
-}: {
-  date: string;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-}) {
+function WorkingDaysModal({ date, onClose }: { date: string; onClose: () => void }) {
   const { t } = useI18n();
   const month = date.slice(0, 7);
   const [workingDays, setWorkingDays] = useState("");
@@ -515,17 +494,26 @@ function WorkingDaysModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    void apiFetch<{
-      data: { working_days: number; derived_working_days: number; is_overridden: boolean; reason: string | null };
-    }>(`/working-days?month=${month}`).then((res) => {
-      setWorkingDays(String(res.data.working_days));
-      setDerived(res.data.derived_working_days);
-      setIsOverridden(res.data.is_overridden);
-      setReason(res.data.reason ?? "");
-    });
-  }, [month]);
+  const { data } = useResource<{
+    data: { working_days: number; derived_working_days: number; is_overridden: boolean; reason: string | null };
+  }>(`/working-days?month=${month}`);
 
+  // Seeded once: these fields are a draft, and a revalidation must not overwrite
+  // a figure or reason the user is part-way through typing.
+  const seeded = useRef(false);
+
+  useEffect(() => {
+    if (seeded.current || !data) return;
+
+    seeded.current = true;
+    setWorkingDays(String(data.data.working_days));
+    setDerived(data.data.derived_working_days);
+    setIsOverridden(data.data.is_overridden);
+    setReason(data.data.reason ?? "");
+  }, [data]);
+
+  // Closing is all these need to do: the write itself revalidates the roster
+  // behind the modal, and with it every daily rate the override changes.
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -535,7 +523,7 @@ function WorkingDaysModal({
         method: "PUT",
         json: { month, working_days: Number(workingDays), reason: reason.trim() },
       });
-      await onSaved();
+      onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -547,7 +535,7 @@ function WorkingDaysModal({
     setSaving(true);
     try {
       await apiFetch(`/working-days?month=${month}`, { method: "DELETE" });
-      await onSaved();
+      onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -555,7 +543,7 @@ function WorkingDaysModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={`${t("attendance.overrideWorkingDays")} — ${month}`}>

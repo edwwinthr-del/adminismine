@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { usePage } from "@/lib/data/use-page";
+import { useResource, withQuery } from "@/lib/data/use-resource";
 import { apiFetch, errorMessage } from "@/lib/api";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate } from "@/lib/format";
@@ -93,10 +94,6 @@ function statusTone(status: string): "gray" | "amber" | "green" | "red" | "indig
 
 export default function CustomsPage() {
   const { t } = useI18n();
-  const [documents, setDocuments] = useState<CustomsDocument[]>([]);
-  const [register, setRegister] = useState<Register | null>(null);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
@@ -112,38 +109,33 @@ export default function CustomsPage() {
 
   const [page, setPage] = usePage([debouncedSearch, documentType, status, missingOnly]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const params = new URLSearchParams({ per_page: "25", page: String(page) });
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    if (documentType) params.set("document_type", documentType);
-    if (status) params.set("status", status);
-    if (missingOnly) params.set("missing_paperwork", "1");
+  // Two resources rather than one Promise.all: the register is a whole-table
+  // summary that does not depend on the filters, so as its own cache key it is
+  // fetched once instead of again on every keystroke and page change.
+  const { data: list, loading, error: listError } = useResource<{
+    data: CustomsDocument[];
+    meta?: PageMeta;
+  }>(
+    withQuery("/customs-documents", {
+      per_page: 25,
+      page,
+      search: debouncedSearch,
+      document_type: documentType,
+      status,
+      missing_paperwork: missingOnly,
+    }),
+  );
 
-    try {
-      const [list, summary] = await Promise.all([
-        apiFetch<{ data: CustomsDocument[]; meta?: PageMeta }>(`/customs-documents?${params.toString()}`),
-        apiFetch<{ data: Register }>("/customs-documents/register"),
-      ]);
-      setDocuments(list.data);
-      setMeta(list.meta ?? null);
-      setRegister(summary.data);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearch, documentType, status, missingOnly, page]);
+  const { data: summary } = useResource<{ data: Register }>("/customs-documents/register");
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const documents = list?.data ?? [];
+  const meta = list?.meta ?? null;
+  const register = summary?.data ?? null;
 
+  // No manual refetch: apiFetch's markMutated() revalidates both resources above.
   async function setDocumentStatus(document: CustomsDocument, next: string) {
     try {
       await apiFetch(`/customs-documents/${document.id}`, { method: "PUT", json: { status: next } });
-      await load();
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -153,7 +145,6 @@ export default function CustomsPage() {
     if (!window.confirm(t("customs.deleteConfirm"))) return;
     try {
       await apiFetch(`/customs-documents/${document.id}`, { method: "DELETE" });
-      await load();
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -162,7 +153,7 @@ export default function CustomsPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("customs.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("customs.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("customs.new")}</Button>
       </div>
 
@@ -177,7 +168,7 @@ export default function CustomsPage() {
         <Tile label={t("customs.linkedToMachine")} value={String(register?.linked_to_machine ?? 0)} />
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Input
             className="max-w-sm"
@@ -208,11 +199,11 @@ export default function CustomsPage() {
         </div>
       </Card>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(error ?? listError) && <p className="text-sm text-red-600">{error ?? listError}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1100px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("customs.document")}</th>
               <th className="px-4 py-3">{t("customs.dates")}</th>
@@ -224,16 +215,16 @@ export default function CustomsPage() {
               <th className="px-4 py-3 text-right">{t("customs.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : documents.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("customs.none")}
                 </td>
               </tr>
@@ -378,7 +369,6 @@ export default function CustomsPage() {
             setCreating(false);
             setEditing(null);
           }}
-          onSaved={load}
         />
       )}
       {managingFiles && (
@@ -387,7 +377,6 @@ export default function CustomsPage() {
           basePath={`/customs-documents/${managingFiles.id}/attachments`}
           defaultKind="cmr"
           onClose={() => setManagingFiles(null)}
-          onChanged={load}
         />
       )}
     </div>
@@ -407,11 +396,9 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
 function DocumentModal({
   document,
   onClose,
-  onSaved,
 }: {
   document?: CustomsDocument;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [form, setForm] = useState({
@@ -502,7 +489,6 @@ function DocumentModal({
           notes: form.notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -511,7 +497,7 @@ function DocumentModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
   const section = "text-xs font-semibold uppercase tracking-wider text-zinc-500";
   const isCmr = form.document_type === "cmr";
 

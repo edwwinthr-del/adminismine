@@ -1090,6 +1090,8 @@ export const dictionaries: Record<Locale, Dict> = {
     "imports.confirmImport": "Import the selected rows? Existing records are never overwritten.",
     "reports.title": "Reports",
     "reports.subtitle": "Run a report, then export it to Excel or PDF.",
+    "reports.emptyHint":
+      "Choose a report and its filters above, then run it. Results appear here and can be exported to Excel or PDF.",
     "reports.report": "Report",
     "reports.month": "Month",
     "reports.year": "Year",
@@ -2435,6 +2437,8 @@ export const dictionaries: Record<Locale, Dict> = {
     "imports.confirmImport": "Uvesti izabrane redove? Postojeći zapisi se nikada ne prepisuju.",
     "reports.title": "Izveštaji",
     "reports.subtitle": "Pokrenite izveštaj, pa ga izvezite u Excel ili PDF.",
+    "reports.emptyHint":
+      "Izaberite izveštaj i filtere iznad, pa ga pokrenite. Rezultati se prikazuju ovde i mogu se izvesti u Excel ili PDF.",
     "reports.report": "Izveštaj",
     "reports.month": "Mesec",
     "reports.year": "Godina",
@@ -3780,6 +3784,8 @@ export const dictionaries: Record<Locale, Dict> = {
     "imports.confirmImport": "Seçili satırlar aktarılsın mı? Mevcut kayıtların üzerine asla yazılmaz.",
     "reports.title": "Raporlar",
     "reports.subtitle": "Bir rapor çalıştırın, sonra Excel veya PDF olarak dışa aktarın.",
+    "reports.emptyHint":
+      "Yukarıdan bir rapor ve filtrelerini seçip çalıştırın. Sonuçlar burada görünür ve Excel veya PDF olarak dışa aktarılabilir.",
     "reports.report": "Rapor",
     "reports.month": "Ay",
     "reports.year": "Yıl",

@@ -38,34 +38,59 @@ export function Pagination({
   const { current_page: page, last_page: lastPage, total, from, to } = meta;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
-      <p className="text-xs text-zinc-500">
+    /*
+     * The footer of a table card, so it carries the same tinted band the report
+     * totals row does — otherwise the count floats in the card's bottom padding
+     * looking like a stray caption rather than part of the table.
+     */
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-900/8 bg-zinc-900/[0.02] px-5 py-3.5 dark:border-white/10 dark:bg-white/[0.03]">
+      <p className="text-xs uppercase tracking-[0.08em] text-zinc-500">
         {t("pagination.showing", { from: from ?? 0, to: to ?? 0, total })}
       </p>
 
       {lastPage > 1 && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Button
             variant="secondary"
-            className="h-8 px-3"
+            className="h-8 w-8 px-0"
+            aria-label={t("pagination.previous")}
             disabled={disabled || page <= 1}
             onClick={() => onPageChange(page - 1)}
           >
-            {t("pagination.previous")}
+            <Chevron className="rotate-90" />
           </Button>
-          <span className="text-xs tabular-nums text-zinc-500">
+          <span className="px-2 text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
             {t("pagination.page", { page, pages: lastPage })}
           </span>
           <Button
             variant="secondary"
-            className="h-8 px-3"
+            className="h-8 w-8 px-0"
+            aria-label={t("pagination.next")}
             disabled={disabled || page >= lastPage}
             onClick={() => onPageChange(page + 1)}
           >
-            {t("pagination.next")}
+            <Chevron className="-rotate-90" />
           </Button>
         </div>
       )}
     </div>
+  );
+}
+
+/** One chevron, rotated per direction, so prev/next cannot drift apart. */
+function Chevron({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`h-4 w-4 ${className ?? ""}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M19 9l-7 7-7-7" />
+    </svg>
   );
 }

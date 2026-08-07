@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useResource } from "@/lib/data/use-resource";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,13 +23,19 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const { data } = useResource<{ data: CompanySettings }>("/company-settings");
+
+  // `settings` is the form draft, so it is seeded from the server exactly once.
+  // `useResource` revalidates on refocus and after any write, and re-seeding on
+  // those would wipe out edits the user has typed but not saved.
+  const seeded = useRef(false);
+
   useEffect(() => {
-    apiFetch<{ data: CompanySettings }>("/company-settings")
-      .then((res) => setSettings(res.data))
-      .catch(() => {
-        /* ignore */
-      });
-  }, []);
+    if (seeded.current || !data) return;
+
+    seeded.current = true;
+    setSettings(data.data);
+  }, [data]);
 
   async function onSave(e: React.FormEvent) {
     e.preventDefault();
@@ -61,11 +68,11 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-xl space-y-6">
-      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("settings.title")}</h1>
+      <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("settings.title")}</h1>
       <Card>
         <form onSubmit={onSave} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
               {t("settings.companyName")}
             </label>
             <Input
@@ -75,7 +82,7 @@ export default function SettingsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
                 {t("settings.baseCurrency")}
               </label>
               <Input
@@ -85,7 +92,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
                 {t("settings.defaultLanguage")}
               </label>
               <select
@@ -102,7 +109,7 @@ export default function SettingsPage() {
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
               {t("settings.timezone")}
             </label>
             <Input value={settings.timezone} onChange={(e) => setSettings({ ...settings, timezone: e.target.value })} />

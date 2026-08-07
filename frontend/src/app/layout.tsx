@@ -1,13 +1,25 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Urbanist } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+/*
+ * Urbanist, per the reference design. It is a geometric sans with a very light
+ * 300 weight, which is what carries the oversized page titles — those are set
+ * in `font-light`, not bold, and the size does the work.
+ *
+ * The Latin Extended subset is not optional here: the app is Serbian, Turkish
+ * and English, so č/ć/š/ž/đ and ğ/ı/İ/ş/ö/ü all have to render in the same
+ * face rather than falling back mid-word.
+ */
+const urbanist = Urbanist({
+  variable: "--font-urbanist",
+  subsets: ["latin", "latin-ext"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
 });
 
+/* Kept for tabular figures in tables and money columns. */
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
@@ -39,7 +51,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${urbanist.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full" suppressHydrationWarning>

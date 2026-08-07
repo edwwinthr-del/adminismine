@@ -1,7 +1,9 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { usePage } from "@/lib/data/use-page";
+import { useResource, withQuery } from "@/lib/data/use-resource";
+import { useWorksiteOptions } from "@/lib/data/use-options";
 import { apiFetch, errorMessage } from "@/lib/api";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -15,11 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Pagination, type PageMeta } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
-
-interface Option {
-  id: number;
-  name: string;
-}
 
 interface Machine {
   id: number;
@@ -66,13 +63,6 @@ function statusTone(status: string): "green" | "amber" | "gray" | "indigo" {
 
 export default function MachinesPage() {
   const { t } = useI18n();
-  const [machines, setMachines] = useState<Machine[]>([]);
-  const [register, setRegister] = useState<Register | null>(null);
-  // Only the filter dropdown needs a preloaded list, and worksites are a short
-  // one. Everything the form points at is searched on demand instead.
-  const [worksites, setWorksites] = useState<Option[]>([]);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
@@ -88,46 +78,38 @@ export default function MachinesPage() {
 
   const [page, setPage] = usePage([debouncedSearch, status, worksiteId, machineType]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const params = new URLSearchParams({ per_page: "25", page: String(page) });
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    if (status) params.set("status", status);
-    if (worksiteId) params.set("worksite_id", worksiteId);
-    if (machineType) params.set("machine_type", machineType);
+  // Two resources rather than one Promise.all: the register is a whole-fleet
+  // summary that does not depend on the filters, so as its own cache key it is
+  // fetched once instead of again on every keystroke and page change.
+  const { data: list, loading, error: listError } = useResource<{
+    data: Machine[];
+    meta?: PageMeta;
+  }>(
+    withQuery("/machines", {
+      per_page: 25,
+      page,
+      search: debouncedSearch,
+      status,
+      worksite_id: worksiteId,
+      machine_type: machineType,
+    }),
+  );
 
-    try {
-      const [list, summary] = await Promise.all([
-        apiFetch<{ data: Machine[]; meta?: PageMeta }>(`/machines?${params.toString()}`),
-        apiFetch<{ data: Register }>("/machines/register"),
-      ]);
-      setMachines(list.data);
-      setMeta(list.meta ?? null);
-      setRegister(summary.data);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearch, status, worksiteId, machineType, page]);
+  const { data: summary } = useResource<{ data: Register }>("/machines/register");
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const machines = list?.data ?? [];
+  const meta = list?.meta ?? null;
+  const register = summary?.data ?? null;
 
-  useEffect(() => {
-    // Optional context: each of these needs its own permission.
-    void apiFetch<{ data: Option[] }>("/worksites?active_only=1")
-      .then((res) => setWorksites(res.data))
-      .catch(() => setWorksites([]));
-  }, []);
+  // Only the filter dropdown needs a preloaded list, and worksites are a short
+  // one. Everything the form points at is searched on demand instead.
+  const { options: worksites } = useWorksiteOptions();
 
+  // No manual refetch: apiFetch's markMutated() revalidates both resources above.
   async function remove(machine: Machine) {
     if (!window.confirm(t("machines.deleteConfirm", { name: machine.display_name }))) return;
     try {
       await apiFetch(`/machines/${machine.id}`, { method: "DELETE" });
-      await load();
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -138,7 +120,7 @@ export default function MachinesPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("machines.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("machines.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("machines.new")}</Button>
       </div>
 
@@ -156,7 +138,7 @@ export default function MachinesPage() {
         <Tile label={t("machines.unlinked")} value={String(register?.unlinked_purchases ?? 0)} />
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Input
             className="max-w-xs"
@@ -191,11 +173,11 @@ export default function MachinesPage() {
         </div>
       </Card>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(error ?? listError) && <p className="text-sm text-red-600">{error ?? listError}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1020px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("machines.machine")}</th>
               <th className="px-4 py-3">{t("machines.serial")}</th>
@@ -207,16 +189,16 @@ export default function MachinesPage() {
               <th className="px-4 py-3 text-right">{t("machines.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : machines.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("machines.none")}
                 </td>
               </tr>
@@ -293,7 +275,6 @@ export default function MachinesPage() {
             setCreating(false);
             setEditing(null);
           }}
-          onSaved={load}
         />
       )}
       {managingFiles && (
@@ -302,7 +283,6 @@ export default function MachinesPage() {
           basePath={`/machines/${managingFiles.id}/attachments`}
           defaultKind="invoice"
           onClose={() => setManagingFiles(null)}
-          onChanged={load}
         />
       )}
     </div>
@@ -322,11 +302,9 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
 function MachineModal({
   machine,
   onClose,
-  onSaved,
 }: {
   machine?: Machine;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [form, setForm] = useState({
@@ -380,7 +358,6 @@ function MachineModal({
           notes: form.notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -389,7 +366,7 @@ function MachineModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
   const section = "text-xs font-semibold uppercase tracking-wider text-zinc-500";
 
   return (

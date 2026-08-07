@@ -82,16 +82,25 @@ export function NotificationBell() {
       <button
         onClick={() => void toggle()}
         aria-label={t("notifications.title")}
-        className="relative flex h-9 w-9 items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        className="control-surface focus-ink relative flex h-10 w-10 items-center justify-center rounded-full text-zinc-600 transition-colors hover:bg-white/80 dark:text-zinc-300 dark:hover:bg-white/10"
       >
-        <span aria-hidden className="text-lg leading-none">
-          🔔
-        </span>
+        <svg
+          viewBox="0 0 24 24"
+          className="h-[18px] w-[18px]"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="M18 9a6 6 0 1 0-12 0c0 6-3 7-3 7h18s-3-1-3-7M13.7 20a2 2 0 0 1-3.4 0" />
+        </svg>
         {counts.unread > 0 && (
           <span
             className={cn(
-              "absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white",
-              counts.critical > 0 ? "bg-red-600" : "bg-indigo-600",
+              "absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold ring-2 ring-[--background]",
+              counts.critical > 0 ? "bg-red-500 text-white" : "bg-brand-yellow text-ink",
             )}
           >
             {counts.unread > 99 ? "99+" : counts.unread}
@@ -100,8 +109,8 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <div className="surface-strong absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-3xl">
+          <div className="flex items-center justify-between border-b border-zinc-900/5 px-4 py-3 dark:border-white/10">
             <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
               {t("notifications.title")}
             </span>

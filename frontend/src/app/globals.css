@@ -1,26 +1,298 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * ---------------------------------------------------------------------------
+ * AdminisMine visual language
+ * ---------------------------------------------------------------------------
+ *
+ * Taken from the reference design in `frontend-template-example/`: Urbanist,
+ * a warm sand background rather than flat white, generously rounded translucent
+ * surfaces that float on it, and two accents — a bright yellow and a soft
+ * orange — over near-black text.
+ *
+ * The important decision is in HOW it is applied. The pages name Tailwind's
+ * `zinc` and `indigo` scales directly, over a thousand times between them, so
+ * the palette is changed by **redefining what those scale names mean** rather
+ * than by editing every page. `zinc` is now a warm sand-grey, `indigo` is the
+ * near-black ink. Every existing `text-zinc-500`, `border-zinc-200`,
+ * `dark:bg-zinc-900` keeps working and comes out in the new palette, including
+ * on pages written after this.
+ *
+ * Reference tokens (from font-example.webp):
+ *   yellow #F5ED31 · orange #FF934F · ink #0D0C0B · grey #DDDDDD · white #ffffff
+ */
+
+@theme {
+  --font-sans: var(--font-urbanist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Brand accents. */
+  --color-brand-yellow: #f5ed31;
+  --color-brand-yellow-soft: #faf6a8;
+  --color-brand-orange: #ff934f;
+  --color-brand-orange-soft: #ffd4b6;
+  --color-ink: #0d0c0b;
+
+  /*
+   * `zinc` remapped from a blue-grey to a warm sand-grey. Same 50→950 ramp
+   * positions, so contrast pairings the pages already rely on still hold.
+   */
+  --color-zinc-50: #faf9f5;
+  --color-zinc-100: #f3f1ea;
+  --color-zinc-200: #e7e4d9;
+  --color-zinc-300: #d5d1c3;
+  --color-zinc-400: #ada894;
+  --color-zinc-500: #8a8579;
+  --color-zinc-600: #6b675d;
+  --color-zinc-700: #4a4740;
+  --color-zinc-800: #2e2c27;
+  --color-zinc-900: #1c1b18;
+  --color-zinc-950: #0d0c0b;
+
+  /*
+   * `indigo` remapped to ink. The reference design has no blue: emphasis is
+   * carried by near-black, with yellow reserved for the primary action.
+   */
+  --color-indigo-50: #f5f4f1;
+  --color-indigo-100: #eae8e1;
+  --color-indigo-200: #d5d2c8;
+  --color-indigo-300: #a8a399;
+  --color-indigo-400: #6e6a61;
+  --color-indigo-500: #46433c;
+  --color-indigo-600: #2b2925;
+  --color-indigo-700: #1c1b18;
+  --color-indigo-800: #131211;
+  --color-indigo-900: #0d0c0b;
+  --color-indigo-950: #070706;
+
+  --radius-card: 1.75rem;
+  --radius-control: 9999px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  --background: #ecebe4;
+  --foreground: #0d0c0b;
+
+  /* Translucent surfaces that sit on the ambient background. */
+  --surface: rgb(255 255 255 / 0.62);
+  --surface-strong: rgb(255 255 255 / 0.86);
+  --surface-border: rgb(255 255 255 / 0.7);
+  --surface-shadow: 0 1px 2px rgb(13 12 11 / 0.04), 0 8px 24px -12px rgb(13 12 11 / 0.16);
+  --surface-shadow-lg: 0 2px 4px rgb(13 12 11 / 0.05), 0 24px 56px -20px rgb(13 12 11 / 0.28);
+
+  /*
+   * Sunken controls — search fields and selects in the reference.
+   *
+   * The border has to be an ink tint rather than the white the panels use: on a
+   * frosted panel a white-on-white edge disappears, and a form of fields with no
+   * visible boundary is not a form. The inner shadow alone was not enough.
+   */
+  --control-bg: rgb(255 255 255 / 0.72);
+  --control-border: rgb(13 12 11 / 0.1);
+  --control-shadow: inset 0 1px 2px rgb(13 12 11 / 0.06), 0 1px 0 rgb(255 255 255 / 0.7);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #14130f;
+    --foreground: #f3f1ea;
+
+    --surface: rgb(46 44 39 / 0.6);
+    --surface-strong: rgb(38 36 32 / 0.9);
+    --surface-border: rgb(255 255 255 / 0.08);
+    --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+    --surface-shadow-lg: 0 2px 4px rgb(0 0 0 / 0.4), 0 24px 56px -20px rgb(0 0 0 / 0.7);
+
+    --control-bg: rgb(13 12 11 / 0.4);
+    --control-border: rgb(255 255 255 / 0.14);
+    --control-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35), 0 1px 0 rgb(255 255 255 / 0.04);
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-urbanist), ui-sans-serif, system-ui, sans-serif;
+  /* Urbanist is geometric and reads tight at small sizes without this. */
+  letter-spacing: 0.005em;
+}
+
+/*
+ * The ambient wash behind the whole app: a warm yellow bloom in one corner and
+ * a peach one in the other, over sand. Fixed rather than scrolling, so the
+ * light source does not move when a long table does.
+ */
+.app-ambient {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-ambient::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(70rem 45rem at 8% -10%, rgb(245 237 49 / 0.28), transparent 60%),
+    radial-gradient(55rem 40rem at 95% 8%, rgb(255 147 79 / 0.16), transparent 62%),
+    radial-gradient(60rem 50rem at 50% 110%, rgb(255 255 255 / 0.5), transparent 60%),
+    var(--background);
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-ambient::before {
+    background:
+      radial-gradient(70rem 45rem at 8% -10%, rgb(245 237 49 / 0.09), transparent 60%),
+      radial-gradient(55rem 40rem at 95% 8%, rgb(255 147 79 / 0.08), transparent 62%),
+      var(--background);
+  }
+}
+
+/* A floating translucent panel. The app's default surface. */
+.surface {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+.surface-strong {
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow-lg);
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+}
+
+/* Inputs and selects: sunken rather than raised. */
+.control-surface {
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  box-shadow: var(--control-shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/*
+ * Tables inherit the page wash instead of painting their own white, so a long
+ * list reads as part of the surface it floats on rather than a box inside it.
+ */
+.table-quiet thead th {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.table-quiet tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.table-quiet tbody tr:hover {
+  background: rgb(255 255 255 / 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  .table-quiet tbody tr:hover {
+    background: rgb(255 255 255 / 0.04);
+  }
+}
+
+/*
+ * A quiet scrollbar for panels that scroll inside the layout — the sidebar
+ * first, but anything with its own overflow.
+ *
+ * The platform scrollbar is a wide opaque gutter that cuts a grey stripe down a
+ * frosted panel and, on Windows, reserves its width permanently. This one is
+ * thin, rounded, tinted from the palette, and only shows its thumb — it fades
+ * in on hover so a resting sidebar is just the sidebar.
+ *
+ * Both syntaxes are here on purpose: `scrollbar-*` is the standard and is what
+ * Firefox honours; the `::-webkit-scrollbar-*` block is what Chrome and Safari
+ * honour, and it is the one that can round the thumb.
+ */
+.scroll-quiet {
+  scrollbar-gutter: stable;
+}
+
+/*
+ * Firefox only. `scrollbar-width`/`scrollbar-color` and `::-webkit-scrollbar`
+ * are mutually exclusive: once either standard property is set on an element,
+ * Chromium stops applying the pseudo-element rules altogether — so setting both
+ * on the same selector silently loses the rounded thumb. Scoping the standard
+ * properties to browsers without the pseudo-element keeps each engine on the
+ * one it actually honours.
+ */
+@supports not selector(::-webkit-scrollbar) {
+  .scroll-quiet {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(13 12 11 / 0.22) transparent;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .scroll-quiet {
+      scrollbar-color: rgb(255 255 255 / 0.24) transparent;
+    }
+  }
+}
+
+.scroll-quiet::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scroll-quiet::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-quiet::-webkit-scrollbar-thumb {
+  background-color: rgb(13 12 11 / 0.24);
+  border-radius: 9999px;
+  /* Transparent border + background-clip is what insets the thumb from the
+     track edge; a margin has no effect on a scrollbar part. */
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color 150ms ease;
+}
+
+.scroll-quiet:hover::-webkit-scrollbar-thumb {
+  background-color: rgb(13 12 11 / 0.36);
+}
+
+.scroll-quiet::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(13 12 11 / 0.48);
+}
+
+.scroll-quiet::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  .scroll-quiet::-webkit-scrollbar-thumb {
+    background-color: rgb(255 255 255 / 0.24);
+  }
+
+  .scroll-quiet:hover::-webkit-scrollbar-thumb {
+    background-color: rgb(255 255 255 / 0.36);
+  }
+
+  .scroll-quiet::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(255 255 255 / 0.4);
+  }
+}
+
+/* Focus ring, once, so every control agrees. */
+.focus-ink:focus-visible,
+.focus-ink:focus {
+  outline: none;
+  border-color: rgb(13 12 11 / 0.45);
+  box-shadow: 0 0 0 3px rgb(245 237 49 / 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

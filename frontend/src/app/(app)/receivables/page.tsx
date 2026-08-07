@@ -106,14 +106,14 @@ export default function ReceivablesPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("receivables.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("receivables.title")}</h1>
         <div className="flex gap-2">
           <StatementButton />
           <Button onClick={() => setCreating(true)}>{t("receivables.new")}</Button>
         </div>
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Input
             className="max-w-xs"
@@ -136,9 +136,9 @@ export default function ReceivablesPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[960px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("receivables.client")}</th>
               <th className="px-4 py-3">{t("receivables.invoiceNumber")}</th>
@@ -156,18 +156,18 @@ export default function ReceivablesPage() {
             className={
               refreshing
                 ? "divide-y divide-zinc-100 opacity-60 dark:divide-zinc-800"
-                : "divide-y divide-zinc-100 dark:divide-zinc-800"
+                : "divide-y divide-zinc-900/5 dark:divide-white/8"
             }
           >
             {loading ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={10} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : invoices.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={10} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("receivables.none")}
                 </td>
               </tr>
@@ -288,7 +288,7 @@ function InvoiceModal({ invoice, onClose }: { invoice?: ReceivableInvoice; onClo
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={editing ? t("receivables.editInvoice") : t("receivables.new")}>
@@ -430,7 +430,7 @@ function SettlementModal({ invoiceId, onClose }: { invoiceId: number; onClose: (
             {(invoice.payments ?? []).length === 0 ? (
               <p className="text-sm text-zinc-500">{t("receivables.noPayments")}</p>
             ) : (
-              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <ul className="divide-y divide-zinc-900/5 dark:divide-white/8">
                 {(invoice.payments ?? []).map((payment) => (
                   <li key={payment.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                     <span className="flex flex-col">
@@ -473,7 +473,7 @@ function SettlementModal({ invoiceId, onClose }: { invoiceId: number; onClose: (
             {(invoice.deductions ?? []).length === 0 ? (
               <p className="text-sm text-zinc-500">{t("receivables.noDeductions")}</p>
             ) : (
-              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <ul className="divide-y divide-zinc-900/5 dark:divide-white/8">
                 {(invoice.deductions ?? []).map((deduction) => (
                   <li key={deduction.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                     <span className="flex flex-col">
@@ -657,7 +657,7 @@ function SettleForm({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={title}>
@@ -786,7 +786,7 @@ function StatementButton() {
                       <th className="px-3 py-2 text-right">{t("receivables.balance")}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
                     {statement.entries.map((entry, i) => (
                       <tr key={i}>
                         <td className="px-3 py-2">{formatDate(entry.date)}</td>

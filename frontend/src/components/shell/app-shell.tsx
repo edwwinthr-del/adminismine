@@ -1,27 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { useResource } from "@/lib/data/use-resource";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [company, setCompany] = useState("AdminisMine");
+  const { data } = useResource<{ data: { company_name: string } }>("/company-settings", {
+    keepAlive: true,
+  });
 
-  useEffect(() => {
-    apiFetch<{ data: { company_name: string } }>("/company-settings")
-      .then((res) => setCompany(res.data.company_name))
-      .catch(() => {
-        /* keep default */
-      });
-  }, []);
+  const company = data?.data.company_name ?? "AdminisMine";
 
+  /*
+   * `app-ambient` paints the warm wash behind everything (globals.css). The
+   * sidebar and main column float on it as frosted panels rather than sitting
+   * in framed boxes, so nothing here paints its own background.
+   */
   return (
-    <div className="flex min-h-screen">
+    <div className="app-ambient flex min-h-screen">
       <Sidebar company={company} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
-        <main className="flex-1 overflow-y-auto bg-zinc-50 p-4 md:p-6 dark:bg-zinc-900/40">{children}</main>
+        <main className="flex-1 overflow-y-auto px-4 pb-8 md:px-6">{children}</main>
       </div>
     </div>
   );

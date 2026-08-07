@@ -28,6 +28,21 @@ interface Entry {
   fetchedAt: number;
   generation: number;
   listeners: Set<Listener>;
+  /**
+   * Survive having no listeners, instead of being dropped on unmount.
+   *
+   * Dropping is right for the big, filtered lists each page owns: they are large,
+   * specific to filters the user has since left behind, and cheap to be wrong
+   * about. It is wrong for the small shared catalogues — the active workers, the
+   * active worksites — that a dozen pages all put in a dropdown. Those were
+   * re-fetched once per page, on every visit, because navigating away always
+   * unmounted the last listener.
+   *
+   * This is not a second staleness rule: a kept entry is still invalidated by
+   * `markMutated`, so the next mount refetches it. It only stops the entry being
+   * thrown away between one page and the next.
+   */
+  keepAlive?: boolean;
 }
 
 const entries = new Map<string, Entry>();
@@ -65,16 +80,19 @@ export function isStale(key: string, staleAfter = STALE_AFTER_MS): boolean {
   return entry.generation !== generation || Date.now() - entry.fetchedAt > staleAfter;
 }
 
-export function subscribe(key: string, listener: Listener): () => void {
+export function subscribe(key: string, listener: Listener, keepAlive = false): () => void {
   const entry = entryFor(key);
   entry.listeners.add(listener);
+
+  if (keepAlive) entry.keepAlive = true;
 
   return () => {
     entry.listeners.delete(listener);
 
     // Nothing is watching this key any more. Keeping it would only serve a
-    // stale first paint the next time the page is opened.
-    if (entry.listeners.size === 0 && !entry.promise) {
+    // stale first paint the next time the page is opened — unless it is one of
+    // the shared catalogues, which are worth holding on to between pages.
+    if (entry.listeners.size === 0 && !entry.promise && !entry.keepAlive) {
       entries.delete(key);
     }
   };
@@ -160,7 +178,11 @@ export function markMutated(): void {
   generation += 1;
 
   for (const [key, entry] of entries) {
-    if (entry.listeners.size === 0 && !entry.promise) {
+    // A kept entry stays, but the generation bump above has already made it
+    // stale, so the next component to mount on it refetches. Holding the data
+    // is never how a screen goes out of date; serving it without revalidating
+    // would be.
+    if (entry.listeners.size === 0 && !entry.promise && !entry.keepAlive) {
       entries.delete(key);
     }
   }

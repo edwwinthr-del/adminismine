@@ -70,8 +70,9 @@ invocation.
 | `APP_COMPANY_NAME` | `AdminisMine DOO` | Seeds the company name; Admins edit it in Settings afterwards. |
 | `APP_BASE_CURRENCY` | `EUR` | The accounting currency. Everything converts to it. |
 | `DB_CONNECTION` | `pgsql` | |
-| `DB_HOST` / `DB_PORT` | `127.0.0.1` / `5433` | Matches `docker-compose.yml`. |
+| `DB_HOST` / `DB_PORT` | `127.0.0.1` / `5433` | Matches `docker-compose.yml`. Keep the literal IP — see "Local performance" below. |
 | `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` | `adminismine` / `adminismine` / `secret` | |
+| `DB_SSLMODE` | `disable` | Laravel's default is `prefer`, which negotiates TLS on every connect — ~10 ms per request for nothing when Postgres is a Docker container on loopback. Leave at `prefer` if the database is ever remote. |
 | `REDIS_HOST` / `REDIS_PORT` | `127.0.0.1` / `6379` | Backs the queue and cache. |
 | `QUEUE_CONNECTION` | `redis` | Imports and scans run as queued jobs. |
 | `FILESYSTEM_DISK` | `local` | Attachments live on a **private** disk and are only served through the authenticated download route. |
@@ -87,7 +88,54 @@ invocation.
 
 | Variable | Default | What it does |
 |----------|---------|--------------|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api` | Base URL of the API. |
+| `NEXT_PUBLIC_API_URL` | `http://127.0.0.1:8000/api` | Base URL of the API. **Not `localhost`** — see below. |
+
+## Local performance
+
+Three settings dominate how fast the app feels in development. None of them are
+application code, and all three were measured rather than guessed — a list page
+went from ~1450 ms to ~450 ms end to end after fixing them.
+
+**1. Never write `localhost` in a URL or DB host on Windows.** It resolves to
+`::1` first, while `php artisan serve` and Docker's published ports both bind
+IPv4 only. Every connection then stalls failing over from IPv6 to IPv4:
+
+| Target | via `localhost` | via `127.0.0.1` |
+|---|---|---|
+| API TCP connect | **206 ms** | 2 ms |
+| Postgres PDO connect | **2060 ms** | 22 ms |
+
+**2. Keep Xdebug's mode off unless you are actually debugging.** `xdebug.mode=debug`
+instruments every function call whether or not a debugger is attached — it cost
+~300 ms on *every* request, including ones that touch no database. In
+`C:\xampp\php\php.ini`:
+
+```ini
+xdebug.mode=off
+xdebug.start_with_request=trigger
+```
+
+Turn it on per process when you need it — the env var overrides the ini file, so
+nothing is lost:
+
+```bash
+XDEBUG_MODE=debug php artisan serve          # PowerShell: $env:XDEBUG_MODE='debug'
+XDEBUG_MODE=debug php artisan test --filter SomeTest
+```
+
+**3. `php artisan serve` handles one request at a time on Windows.** PHP's
+built-in server needs `fork()` for concurrency, which Windows does not have
+(`PHP_CLI_SERVER_WORKERS` prints "forking is not supported on this platform").
+Every request a page makes is therefore *added*, not overlapped — which is why
+per-request overhead matters so much more here than the queries do. If serialized
+requests become the limit, run the API under a real SAPI (`php-fpm` behind nginx,
+Laravel Octane, or the Docker image) instead of tuning the app.
+
+Optionally, `php artisan config:cache && php artisan route:cache` takes a further
+~25 ms off each request. It is **not** on by default because a cached config
+ignores later `.env` edits and a cached route table ignores new routes — a
+confusing failure while the app is still being built. Run `config:clear` and
+`route:clear` before you change either.
 
 ## Background work
 

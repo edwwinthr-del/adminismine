@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate } from "@/lib/format";
@@ -49,7 +50,7 @@ interface RulesResponse {
 const TABS = ["inbox", "rules", "preferences"] as const;
 type Tab = (typeof TABS)[number];
 
-const labelClass = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+const labelClass = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
 export default function NotificationsPage() {
   const { t } = useI18n();
@@ -61,17 +62,17 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("notifications.title")}</h1>
+      <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("notifications.title")}</h1>
 
-      <div className="flex flex-wrap gap-2 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="control-surface inline-flex flex-wrap gap-1 rounded-full p-1">
         {tabs.map((value) => (
           <button
             key={value}
             onClick={() => setTab(value)}
             className={
               tab === value
-                ? "-mb-px border-b-2 border-zinc-900 px-3 py-2 text-sm font-medium text-zinc-900 dark:border-zinc-100 dark:text-zinc-50"
-                : "-mb-px border-b-2 border-transparent px-3 py-2 text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                ? "rounded-full bg-white px-4 py-1.5 text-sm font-medium text-zinc-900 shadow-[0_1px_2px_rgb(13_12_11/0.06),0_4px_12px_-6px_rgb(13_12_11/0.25)] dark:bg-white/15 dark:text-zinc-50"
+                : "rounded-full px-4 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-white/60 hover:text-zinc-800 dark:hover:bg-white/10 dark:hover:text-zinc-200"
             }
           >
             {t(`notifications.tab.${value}`)}
@@ -88,43 +89,25 @@ export default function NotificationsPage() {
 
 function InboxTab({ canConfigure }: { canConfigure: boolean }) {
   const { t } = useI18n();
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [counts, setCounts] = useState<NotificationCounts>({ unread: 0, open: 0, critical: 0 });
-  const [loading, setLoading] = useState(true);
   const [type, setType] = useState("");
   const [severity, setSeverity] = useState("");
   const [history, setHistory] = useState(false);
   const [reminding, setReminding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const query = new URLSearchParams();
-      if (type) query.set("type", type);
-      if (severity) query.set("severity", severity);
-      if (history) query.set("include_history", "1");
+  const { data, loading, error: listError } = useResource<{
+    data: AppNotification[];
+    meta: NotificationCounts;
+  }>(withQuery("/notifications", { type, severity, include_history: history }));
 
-      const res = await apiFetch<{ data: AppNotification[]; meta: NotificationCounts }>(
-        `/notifications?${query.toString()}`,
-      );
-      setNotifications(res.data);
-      setCounts(res.meta);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
-    } finally {
-      setLoading(false);
-    }
-  }, [type, severity, history]);
+  const notifications = data?.data ?? [];
+  const counts = data?.meta ?? { unread: 0, open: 0, critical: 0 };
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
+  // No manual refetch below: every action is a write, and apiFetch's
+  // markMutated() revalidates this list — and the shell's unread badge with it.
   async function act(notification: AppNotification, action: "read" | "dismiss" | "resolve") {
     try {
       await apiFetch(`/notifications/${notification.id}/${action}`, { method: "PUT" });
-      await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     }
@@ -133,7 +116,6 @@ function InboxTab({ canConfigure }: { canConfigure: boolean }) {
   async function markAllRead() {
     try {
       await apiFetch("/notifications/read-all", { method: "PUT" });
-      await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     }
@@ -142,7 +124,6 @@ function InboxTab({ canConfigure }: { canConfigure: boolean }) {
   async function rescan() {
     try {
       await apiFetch("/notifications/scan", { method: "POST" });
-      await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     }
@@ -202,7 +183,7 @@ function InboxTab({ canConfigure }: { canConfigure: boolean }) {
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(error ?? listError) && <p className="text-sm text-red-600">{error ?? listError}</p>}
 
       <Card className="divide-y divide-zinc-100 p-0 dark:divide-zinc-800">
         {loading ? (
@@ -272,27 +253,24 @@ function InboxTab({ canConfigure }: { canConfigure: boolean }) {
         )}
       </Card>
 
-      {reminding && <ReminderModal onClose={() => setReminding(false)} onSaved={load} />}
+      {reminding && <ReminderModal onClose={() => setReminding(false)} />}
     </div>
   );
 }
 
-function ReminderModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => Promise<void> }) {
+function ReminderModal({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [severity, setSeverity] = useState("info");
-  const [roles, setRoles] = useState<string[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    void apiFetch<RulesResponse>("/settings/notification-rules")
-      .then((res) => setRoles(res.meta.roles))
-      .catch(() => setRoles([]));
-  }, []);
+  // The rules endpoint is also read by the Rules tab; one cache key serves both.
+  const { data } = useResource<RulesResponse>("/settings/notification-rules");
+  const roles = data?.meta.roles ?? [];
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -309,7 +287,6 @@ function ReminderModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           roles: selectedRoles,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -385,28 +362,27 @@ function ReminderModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 function RulesTab() {
   const { t } = useI18n();
   const [rules, setRules] = useState<NotificationRule[]>([]);
-  const [roles, setRoles] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch<RulesResponse>("/settings/notification-rules");
-      setRules(res.data);
-      setRoles(res.meta.roles);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data, loading, error: loadError } = useResource<RulesResponse>(
+    "/settings/notification-rules",
+  );
+
+  const roles = data?.meta.roles ?? [];
+
+  // `rules` is an editable draft that `patch()` writes into and `save()` submits,
+  // so it is seeded exactly once. Re-seeding on a revalidation — which happens on
+  // refocus and after any write — would silently discard unsaved edits.
+  const seeded = useRef(false);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (seeded.current || !data) return;
+
+    seeded.current = true;
+    setRules(data.data);
+  }, [data]);
 
   function patch(type: string, changes: Partial<NotificationRule>) {
     setSaved(false);
@@ -447,9 +423,9 @@ function RulesTab() {
     <div className="space-y-4">
       <p className="text-sm text-zinc-500">{t("notifications.rulesHint")}</p>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("notifications.type")}</th>
               <th className="px-4 py-3">{t("notifications.enabled")}</th>
@@ -459,7 +435,7 @@ function RulesTab() {
               <th className="px-4 py-3">{t("notifications.recipientRoles")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {rules.map((rule) => (
               <tr key={rule.type} className="text-zinc-800 dark:text-zinc-200">
                 <td className="px-4 py-3">
@@ -545,7 +521,7 @@ function RulesTab() {
         </table>
       </Card>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(error ?? loadError) && <p className="text-sm text-red-600">{error ?? loadError}</p>}
       <div className="flex items-center justify-end gap-3">
         {saved && <span className="text-sm text-green-600">{t("notifications.saved")}</span>}
         <Button onClick={() => void save()} disabled={saving}>
@@ -559,26 +535,23 @@ function RulesTab() {
 function PreferencesTab() {
   const { t } = useI18n();
   const [preferences, setPreferences] = useState<Preference[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch<{ data: Preference[] }>("/me/notification-preferences");
-      setPreferences(res.data);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data, loading, error: loadError } = useResource<{ data: Preference[] }>(
+    "/me/notification-preferences",
+  );
+
+  // Seeded once for the same reason as the rules draft above.
+  const seeded = useRef(false);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (seeded.current || !data) return;
+
+    seeded.current = true;
+    setPreferences(data.data);
+  }, [data]);
 
   function patch(type: string, value: boolean | null) {
     setSaved(false);
@@ -635,7 +608,7 @@ function PreferencesTab() {
         ))}
       </Card>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(error ?? loadError) && <p className="text-sm text-red-600">{error ?? loadError}</p>}
       <div className="flex items-center justify-end gap-3">
         {saved && <span className="text-sm text-green-600">{t("notifications.saved")}</span>}
         <Button onClick={() => void save()} disabled={saving}>

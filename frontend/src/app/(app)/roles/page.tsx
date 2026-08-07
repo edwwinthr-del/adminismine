@@ -70,11 +70,11 @@ export default function RolesPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("roles.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("roles.title")}</h1>
         <p className="text-sm text-zinc-500">{t("roles.subtitle")}</p>
       </div>
 
-      <div className="flex gap-2 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="control-surface inline-flex flex-wrap gap-1 rounded-full p-1">
         {(["roles", "users"] as const).map((key) => (
           <button
             key={key}
@@ -82,8 +82,8 @@ export default function RolesPage() {
             onClick={() => setTab(key)}
             className={
               tab === key
-                ? "-mb-px border-b-2 border-indigo-600 px-3 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300"
-                : "-mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                ? "rounded-full bg-white px-4 py-1.5 text-sm font-medium text-zinc-900 shadow-[0_1px_2px_rgb(13_12_11/0.06),0_4px_12px_-6px_rgb(13_12_11/0.25)] dark:bg-white/15 dark:text-zinc-50"
+                : "rounded-full px-4 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-white/60 hover:text-zinc-800 dark:hover:bg-white/10 dark:hover:text-zinc-200"
             }
           >
             {t(`roles.tab.${key}`)}
@@ -140,9 +140,9 @@ function RolesTab() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("roles.name")}</th>
               <th className="px-4 py-3 text-right">{t("roles.users")}</th>
@@ -151,16 +151,16 @@ function RolesTab() {
               <th className="px-4 py-3 text-right">{t("common.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : roles.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("roles.none")}
                 </td>
               </tr>
@@ -262,7 +262,7 @@ function RoleModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={role ? t("roles.edit") : t("roles.new")}>
@@ -364,7 +364,7 @@ function CloneModal({ role, onClose }: { role: Role; onClose: () => void }) {
       <form onSubmit={submit} className="space-y-4">
         <p className="text-sm text-zinc-500">{t("roles.cloneHint", { name: role.name })}</p>
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
             {t("roles.name")}
           </label>
           <Input value={name} onChange={(e) => setName(e.target.value)} required />
@@ -429,9 +429,9 @@ function UsersTab() {
         <Button onClick={() => setCreating(true)}>{t("users.new")}</Button>
       </div>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[960px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("roles.user")}</th>
               <th className="px-4 py-3">{t("roles.email")}</th>
@@ -440,16 +440,16 @@ function UsersTab() {
               <th className="px-4 py-3 text-right">{t("common.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("roles.noUsers")}
                 </td>
               </tr>
@@ -604,7 +604,7 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={user ? t("users.edit") : t("users.new")}>
@@ -780,7 +780,7 @@ function PasswordModal({ user, onClose }: { user: UserRow; onClose: () => void }
     <Modal open onClose={onClose} title={`${t("users.resetPassword")} — ${user.name}`}>
       <form onSubmit={submit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
             {t("users.newPassword")}
           </label>
           <div className="flex gap-2">
@@ -866,7 +866,7 @@ function UserAccessModal({ user, onClose }: { user: UserRow; onClose: () => void
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={`${t("roles.manageAccess")} — ${user.name}`}>

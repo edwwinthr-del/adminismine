@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useResource } from "@/lib/data/use-resource";
 import { useI18n } from "@/lib/i18n/context";
 import { formatMoney } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
@@ -52,24 +53,17 @@ const EXAMPLES = [
 
 export default function AssistantPage() {
   const { t } = useI18n();
-  const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await apiFetch<{ data: Message[] }>("/assistant/messages");
-      setMessages(res.data);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // The transcript is server state, not a draft — the only thing typed here is
+  // `question`, which is held separately. So it can render the cache directly:
+  // asking, confirming a suggestion and clearing are all writes, and each one's
+  // markMutated() brings the thread back current.
+  const { data, error: historyError } = useResource<{ data: Message[] }>("/assistant/messages");
+  const messages = data?.data ?? [];
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -87,7 +81,6 @@ export default function AssistantPage() {
         method: "POST",
         json: { question: asked },
       });
-      await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -100,7 +93,6 @@ export default function AssistantPage() {
     setError(null);
     try {
       await apiFetch(`/assistant/suggestions/${suggestion.id}/${action}`, { method: "POST" });
-      await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -111,14 +103,13 @@ export default function AssistantPage() {
   async function clear() {
     if (!window.confirm(t("assistant.clearConfirm"))) return;
     await apiFetch("/assistant/messages", { method: "DELETE" });
-    await load();
   }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("assistant.title")}</h1>
+          <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("assistant.title")}</h1>
           <p className="text-sm text-zinc-500">{t("assistant.subtitle")}</p>
         </div>
         {messages.length > 0 && (
@@ -128,7 +119,7 @@ export default function AssistantPage() {
         )}
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {(error ?? historyError) && <p className="text-sm text-red-600">{error ?? historyError}</p>}
 
       <Card className="space-y-4">
         <div className="max-h-[26rem] space-y-4 overflow-y-auto pr-1">
@@ -220,12 +211,12 @@ function ReportBlock({ report }: { report: ReportPayload }) {
   const { t } = useI18n();
 
   return (
-    <Card className="overflow-x-auto p-0">
+    <Card className="table-quiet overflow-x-auto p-0">
       <p className="px-4 pb-2 pt-4 text-xs font-medium text-zinc-500">
         {t(`report.${report.key}`)} · {t("assistant.rowCount", { count: report.row_count })}
       </p>
       <table className="w-full min-w-[560px] text-xs">
-        <thead className="border-b border-zinc-200 text-left uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+        <thead className="border-b border-zinc-900/8 text-left uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
           <tr>
             {report.columns.map((column) => (
               <th
@@ -241,7 +232,7 @@ function ReportBlock({ report }: { report: ReportPayload }) {
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
           {report.rows.map((row, index) => (
             <tr key={index} className="text-zinc-700 dark:text-zinc-300">
               {report.columns.map((column) => {

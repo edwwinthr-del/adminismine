@@ -48,13 +48,13 @@ export default function MinesPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("mines.title")}</h1>
+          <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("mines.title")}</h1>
           <p className="text-sm text-zinc-500">{t("mines.subtitle")}</p>
         </div>
         <Button onClick={() => setCreating(true)}>{t("mines.new")}</Button>
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <Input
           className="max-w-xs"
           placeholder={t("mines.search")}
@@ -65,9 +65,9 @@ export default function MinesPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[760px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("mines.name")}</th>
               <th className="px-4 py-3">{t("mines.code")}</th>
@@ -78,16 +78,16 @@ export default function MinesPage() {
               <th className="px-4 py-3 text-right">{t("mines.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : mines.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("mines.none")}
                 </td>
               </tr>
@@ -164,7 +164,7 @@ function MineModal({ mine, onClose }: { mine?: Mine; onClose: () => void }) {
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={mine ? t("mines.edit") : t("mines.new")}>

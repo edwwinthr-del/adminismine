@@ -72,7 +72,7 @@ export function BankRecordField({
   const { t } = useI18n();
   const bookable = canBook(method);
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <div>

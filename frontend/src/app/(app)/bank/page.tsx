@@ -87,7 +87,7 @@ export default function BankPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("bank.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("bank.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("bank.new")}</Button>
       </div>
 
@@ -107,7 +107,7 @@ export default function BankPage() {
         ))}
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Input
             className="max-w-xs"
@@ -130,9 +130,9 @@ export default function BankPage() {
         </div>
       </Card>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1080px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("bank.date")}</th>
               <th className="px-4 py-3">{t("bank.description1")}</th>
@@ -145,16 +145,16 @@ export default function BankPage() {
               <th className="px-4 py-3 text-right">{t("common.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("bank.none")}
                 </td>
               </tr>
@@ -317,7 +317,7 @@ function TransactionModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={editing ? t("bank.edit") : t("bank.new")}>
@@ -452,7 +452,7 @@ function MatchButton({ transaction }: { transaction: BankTransaction }) {
             <option value="receivable">{t("bank.receivable")}</option>
           </Select>
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
               {t("bank.selectInvoice")}
             </label>
             {/*
@@ -476,7 +476,7 @@ function MatchButton({ transaction }: { transaction: BankTransaction }) {
             )}
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("bank.amount")}</label>
+            <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">{t("bank.amount")}</label>
             <Input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} required />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}

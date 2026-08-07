@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useResource } from "@/lib/data/use-resource";
+import { useEmployeeOptions, type EmployeeOption } from "@/lib/data/use-options";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, formatMoney, todayISO } from "@/lib/format";
 import { AttachmentsModal } from "@/components/attachments-modal";
@@ -11,11 +13,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
-
-interface EmployeeOption {
-  id: number;
-  full_name: string;
-}
 
 interface Occupant {
   employee_id: number;
@@ -169,26 +166,16 @@ export default function HousingPage() {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("houses");
   const [month, setMonth] = useState(currentMonth);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadSummary = useCallback(async () => {
-    try {
-      const res = await apiFetch<{ data: Summary }>(`/housing/summary?month=${month}`);
-      setSummary(res.data);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Error");
-    }
-  }, [month]);
-
-  useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
+  // The tabs used to be handed an `onChanged` callback so a write inside one
+  // could refresh these totals. They no longer need to: every write goes through
+  // apiFetch, whose markMutated() revalidates this resource wherever it happened.
+  const { data, error } = useResource<{ data: Summary }>(`/housing/summary?month=${month}`);
+  const summary = data?.data ?? null;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("housing.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("housing.title")}</h1>
         <Input className="w-[10rem]" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
       </div>
 
@@ -218,15 +205,15 @@ export default function HousingPage() {
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex flex-wrap gap-2 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="control-surface inline-flex flex-wrap gap-1 rounded-full p-1">
         {TABS.map((value) => (
           <button
             key={value}
             onClick={() => setTab(value)}
             className={
               tab === value
-                ? "-mb-px border-b-2 border-zinc-900 px-3 py-2 text-sm font-medium text-zinc-900 dark:border-zinc-100 dark:text-zinc-50"
-                : "-mb-px border-b-2 border-transparent px-3 py-2 text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                ? "rounded-full bg-white px-4 py-1.5 text-sm font-medium text-zinc-900 shadow-[0_1px_2px_rgb(13_12_11/0.06),0_4px_12px_-6px_rgb(13_12_11/0.25)] dark:bg-white/15 dark:text-zinc-50"
+                : "rounded-full px-4 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-white/60 hover:text-zinc-800 dark:hover:bg-white/10 dark:hover:text-zinc-200"
             }
           >
             {t(`housing.tab.${value}`)}
@@ -234,10 +221,10 @@ export default function HousingPage() {
         ))}
       </div>
 
-      {tab === "houses" && <HousesTab summary={summary} onChanged={loadSummary} />}
-      {tab === "rent" && <RentTab month={month} onChanged={loadSummary} />}
-      {tab === "bills" && <BillsTab month={month} onChanged={loadSummary} />}
-      {tab === "deductions" && <DeductionsTab month={month} onChanged={loadSummary} />}
+      {tab === "houses" && <HousesTab summary={summary} />}
+      {tab === "rent" && <RentTab month={month} />}
+      {tab === "bills" && <BillsTab month={month} />}
+      {tab === "deductions" && <DeductionsTab month={month} />}
     </div>
   );
 }
@@ -252,39 +239,22 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-function HousesTab({ summary, onChanged }: { summary: Summary | null; onChanged: () => Promise<void> }) {
+function HousesTab({ summary }: { summary: Summary | null }) {
   const { t } = useI18n();
-  const [houses, setHouses] = useState<House[]>([]);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<House | null>(null);
   const [managing, setManaging] = useState<House | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch<{ data: House[] }>("/houses?with_occupants=1");
-      setHouses(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data, loading } = useResource<{ data: House[] }>("/houses?with_occupants=1");
+  const houses = data?.data ?? [];
 
-  useEffect(() => {
-    void load();
-    void apiFetch<{ data: EmployeeOption[] }>("/employees?status=active&per_page=200")
-      .then((res) => setEmployees(res.data))
-      .catch(() => setEmployees([]));
-  }, [load]);
+  const { options: employees } = useEmployeeOptions();
 
   async function remove(house: House) {
     if (!window.confirm(t("housing.removeHouseConfirm", { name: house.name }))) return;
     try {
       await apiFetch(`/houses/${house.id}`, { method: "DELETE" });
-      await load();
-      await onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     }
@@ -299,9 +269,9 @@ function HousesTab({ summary, onChanged }: { summary: Summary | null; onChanged:
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[980px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("housing.house")}</th>
               <th className="px-4 py-3">{t("housing.landlord")}</th>
@@ -312,16 +282,16 @@ function HousesTab({ summary, onChanged }: { summary: Summary | null; onChanged:
               <th className="px-4 py-3 text-right">{t("housing.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : houses.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("housing.noHouses")}
                 </td>
               </tr>
@@ -405,10 +375,6 @@ function HousesTab({ summary, onChanged }: { summary: Summary | null; onChanged:
             setCreating(false);
             setEditing(null);
           }}
-          onSaved={async () => {
-            await load();
-            await onChanged();
-          }}
         />
       )}
       {managing && (
@@ -416,10 +382,6 @@ function HousesTab({ summary, onChanged }: { summary: Summary | null; onChanged:
           house={managing}
           employees={employees}
           onClose={() => setManaging(null)}
-          onChanged={async () => {
-            await load();
-            await onChanged();
-          }}
         />
       )}
     </div>
@@ -429,11 +391,9 @@ function HousesTab({ summary, onChanged }: { summary: Summary | null; onChanged:
 function HouseModal({
   house,
   onClose,
-  onSaved,
 }: {
   house?: House;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [form, setForm] = useState({
@@ -483,7 +443,6 @@ function HouseModal({
           notes: form.notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -492,7 +451,7 @@ function HouseModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
   const section = "text-xs font-semibold uppercase tracking-wider text-zinc-500";
 
   return (
@@ -617,35 +576,24 @@ function OccupantsModal({
   house,
   employees,
   onClose,
-  onChanged,
 }: {
   house: House;
   employees: EmployeeOption[];
   onClose: () => void;
-  onChanged: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [stays, setStays] = useState<Occupancy[]>([]);
-  const [loading, setLoading] = useState(true);
   const [employeeId, setEmployeeId] = useState("");
   const [room, setRoom] = useState("");
   const [movedInAt, setMovedInAt] = useState(todayISO());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch<{ data: Occupancy[] }>(`/housing/occupancies?house_id=${house.id}`);
-      setStays(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [house.id]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Read-only list, so it renders the cache directly — moving someone in or out
+  // writes through apiFetch, and markMutated() brings this back current.
+  const { data, loading } = useResource<{ data: Occupancy[] }>(
+    `/housing/occupancies?house_id=${house.id}`,
+  );
+  const stays = data?.data ?? [];
 
   async function moveIn(e: React.FormEvent) {
     e.preventDefault();
@@ -663,8 +611,6 @@ function OccupantsModal({
       });
       setEmployeeId("");
       setRoom("");
-      await load();
-      await onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -679,8 +625,6 @@ function OccupantsModal({
     setError(null);
     try {
       await apiFetch(`/housing/occupancies/${stay.id}`, { method: "PUT", json: { moved_out_at: date } });
-      await load();
-      await onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -688,7 +632,7 @@ function OccupantsModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={`${t("housing.manageOccupants")} — ${house.name}`}>
@@ -769,10 +713,8 @@ function OccupantsModal({
   );
 }
 
-function RentTab({ month, onChanged }: { month: string; onChanged: () => Promise<void> }) {
+function RentTab({ month }: { month: string }) {
   const { t } = useI18n();
-  const [rows, setRows] = useState<RentPayment[]>([]);
-  const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState<RentPayment | null>(null);
   const [preview, setPreview] = useState<{
     data: RentPayment[];
@@ -780,19 +722,8 @@ function RentTab({ month, onChanged }: { month: string; onChanged: () => Promise
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch<{ data: RentPayment[] }>(`/housing/rent?month=${month}`);
-      setRows(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [month]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data, loading } = useResource<{ data: RentPayment[] }>(`/housing/rent?month=${month}`);
+  const rows = data?.data ?? [];
 
   async function openPreview() {
     setError(null);
@@ -810,8 +741,6 @@ function RentTab({ month, onChanged }: { month: string; onChanged: () => Promise
   async function confirmGenerate() {
     await apiFetch("/housing/rent/generate", { method: "POST", json: { month } });
     setPreview(null);
-    await load();
-    await onChanged();
   }
 
   return (
@@ -821,9 +750,9 @@ function RentTab({ month, onChanged }: { month: string; onChanged: () => Promise
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("housing.house")}</th>
               <th className="px-4 py-3">{t("housing.dueDate")}</th>
@@ -835,16 +764,16 @@ function RentTab({ month, onChanged }: { month: string; onChanged: () => Promise
               <th className="px-4 py-3 text-right">{t("housing.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("housing.noRent")}
                 </td>
               </tr>
@@ -945,44 +874,26 @@ function RentTab({ month, onChanged }: { month: string; onChanged: () => Promise
           currency={paying.currency}
           path={`/housing/rent/${paying.id}/payments`}
           onClose={() => setPaying(null)}
-          onSaved={async () => {
-            setPaying(null);
-            await load();
-            await onChanged();
-          }}
+          onSaved={() => setPaying(null)}
         />
       )}
     </div>
   );
 }
 
-function BillsTab({ month, onChanged }: { month: string; onChanged: () => Promise<void> }) {
+function BillsTab({ month }: { month: string }) {
   const { t } = useI18n();
-  const [rows, setRows] = useState<UtilityBill[]>([]);
-  const [houses, setHouses] = useState<House[]>([]);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState<UtilityBill | null>(null);
   const [splitting, setSplitting] = useState<UtilityBill | null>(null);
   const [files, setFiles] = useState<UtilityBill | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch<{ data: UtilityBill[] }>(`/housing/bills?month=${month}`);
-      setRows(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [month]);
+  const { data, loading } = useResource<{ data: UtilityBill[] }>(`/housing/bills?month=${month}`);
+  const rows = data?.data ?? [];
 
-  useEffect(() => {
-    void load();
-    void apiFetch<{ data: House[] }>("/houses?active_only=1")
-      .then((res) => setHouses(res.data))
-      .catch(() => setHouses([]));
-  }, [load]);
+  const { data: houseData } = useResource<{ data: House[] }>("/houses?active_only=1");
+  const houses = houseData?.data ?? [];
 
   return (
     <div className="space-y-4">
@@ -991,9 +902,9 @@ function BillsTab({ month, onChanged }: { month: string; onChanged: () => Promis
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1000px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("housing.house")}</th>
               <th className="px-4 py-3">{t("housing.billType")}</th>
@@ -1005,16 +916,16 @@ function BillsTab({ month, onChanged }: { month: string; onChanged: () => Promis
               <th className="px-4 py-3 text-right">{t("housing.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("housing.noBills")}
                 </td>
               </tr>
@@ -1074,10 +985,6 @@ function BillsTab({ month, onChanged }: { month: string; onChanged: () => Promis
           houses={houses}
           month={month}
           onClose={() => setCreating(false)}
-          onSaved={async () => {
-            await load();
-            await onChanged();
-          }}
         />
       )}
       {paying && (
@@ -1088,22 +995,14 @@ function BillsTab({ month, onChanged }: { month: string; onChanged: () => Promis
           currency={paying.currency}
           path={`/housing/bills/${paying.id}/payments`}
           onClose={() => setPaying(null)}
-          onSaved={async () => {
-            setPaying(null);
-            await load();
-            await onChanged();
-          }}
+          onSaved={() => setPaying(null)}
         />
       )}
       {splitting && (
         <SplitModal
           bill={splitting}
           onClose={() => setSplitting(null)}
-          onSaved={async () => {
-            setSplitting(null);
-            await load();
-            await onChanged();
-          }}
+          onSaved={() => setSplitting(null)}
           onError={setError}
         />
       )}
@@ -1113,7 +1012,6 @@ function BillsTab({ month, onChanged }: { month: string; onChanged: () => Promis
           basePath={`/housing/bills/${files.id}/attachments`}
           defaultKind="invoice"
           onClose={() => setFiles(null)}
-          onChanged={load}
         />
       )}
     </div>
@@ -1124,12 +1022,10 @@ function BillModal({
   houses,
   month,
   onClose,
-  onSaved,
 }: {
   houses: House[];
   month: string;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [houseId, setHouseId] = useState("");
@@ -1157,7 +1053,6 @@ function BillModal({
           notes: notes.trim() || null,
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -1166,7 +1061,7 @@ function BillModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={t("housing.newBill")}>
@@ -1242,7 +1137,7 @@ function SplitModal({
 }: {
   bill: UtilityBill;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: () => void;
   onError: (message: string) => void;
 }) {
   const { t } = useI18n();
@@ -1260,7 +1155,9 @@ function SplitModal({
         method: "POST",
         json: { reason: reason.trim(), amount: Number(amount) },
       });
-      await onSaved();
+      // Only closes the modal — the lists behind it are revalidated by the
+      // markMutated() that the POST above already triggered.
+      onSaved();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Error";
       setError(message);
@@ -1270,7 +1167,7 @@ function SplitModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={t("housing.splitTitle")}>
@@ -1322,7 +1219,7 @@ function PaymentModal({
   currency: string;
   path: string;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: () => void;
 }) {
   const { t } = useI18n();
   const [amount, setAmount] = useState(String(remaining));
@@ -1340,7 +1237,9 @@ function PaymentModal({
         method: "POST",
         json: { amount: Number(amount), payment_date: paymentDate, method },
       });
-      await onSaved();
+      // Only closes the modal — the lists behind it are revalidated by the
+      // markMutated() that the POST above already triggered.
+      onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     } finally {
@@ -1348,7 +1247,7 @@ function PaymentModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={title}>
@@ -1397,41 +1296,25 @@ function PaymentModal({
   );
 }
 
-function DeductionsTab({ month, onChanged }: { month: string; onChanged: () => Promise<void> }) {
+function DeductionsTab({ month }: { month: string }) {
   const { t } = useI18n();
-  const [rows, setRows] = useState<HousingDeduction[]>([]);
-  const [houses, setHouses] = useState<House[]>([]);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch<{ data: HousingDeduction[] }>(`/housing/deductions?month=${month}`);
-      setRows(res.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [month]);
+  const { data, loading } = useResource<{ data: HousingDeduction[] }>(
+    `/housing/deductions?month=${month}`,
+  );
+  const rows = data?.data ?? [];
 
-  useEffect(() => {
-    void load();
-    void apiFetch<{ data: House[] }>("/houses")
-      .then((res) => setHouses(res.data))
-      .catch(() => setHouses([]));
-    void apiFetch<{ data: EmployeeOption[] }>("/employees?status=active&per_page=200")
-      .then((res) => setEmployees(res.data))
-      .catch(() => setEmployees([]));
-  }, [load]);
+  const { data: houseData } = useResource<{ data: House[] }>("/houses");
+  const houses = houseData?.data ?? [];
+
+  const { options: employees } = useEmployeeOptions();
 
   async function remove(row: HousingDeduction) {
     if (!window.confirm(t("housing.removeDeductionConfirm"))) return;
     try {
       await apiFetch(`/housing/deductions/${row.id}`, { method: "DELETE" });
-      await load();
-      await onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
     }
@@ -1445,9 +1328,9 @@ function DeductionsTab({ month, onChanged }: { month: string; onChanged: () => P
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[920px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("housing.worker")}</th>
               <th className="px-4 py-3">{t("housing.house")}</th>
@@ -1459,16 +1342,16 @@ function DeductionsTab({ month, onChanged }: { month: string; onChanged: () => P
               <th className="px-4 py-3 text-right">{t("housing.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("housing.noDeductions")}
                 </td>
               </tr>
@@ -1506,10 +1389,6 @@ function DeductionsTab({ month, onChanged }: { month: string; onChanged: () => P
           employees={employees}
           month={month}
           onClose={() => setCreating(false)}
-          onSaved={async () => {
-            await load();
-            await onChanged();
-          }}
         />
       )}
     </div>
@@ -1521,13 +1400,11 @@ function DeductionModal({
   employees,
   month,
   onClose,
-  onSaved,
 }: {
   houses: House[];
   employees: EmployeeOption[];
   month: string;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [employeeId, setEmployeeId] = useState("");
@@ -1556,7 +1433,6 @@ function DeductionModal({
           reason: reason.trim(),
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -1565,7 +1441,7 @@ function DeductionModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={t("housing.newDeduction")}>

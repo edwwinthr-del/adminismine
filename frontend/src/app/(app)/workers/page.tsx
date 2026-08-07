@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { usePage } from "@/lib/data/use-page";
+import { useResource, withQuery } from "@/lib/data/use-resource";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useI18n } from "@/lib/i18n/context";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -76,9 +77,6 @@ function bankTone(status: string): "gray" | "amber" | "green" | "red" {
 
 export default function WorkersPage() {
   const { t } = useI18n();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [meta, setMeta] = useState<PageMeta | null>(null);
-  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -102,49 +100,46 @@ export default function WorkersPage() {
     showRemoved,
   ]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (debouncedSearch) params.set("search", debouncedSearch);
-    if (status) params.set("status", status);
-    if (bankStatus) params.set("bank_account_status", bankStatus);
-    if (expiringOnly) params.set("expiring", "1");
-    if (missingOnly) params.set("missing_documents", "1");
-    if (showRemoved) params.set("with_removed", "1");
-    params.set("per_page", "25");
-    params.set("page", String(page));
-    try {
-      const res = await apiFetch<{ data: Employee[]; meta?: PageMeta }>(`/employees?${params.toString()}`);
-      setEmployees(res.data);
-      setMeta(res.meta ?? null);
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearch, status, bankStatus, expiringOnly, missingOnly, showRemoved, page]);
+  // Through useResource rather than a hand-rolled effect, so this list is cached
+  // per URL, deduped, and refetched by `markMutated()` after any write — the
+  // behaviour the rest of the app gets for free (see lib/data/cache.ts). The
+  // effect version re-requested on every mount, which on a dev server that
+  // handles one request at a time is a round trip the user waits through.
+  const { data, loading } = useResource<{ data: Employee[]; meta?: PageMeta }>(
+    withQuery("/employees", {
+      search: debouncedSearch,
+      status,
+      bank_account_status: bankStatus,
+      expiring: expiringOnly,
+      missing_documents: missingOnly,
+      with_removed: showRemoved,
+      per_page: 25,
+      page,
+    }),
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const employees = data?.data ?? [];
+  const meta = data?.meta ?? null;
 
+  // No manual refetch after a write: apiFetch calls markMutated(), which
+  // revalidates every mounted resource including this one.
   async function remove(employee: Employee) {
     if (!window.confirm(t("workers.removeConfirm", { name: employee.full_name }))) return;
     await apiFetch(`/employees/${employee.id}`, { method: "DELETE" });
-    await load();
   }
 
   async function restore(employee: Employee) {
     await apiFetch(`/employees/${employee.id}/restore`, { method: "POST" });
-    await load();
   }
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("workers.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("workers.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("workers.new")}</Button>
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Input
             className="max-w-xs"
@@ -183,9 +178,9 @@ export default function WorkersPage() {
         </div>
       </Card>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[980px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("workers.name")}</th>
               <th className="px-4 py-3">{t("workers.jobRole")}</th>
@@ -198,16 +193,16 @@ export default function WorkersPage() {
               <th className="px-4 py-3 text-right">{t("workers.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : employees.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("workers.none")}
                 </td>
               </tr>
@@ -264,8 +259,8 @@ export default function WorkersPage() {
         <Pagination meta={meta} onPageChange={setPage} disabled={loading} />
       </Card>
 
-      {creating && <WorkerModal onClose={() => setCreating(false)} onSaved={load} />}
-      {editing && <WorkerModal employee={editing} onClose={() => setEditing(null)} onSaved={load} />}
+      {creating && <WorkerModal onClose={() => setCreating(false)} />}
+      {editing && <WorkerModal employee={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }
@@ -352,14 +347,14 @@ function initialForm(employee?: Employee): FormState {
   };
 }
 
+// No onSaved callback: saving goes through apiFetch, whose markMutated() call
+// revalidates the list behind this modal on its own.
 function WorkerModal({
   employee,
   onClose,
-  onSaved,
 }: {
   employee?: Employee;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [form, setForm] = useState<FormState>(() => initialForm(employee));
@@ -404,7 +399,6 @@ function WorkerModal({
           notes: orNull(form.notes),
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -413,7 +407,7 @@ function WorkerModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
   const section = "text-xs font-semibold uppercase tracking-wider text-zinc-500";
 
   return (

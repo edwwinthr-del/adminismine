@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useI18n } from "@/lib/i18n/context";
 import { formatMoney, todayISO } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
@@ -71,32 +72,20 @@ export default function SalariesPage() {
   const { t } = useI18n();
   const [month, setMonth] = useState(currentMonth);
   const [status, setStatus] = useState("");
-  const [rows, setRows] = useState<SalaryPayment[]>([]);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState<SalaryPayment | null>(null);
   const [adjusting, setAdjusting] = useState<SalaryPayment | null>(null);
   const [preview, setPreview] = useState<GenerateResult | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({ month, per_page: "200" });
-    if (status) params.set("status", status);
-    try {
-      const [list, sum] = await Promise.all([
-        apiFetch<{ data: SalaryPayment[] }>(`/salary-payments?${params.toString()}`),
-        apiFetch<{ data: Summary }>(`/salary-payments/summary?month=${month}`),
-      ]);
-      setRows(list.data);
-      setSummary(sum.data);
-    } finally {
-      setLoading(false);
-    }
-  }, [month, status]);
+  // Two resources rather than one Promise.all: the summary is keyed on the month
+  // alone, so narrowing by status no longer refetches it.
+  const { data: list, loading } = useResource<{ data: SalaryPayment[] }>(
+    withQuery("/salary-payments", { month, per_page: 200, status }),
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data: sum } = useResource<{ data: Summary }>(`/salary-payments/summary?month=${month}`);
+
+  const rows = list?.data ?? [];
+  const summary = sum?.data ?? null;
 
   async function openPreview() {
     const result = await apiFetch<GenerateResult>("/salary-payments/generate", {
@@ -106,22 +95,21 @@ export default function SalariesPage() {
     setPreview(result);
   }
 
+  // No manual refetch below: apiFetch's markMutated() revalidates both resources.
   async function confirmGenerate() {
     await apiFetch("/salary-payments/generate", { method: "POST", json: { month } });
     setPreview(null);
-    await load();
   }
 
   async function remove(row: SalaryPayment) {
     if (!window.confirm(t("salaries.deleteConfirm"))) return;
     await apiFetch(`/salary-payments/${row.id}`, { method: "DELETE" });
-    await load();
   }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{t("salaries.title")}</h1>
+        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("salaries.title")}</h1>
         <div className="flex items-center gap-3">
           <Input className="w-[10rem]" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           <Button onClick={() => void openPreview()}>{t("salaries.generate")}</Button>
@@ -139,7 +127,7 @@ export default function SalariesPage() {
         />
       </div>
 
-      <Card className="p-3">
+      <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Select className="max-w-[12rem]" value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">{t("salaries.allStatuses")}</option>
@@ -150,9 +138,9 @@ export default function SalariesPage() {
         </div>
       </Card>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="table-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[940px] text-sm">
-          <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
               <th className="px-4 py-3">{t("salaries.worker")}</th>
               <th className="px-4 py-3 text-right">{t("salaries.base")}</th>
@@ -165,16 +153,16 @@ export default function SalariesPage() {
               <th className="px-4 py-3 text-right">{t("salaries.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
                   {t("salaries.none")}
                 </td>
               </tr>
@@ -226,8 +214,8 @@ export default function SalariesPage() {
           onConfirm={confirmGenerate}
         />
       )}
-      {paying && <RecordPaymentModal row={paying} onClose={() => setPaying(null)} onSaved={load} />}
-      {adjusting && <AdjustModal row={adjusting} onClose={() => setAdjusting(null)} onSaved={load} />}
+      {paying && <RecordPaymentModal row={paying} onClose={() => setPaying(null)} />}
+      {adjusting && <AdjustModal row={adjusting} onClose={() => setAdjusting(null)} />}
     </div>
   );
 }
@@ -321,11 +309,9 @@ function GeneratePreviewModal({
 function RecordPaymentModal({
   row,
   onClose,
-  onSaved,
 }: {
   row: SalaryPayment;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [amount, setAmount] = useState(String(row.remaining_amount));
@@ -343,7 +329,6 @@ function RecordPaymentModal({
         method: "POST",
         json: { amount: Number(amount), payment_date: paymentDate, method },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -352,7 +337,7 @@ function RecordPaymentModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={t("salaries.recordPayment")}>
@@ -402,11 +387,9 @@ function RecordPaymentModal({
 function AdjustModal({
   row,
   onClose,
-  onSaved,
 }: {
   row: SalaryPayment;
   onClose: () => void;
-  onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [base, setBase] = useState(String(row.base_salary));
@@ -432,7 +415,6 @@ function AdjustModal({
           notes: notes.trim() === "" ? null : notes.trim(),
         },
       });
-      await onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error");
@@ -441,7 +423,7 @@ function AdjustModal({
     }
   }
 
-  const label = "mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 
   return (
     <Modal open onClose={onClose} title={t("salaries.adjust")}>

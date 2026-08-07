@@ -39,18 +39,27 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-4 dark:bg-zinc-950">
+    <div className="app-ambient flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center justify-center gap-2">
-          <div className="h-9 w-9 rounded-md bg-indigo-600" />
-          <span className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">AdminisMine</span>
+        <div className="mb-7 flex items-center justify-center gap-3">
+          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-ink text-brand-yellow">
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor" aria-hidden>
+              <path d="M4 3h16a8 8 0 0 1-8 8 8 8 0 0 1-8-8Z" />
+              <path d="M20 21H4a8 8 0 0 1 8-8 8 8 0 0 1 8 8Z" />
+            </svg>
+          </span>
+          <span className="text-[1.75rem] font-light tracking-tight text-zinc-900 dark:text-zinc-50">
+            AdminisMine
+          </span>
         </div>
-        <Card>
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">{t("login.title")}</h1>
-          <p className="mt-1 text-sm text-zinc-500">{t("login.subtitle")}</p>
-          <form onSubmit={onSubmit} className="mt-5 space-y-4">
+        <Card raised className="p-7">
+          <h1 className="text-2xl font-light tracking-tight text-zinc-900 dark:text-zinc-50">
+            {t("login.title")}
+          </h1>
+          <p className="mt-1.5 text-sm text-zinc-500">{t("login.subtitle")}</p>
+          <form onSubmit={onSubmit} className="mt-6 space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
                 {t("login.email")}
               </label>
               <Input
@@ -62,7 +71,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
                 {t("login.password")}
               </label>
               <Input
@@ -73,18 +82,23 @@ export default function LoginPage() {
                 required
               />
             </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="px-4 text-sm text-red-600">{error}</p>}
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting ? t("login.signingIn") : t("login.signIn")}
             </Button>
           </form>
         </Card>
-        <div className="mt-4 flex justify-center gap-3">
+        <div className="mt-5 flex justify-center gap-1.5">
           {locales.map((l) => (
             <button
               key={l}
               onClick={() => setLocale(l)}
-              className={l === locale ? "text-xs font-semibold text-indigo-600" : "text-xs text-zinc-500"}
+              aria-pressed={l === locale}
+              className={
+                l === locale
+                  ? "rounded-full bg-ink px-3 py-1 text-xs font-medium text-zinc-50"
+                  : "rounded-full px-3 py-1 text-xs text-zinc-500 transition-colors hover:bg-white/60 dark:hover:bg-white/10"
+              }
             >
               {LOCALE_LABELS[l]}
             </button>
