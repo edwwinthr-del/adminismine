@@ -7,6 +7,7 @@ use App\Reports\Report;
 use App\Reports\ReportRegistry;
 use App\Reports\StatementReport;
 use App\Services\Reports\ReportExporter;
+use App\Support\MonthPeriod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -99,7 +100,7 @@ class ReportController extends Controller
     private function filters(Request $request, array $accepted): array
     {
         $rules = [
-            'month' => ['nullable', 'string', 'regex:/^\d{4}-\d{2}(-\d{2})?$/'],
+            'month' => ['nullable', 'string', MonthPeriod::rule()],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date'],

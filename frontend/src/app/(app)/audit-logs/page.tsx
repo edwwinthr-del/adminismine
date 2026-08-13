@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePage } from "@/lib/data/use-page";
 import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useI18n } from "@/lib/i18n/context";
+import { auditEventLabel } from "@/lib/audit";
 import { formatDate } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { AsyncSelect } from "@/components/ui/async-select";
@@ -139,7 +140,7 @@ export default function AuditLogsPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[860px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -169,7 +170,14 @@ export default function AuditLogsPage() {
                   <td className="whitespace-nowrap px-4 py-3 text-zinc-500">{formatTimestamp(log.created_at)}</td>
                   <td className="px-4 py-3">{log.causer?.name ?? t("audit.system")}</td>
                   <td className="px-4 py-3">
-                    <Badge tone={eventTone(log.event)}>{log.event ?? "—"}</Badge>
+                    {/* The stored key is what the row *is*; the label is how it
+                        reads. Kept as a title so the neutral key stays
+                        recoverable when someone is comparing against the API. */}
+                    <Badge tone={eventTone(log.event)}>
+                      <span title={log.event ?? undefined}>
+                        {auditEventLabel(log.event, t) ?? "—"}
+                      </span>
+                    </Badge>
                   </td>
                   <td className="px-4 py-3 text-zinc-500">
                     {log.subject_label ? `${log.subject_label} #${log.subject_id}` : "—"}
@@ -197,7 +205,7 @@ function DetailsModal({ log, onClose }: { log: AuditLog; onClose: () => void }) 
   const { t } = useI18n();
 
   return (
-    <Modal open onClose={onClose} title={log.event ?? t("audit.title")}>
+    <Modal open onClose={onClose} title={auditEventLabel(log.event, t) ?? t("audit.title")}>
       <dl className="space-y-3 text-sm">
         <div className="flex justify-between gap-4">
           <dt className="text-zinc-500">{t("audit.when")}</dt>

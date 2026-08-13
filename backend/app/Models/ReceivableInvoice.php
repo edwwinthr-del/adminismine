@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ConvertsToEur;
 use App\Models\Concerns\HasAuditColumns;
 use App\Models\Concerns\Searchable;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class ReceivableInvoice extends Model
 {
+    use ConvertsToEur;
     use HasAuditColumns, HasFactory, Searchable;
 
     /** @var list<string> */
@@ -30,6 +32,8 @@ class ReceivableInvoice extends Model
         'description',
         'currency',
         'invoice_amount',
+        'exchange_rate',
+        'exchange_rate_date',
         'source',
         'notes',
     ];
@@ -40,6 +44,8 @@ class ReceivableInvoice extends Model
             'invoice_date' => 'date:Y-m-d',
             'due_date' => 'date:Y-m-d',
             'invoice_amount' => 'decimal:2',
+            'amount_eur' => 'decimal:2',
+            'exchange_rate_date' => 'date:Y-m-d',
             'received_amount' => 'decimal:2',
             'deducted_amount' => 'decimal:2',
             'remaining_amount' => 'decimal:2',
@@ -67,9 +73,10 @@ class ReceivableInvoice extends Model
      */
     public function recalculate(): void
     {
-        $received = round((float) $this->payments()->sum('amount'), 2);
+        // Both sides in EUR — see PayableInvoice::recalculate().
+        $received = round((float) $this->payments()->sum('amount_eur'), 2);
         $deducted = round((float) $this->deductions()->sum('amount'), 2);
-        $invoice = round((float) $this->invoice_amount, 2);
+        $invoice = round((float) $this->amount_eur, 2);
         $remaining = round($invoice - $received - $deducted, 2);
 
         $settled = $received + $deducted;
@@ -102,5 +109,15 @@ class ReceivableInvoice extends Model
         return $query->outstanding()
             ->whereNotNull('due_date')
             ->whereDate('due_date', '<', now()->toDateString());
+    }
+
+    protected function eurSourceColumn(): string
+    {
+        return 'invoice_amount';
+    }
+
+    protected function eurRateDate(): ?string
+    {
+        return optional($this->invoice_date)->toDateString();
     }
 }

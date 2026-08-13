@@ -12,6 +12,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 /**
@@ -30,6 +31,20 @@ class TemplateGenerator
 {
     /** Row holding the headers; the sheet is read back from the row after it. */
     public const HEADER_ROW = 1;
+
+    /**
+     * Marks the sample row so the reader can tell it from real data.
+     *
+     * The sample is well-formed by construction, so without a marker it parsed
+     * as a valid row and imported — a user who filled in below it and left it in
+     * place created a fake invoice. Recognising it by its values instead would
+     * be guesswork, and would drop a real row that happened to match, so the
+     * template says outright which row is the sample. The column is hidden and
+     * the reader never reports it as unknown.
+     */
+    public const EXAMPLE_MARKER_HEADER = '__example_row__';
+
+    public const EXAMPLE_MARKER_VALUE = 'template-sample';
 
     private const EXAMPLE_ROW = 2;
 
@@ -60,6 +75,8 @@ class TemplateGenerator
             $sheet->getColumnDimension($letter)->setWidth(max(14, min(34, mb_strlen($column->header) + 6)));
         }
 
+        $this->markExampleRow($sheet, count($entity->columns) + 1);
+
         $lastColumn = Coordinate::stringFromColumnIndex(count($entity->columns));
 
         $sheet->getStyle("A1:{$lastColumn}1")->applyFromArray([
@@ -80,6 +97,25 @@ class TemplateGenerator
         $spreadsheet->disconnectWorksheets();
 
         return $path;
+    }
+
+    /** Tag the sample row in a hidden column so the reader can leave it out. */
+    private function markExampleRow(Worksheet $sheet, int $columnIndex): void
+    {
+        $letter = Coordinate::stringFromColumnIndex($columnIndex);
+
+        $sheet->setCellValueExplicit(
+            $letter.self::HEADER_ROW,
+            self::EXAMPLE_MARKER_HEADER,
+            DataType::TYPE_STRING,
+        );
+        $sheet->setCellValueExplicit(
+            $letter.self::EXAMPLE_ROW,
+            self::EXAMPLE_MARKER_VALUE,
+            DataType::TYPE_STRING,
+        );
+
+        $sheet->getColumnDimension($letter)->setVisible(false);
     }
 
     public function filename(ImportEntity $entity): string

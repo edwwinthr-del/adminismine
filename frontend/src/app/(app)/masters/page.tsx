@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Master {
   id: number;
@@ -61,7 +62,7 @@ export default function MastersPage() {
 
       <p className="text-sm text-zinc-500">{t("masters.hint")}</p>
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[780px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -251,13 +252,13 @@ function MasterModal({
             <ul className="max-h-48 space-y-1 overflow-y-auto">
               {worksites.map((worksite) => (
                 <li key={worksite.id}>
-                  <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
-                    <input
-                      type="checkbox"
-                      checked={selectedSites.includes(worksite.id)}
-                      onChange={() => toggleSite(worksite.id)}
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+                    <Checkbox
+                        size="sm"
+                        checked={selectedSites.includes(worksite.id)}
+                        onChange={() => toggleSite(worksite.id)}
                     />
-                    {worksite.name}
+                    <span>{worksite.name}</span>
                   </label>
                 </li>
               ))}
@@ -265,9 +266,12 @@ function MasterModal({
           )}
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-          <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-          {t("masters.active")}
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+          <Checkbox
+              size="sm"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}/>
+          <span>{t("masters.active")}</span>
         </label>
 
         {error && <p className="text-sm text-red-600">{error}</p>}

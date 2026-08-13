@@ -23,6 +23,7 @@ import { Modal } from "@/components/ui/modal";
 import { Pagination, type PageMeta } from "@/components/ui/pagination";
 import { PasswordConfirmModal } from "@/components/ui/password-confirm-modal";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Payment {
   id: number;
@@ -115,16 +116,20 @@ export default function PayablesPage() {
             <option value="partial">{t("status.partial")}</option>
             <option value="paid">{t("status.paid")}</option>
           </Select>
-          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} />
-            {t("payables.overdueOnly")}
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+            <Checkbox
+                checked={overdue}
+                onChange={(e) => setOverdue(e.target.checked)}
+                size="sm"
+            />
+            <span>{t("payables.overdueOnly")}</span>
           </label>
         </div>
       </Card>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -568,13 +573,12 @@ function RemovePaymentModal({
       {matched && (
         <div>
           <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-200">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={deleteMovement}
-              onChange={(e) => setDeleteMovement(e.target.checked)}
+            <Checkbox
+                size="sm"
+                checked={deleteMovement}
+                onChange={(e) => setDeleteMovement(e.target.checked)}
             />
-            {t("payables.alsoDeleteMovement")}
+            <span>{t("payables.alsoDeleteMovement")}</span>
           </label>
           <p className="mt-1 text-xs text-zinc-500">{t("payables.alsoDeleteMovementHint")}</p>
         </div>

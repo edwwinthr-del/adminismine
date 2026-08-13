@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Housing;
 
 use App\Models\UtilityBill;
+use App\Support\Currencies;
 use App\Support\MonthPeriod;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -28,7 +29,7 @@ class StoreUtilityBillRequest extends FormRequest
             'bill_type' => ['required', Rule::in(UtilityBill::TYPES)],
             'billing_period' => ['required', 'date'],
             'amount' => ['required', 'numeric', 'min:0'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'due_date' => ['nullable', 'date'],
             'cost_bearer' => ['sometimes', Rule::in(UtilityBill::COST_BEARERS)],
             'exception_reason' => ['nullable', 'required_if:cost_bearer,workers', 'string', 'max:255'],

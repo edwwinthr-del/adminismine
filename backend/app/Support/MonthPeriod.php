@@ -11,12 +11,36 @@ use Illuminate\Support\Carbon;
  */
 class MonthPeriod
 {
+    /**
+     * A month this class can actually parse.
+     *
+     * The old rule was `\d{4}-\d{2}`, which accepts months 00 through 99: every
+     * endpoint taking a month answered `?month=2026-13` with a 500 from Carbon,
+     * and `?month=2026-00` with December of the previous year, labelled as the
+     * month that was asked for.
+     */
+    public const PATTERN = '/^\d{4}-(0[1-9]|1[0-2])(-\d{2})?$/';
+
+    /** The validation rule for a month parameter. */
+    public static function rule(): string
+    {
+        return 'regex:'.self::PATTERN;
+    }
+
     /** First day of the month, as Y-m-d. */
     public static function normalize(string $month): string
     {
-        $value = preg_match('/^\d{4}-\d{2}$/', $month) === 1 ? "{$month}-01" : $month;
+        // Built from the year and month alone. Parsing the whole string let an
+        // impossible day carry into the next month — `2026-02-31` became March.
+        if (preg_match('/^(\d{4})-(\d{2})/', $month, $matches) === 1) {
+            [, $year, $monthNumber] = $matches;
 
-        return Carbon::parse($value)->startOfMonth()->toDateString();
+            if ((int) $monthNumber >= 1 && (int) $monthNumber <= 12) {
+                return Carbon::create((int) $year, (int) $monthNumber, 1)->toDateString();
+            }
+        }
+
+        return Carbon::parse($month)->startOfMonth()->toDateString();
     }
 
     /** Last day of the month, as Y-m-d. */

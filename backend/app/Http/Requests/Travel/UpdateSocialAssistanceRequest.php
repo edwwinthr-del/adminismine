@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Travel;
 
 use App\Models\SocialAssistancePayment;
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,7 +21,7 @@ class UpdateSocialAssistanceRequest extends FormRequest
             'person_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'payment_date' => ['sometimes', 'date'],
             'entitlement_year' => ['sometimes', 'integer', 'min:2000', 'max:2100'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'amount' => ['sometimes', 'numeric', 'gt:0'],
             'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'method' => ['sometimes', 'nullable', Rule::in(SocialAssistancePayment::METHODS)],

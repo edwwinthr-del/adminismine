@@ -2,9 +2,13 @@
 
 namespace App\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,12 +26,27 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->registerAuditColumnsMacro();
+        $this->registerRateLimiters();
 
         // Super Admin bypasses every permission check, including permissions
         // added in future modules.
         Gate::before(function ($user, string $ability) {
             return $user->hasRole('Super Admin') ? true : null;
         });
+    }
+
+    /**
+     * Laravel 11+ leaves the api group unthrottled unless `throttleApi()` is
+     * called, so `/api/login` accepted attempts as fast as they could be sent —
+     * and, because there is no mail transport and no lockout, a password was the
+     * only thing between an attacker and an account. Keyed on the email being
+     * tried as well as the address it comes from, so one attacker cannot lock a
+     * real user out by exhausting their allowance from elsewhere.
+     */
+    private function registerRateLimiters(): void
+    {
+        RateLimiter::for('login', fn (Request $request) => Limit::perMinute(10)
+            ->by(Str::lower((string) $request->input('email')).'|'.$request->ip()));
     }
 
     /**

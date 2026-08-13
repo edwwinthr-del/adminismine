@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Pagination, type PageMeta } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface DocumentAlert {
   document: string;
@@ -163,22 +164,36 @@ export default function WorkersPage() {
               </option>
             ))}
           </Select>
-          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input type="checkbox" checked={expiringOnly} onChange={(e) => setExpiringOnly(e.target.checked)} />
-            {t("workers.expiringOnly")}
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+            <Checkbox
+                size="sm"
+                checked={expiringOnly}
+                onChange={(e) => setExpiringOnly(e.target.checked)}
+            />
+            <span>{t("workers.expiringOnly")}</span>
           </label>
-          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input type="checkbox" checked={missingOnly} onChange={(e) => setMissingOnly(e.target.checked)} />
-            {t("workers.missingOnly")}
+
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+            <Checkbox
+                size="sm"
+                checked={missingOnly}
+                onChange={(e) => setMissingOnly(e.target.checked)}
+            />
+            <span>{t("workers.missingOnly")}</span>
           </label>
-          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} />
-            {t("workers.showRemoved")}
+
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+            <Checkbox
+                size="sm"
+                checked={showRemoved}
+                onChange={(e) => setShowRemoved(e.target.checked)}
+            />
+            <span>{t("workers.showRemoved")}</span>
           </label>
         </div>
       </Card>
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[980px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>

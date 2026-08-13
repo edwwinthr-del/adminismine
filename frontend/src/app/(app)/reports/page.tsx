@@ -284,7 +284,7 @@ export default function ReportsPage() {
       )}
 
       {data && (
-        <Card className="table-quiet overflow-x-auto p-0">
+        <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
           {/* The result gets its own header naming what was run, so an exported
               sheet and the screen it came from are recognisably the same thing. */}
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-4 pt-5">

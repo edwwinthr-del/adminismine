@@ -9,6 +9,7 @@ use App\Models\Worksite;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
 
 class ProductionRecordTest extends TestCase
@@ -277,5 +278,50 @@ class ProductionRecordTest extends TestCase
 
         $this->getJson('/api/production')->assertStatus(403);
         $this->getJson('/api/production/totals')->assertStatus(403);
+    }
+
+    /**
+     * A deletion is the one event whose subject is gone afterwards, so the row
+     * has to carry what was removed. It used to say only "somebody deleted
+     * record #12", which cannot answer how much ore that record claimed.
+     */
+    public function test_deleting_a_production_record_records_what_was_removed(): void
+    {
+        $this->actingAsAdmin();
+
+        $record = ProductionRecord::factory()->create([
+            'worksite_id' => Worksite::factory()->create()->id,
+            'material_type' => 'bauxite_ore',
+            'quantity' => 412.5,
+            'unit' => 'tons',
+        ]);
+
+        $this->deleteJson("/api/production/{$record->id}")->assertOk();
+
+        $properties = Activity::where('description', 'production.deleted')
+            ->latest('id')->firstOrFail()->properties;
+
+        $this->assertSame('bauxite_ore', $properties['removed']['material_type']);
+        $this->assertSame('412.500', (string) $properties['removed']['quantity']);
+        $this->assertSame('tons', $properties['removed']['unit']);
+    }
+
+    /** An approver may edit an approved record, so the figures it moved between are the trail. */
+    public function test_editing_a_record_records_the_figures_it_moved_between(): void
+    {
+        $this->actingAsAdmin();
+
+        $record = ProductionRecord::factory()->create([
+            'worksite_id' => Worksite::factory()->create()->id,
+            'quantity' => 100,
+        ]);
+
+        $this->putJson("/api/production/{$record->id}", ['quantity' => 250])->assertOk();
+
+        $properties = Activity::where('description', 'production.updated')
+            ->latest('id')->firstOrFail()->properties;
+
+        $this->assertSame('100.000', (string) $properties['before']['quantity']);
+        $this->assertSame('250.000', (string) $properties['after']['quantity']);
     }
 }

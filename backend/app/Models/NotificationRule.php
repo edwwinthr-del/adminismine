@@ -71,19 +71,76 @@ class NotificationRule extends Model
         $userIds = $this->recipient_user_ids ?? [];
 
         if ($roles === [] && $userIds === []) {
-            return collect();
+            return $this->lastResortRecipients();
         }
 
+        $recipients = $this->permitted(
+            User::query()
+                // A deactivated account cannot read anything, so writing to it
+                // only builds a backlog that greets the person if they are ever
+                // restored — and silently inflates the "created" count.
+                ->where('is_active', true)
+                ->where(function (Builder $query) use ($roles, $userIds): void {
+                    if ($roles !== []) {
+                        $query->whereHas('roles', fn (Builder $q) => $q->whereIn('name', $roles));
+                    }
+                    if ($userIds !== []) {
+                        $query->orWhereIn('id', $userIds);
+                    }
+                })
+                ->get()
+        );
+
+        return $recipients->isEmpty() ? $this->lastResortRecipients() : $recipients;
+    }
+
+    /**
+     * Who to tell when the rule as configured reaches nobody.
+     *
+     * The seeded rules all name the role `Admin`, while the only account a fresh
+     * install creates is a `Super Admin` — and the role query is literal, so
+     * `Gate::before` does not help. The result was an app that raised its first
+     * notification for nobody and gave no sign why: enter forty overdue invoices,
+     * press Re-scan, get `created: 0`, forever. A rule that reaches no one is
+     * always a misconfiguration, so it falls back to whoever can fix it.
+     *
+     * @return Collection<int, User>
+     */
+    private function lastResortRecipients(): Collection
+    {
         return User::query()
-            ->where(function (Builder $query) use ($roles, $userIds): void {
-                if ($roles !== []) {
-                    $query->whereHas('roles', fn (Builder $q) => $q->whereIn('name', $roles));
-                }
-                if ($userIds !== []) {
-                    $query->orWhereIn('id', $userIds);
-                }
-            })
+            ->where('is_active', true)
+            ->whereHas('roles', fn (Builder $q) => $q->where('name', User::SUPER_ADMIN))
             ->get();
+    }
+
+    /**
+     * Drop anyone who may not see what the notification would tell them.
+     *
+     * Recipients were chosen by role name and raw user id, and no permission was
+     * ever consulted — so adding a roleless worker to the `payables.overdue`
+     * recipients handed him supplier names, invoice numbers and outstanding
+     * amounts he is refused in `/payables`. Naming a user is still how you
+     * include someone who lacks the *role*; it is not a way to grant them sight
+     * of the data, because a role is not a permission (rule 6).
+     *
+     * Filtered in PHP rather than SQL so it goes through the same `can()` the
+     * rest of the app uses — which means a permission granted directly, one
+     * inherited from any role, and the Super Admin bypass are all honoured, and
+     * this can never drift from what the module itself allows.
+     *
+     * @param  Collection<int, User>  $candidates
+     * @return Collection<int, User>
+     */
+    private function permitted(Collection $candidates): Collection
+    {
+        $permission = NotificationTypes::permission($this->type);
+
+        if ($permission === null) {
+            return $candidates;
+        }
+
+        return $candidates->filter(fn (User $user): bool => $user->can($permission))->values();
     }
 
     /**

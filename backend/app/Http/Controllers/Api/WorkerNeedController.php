@@ -153,7 +153,9 @@ class WorkerNeedController extends Controller
     {
         $workerNeed->delete();
 
-        activity()->performedOn($workerNeed)->causedBy($request->user())->log('worker_need.deleted');
+        activity()->performedOn($workerNeed)->causedBy($request->user())
+            ->withProperties(['removed' => $workerNeed->only(['employee_id', 'worksite_id', 'date', 'need_type', 'priority', 'status'])])
+            ->log('worker_need.deleted');
 
         return response()->json(['message' => 'Worker need deleted.']);
     }

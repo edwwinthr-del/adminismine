@@ -1,4 +1,5 @@
-import { markMutated } from "./data/cache";
+import { notifySessionExpired } from "./auth/session";
+import { clearCache, markMutated } from "./data/cache";
 import { clearToken, getToken } from "./token";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
@@ -29,6 +30,21 @@ export function errorMessage(error: unknown, fallback = "Error"): string {
   return first ?? error.message;
 }
 
+/**
+ * End the session the server has just refused.
+ *
+ * All three steps matter and only the first was happening: drop the credential,
+ * drop everything it fetched (otherwise the previous user's payables and
+ * dashboard stay on screen, served from cache), and tell the auth provider so
+ * the shell returns to the login screen instead of rendering an app whose every
+ * request now fails.
+ */
+function endSession(): void {
+  clearToken();
+  clearCache();
+  notifySessionExpired();
+}
+
 interface RequestOptions extends Omit<RequestInit, "body"> {
   /** When provided, the value is JSON-encoded and the content-type header is set. */
   json?: unknown;
@@ -52,7 +68,7 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
   });
 
   if (response.status === 401) {
-    clearToken();
+    endSession();
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -89,7 +105,7 @@ export async function apiDownload(path: string): Promise<{ blob: Blob; filename:
   });
 
   if (response.status === 401) {
-    clearToken();
+    endSession();
   }
 
   if (!response.ok) {

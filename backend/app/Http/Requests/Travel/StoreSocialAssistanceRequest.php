@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Travel;
 
 use App\Models\SocialAssistancePayment;
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
@@ -29,7 +30,7 @@ class StoreSocialAssistanceRequest extends FormRequest
             'person_name' => ['nullable', 'required_without:employee_id', 'string', 'max:255'],
             'payment_date' => ['required', 'date'],
             'entitlement_year' => ['required', 'integer', 'min:2000', 'max:2100'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'amount' => ['required', 'numeric', 'gt:0'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'method' => ['nullable', Rule::in(SocialAssistancePayment::METHODS)],

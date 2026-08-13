@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Housing;
 
+use App\Support\Currencies;
 use App\Support\MonthPeriod;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -29,7 +30,7 @@ class StoreHousingDeductionRequest extends FormRequest
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
             'house_id' => ['required', 'integer', 'exists:houses,id'],
             'month' => ['required', 'date'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'rent_share' => ['sometimes', 'numeric', 'min:0'],
             'utility_share' => ['sometimes', 'numeric', 'min:0'],
             'amount_deducted' => ['sometimes', 'numeric', 'min:0'],

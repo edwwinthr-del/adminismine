@@ -211,7 +211,7 @@ function ReportBlock({ report }: { report: ReportPayload }) {
   const { t } = useI18n();
 
   return (
-    <Card className="table-quiet overflow-x-auto p-0">
+    <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
       <p className="px-4 pb-2 pt-4 text-xs font-medium text-zinc-500">
         {t(`report.${report.key}`)} · {t("assistant.rowCount", { count: report.row_count })}
       </p>

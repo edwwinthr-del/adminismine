@@ -410,4 +410,82 @@ class AttendanceTest extends TestCase
         $this->getJson('/api/attendance')->assertStatus(403);
         $this->postJson('/api/attendance', [])->assertStatus(403);
     }
+
+    /**
+     * The status check lived in the regular-pay branch only, so a day that paid
+     * nothing still paid its overtime hours — a worker recorded as absent earned.
+     */
+    public function test_a_day_that_earns_nothing_earns_no_overtime_either(): void
+    {
+        $this->actingAsAdmin();
+
+        $worksite = Worksite::factory()->create();
+        $absent = Employee::factory()->create(['base_salary' => 1350]);
+        $present = Employee::factory()->create(['base_salary' => 1350]);
+        $worksite->employees()->attach([$absent->id, $present->id]);
+
+        $this->postJson('/api/attendance', [
+            'worksite_id' => $worksite->id,
+            'date' => '2026-07-15',
+            'records' => [
+                ['employee_id' => $absent->id, 'status' => 'absent', 'regular_hours' => 0, 'overtime_hours' => 4],
+                ['employee_id' => $present->id, 'status' => 'present', 'regular_hours' => 8, 'overtime_hours' => 4],
+            ],
+        ])->assertCreated();
+
+        $absentRecord = AttendanceRecord::where('employee_id', $absent->id)->sole();
+        $this->assertSame(0.0, (float) $absentRecord->overtime_amount);
+        $this->assertSame(0.0, (float) $absentRecord->total_amount);
+
+        // A day that does earn is untouched: 50.00 + 4h at 50/8 × 1.5.
+        $presentRecord = AttendanceRecord::where('employee_id', $present->id)->sole();
+        $this->assertSame(37.5, (float) $presentRecord->overtime_amount);
+        $this->assertSame(87.5, (float) $presentRecord->total_amount);
+    }
+
+    /**
+     * The earned figures are cached on the record, and overriding a month's
+     * working days changes the divisor they were built from. Days already
+     * entered kept the old rate, so what a worker earned depended on whether the
+     * office typed their day before or after the override.
+     */
+    public function test_overriding_a_months_working_days_rebuilds_the_days_already_entered(): void
+    {
+        $this->actingAsAdmin();
+
+        $worksite = Worksite::factory()->create();
+        $employee = Employee::factory()->create(['base_salary' => 1350]);
+        $worksite->employees()->attach($employee->id);
+
+        $this->postJson('/api/attendance', [
+            'worksite_id' => $worksite->id,
+            'date' => '2026-07-15',
+            'records' => [
+                ['employee_id' => $employee->id, 'status' => 'present', 'regular_hours' => 8],
+            ],
+        ])->assertCreated();
+
+        // July 2026 derives 27 non-Sunday days: 1350 / 27 = 50.00.
+        $record = AttendanceRecord::where('employee_id', $employee->id)->sole();
+        $this->assertSame(27, $record->working_days_basis);
+        $this->assertSame(50.0, (float) $record->total_amount);
+
+        $this->putJson('/api/working-days', [
+            'month' => '2026-07',
+            'working_days' => 25,
+            'reason' => 'Two public holidays',
+        ])->assertOk()->assertJsonPath('data.recomputed_records', 1);
+
+        // 1350 / 25 = 54.00, for the day that was already on the books.
+        $record->refresh();
+        $this->assertSame(25, $record->working_days_basis);
+        $this->assertSame(54.0, (float) $record->daily_rate);
+        $this->assertSame(54.0, (float) $record->total_amount);
+
+        // Removing the override puts the month back where it was.
+        $this->deleteJson('/api/working-days?month=2026-07')->assertOk();
+        $record->refresh();
+        $this->assertSame(27, $record->working_days_basis);
+        $this->assertSame(50.0, (float) $record->total_amount);
+    }
 }

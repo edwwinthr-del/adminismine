@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Salary;
 
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -18,7 +19,7 @@ class UpdateSalaryPaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'base_salary' => ['sometimes', 'numeric', 'min:0'],
             'adjustments' => ['sometimes', 'numeric'],
             'deductions' => ['sometimes', 'numeric', 'min:0'],

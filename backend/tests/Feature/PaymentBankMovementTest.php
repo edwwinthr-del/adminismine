@@ -416,4 +416,156 @@ class PaymentBankMovementTest extends TestCase
         $this->assertNull(Payment::sole()->bank_transaction_id);
         $this->assertSame('paid', $invoice->fresh()->status);
     }
+
+    /** Book a receivable and hand back the movement it wrote. */
+    private function bookedMovement(ReceivableInvoice $invoice, float $amount): BankTransaction
+    {
+        $this->postJson("/api/receivables/{$invoice->id}/payments", [
+            'amount' => $amount,
+            'payment_date' => '2026-07-05',
+            'method' => 'nlb',
+            'book_bank_transaction' => true,
+        ])->assertCreated();
+
+        return BankTransaction::where('source', PaymentBankMovement::SOURCE)->sole();
+    }
+
+    /**
+     * A generated movement is not a statement line waiting to be matched: it
+     * already belongs to the invoice that booked it. Pointing a second payment
+     * at it let that payment rewrite it to a smaller amount, delete it by
+     * unlinking, or invert its direction — real income leaving the ledger while
+     * the first invoice still read `paid`.
+     */
+    public function test_a_movement_booked_by_one_payment_cannot_be_matched_by_another(): void
+    {
+        $this->actingAsAdmin();
+        $first = $this->receivable(1000);
+        $movement = $this->bookedMovement($first, 1000);
+
+        $second = $this->receivable(1000);
+
+        $this->postJson("/api/receivables/{$second->id}/payments", [
+            'amount' => 200,
+            'payment_date' => '2026-07-06',
+            'method' => 'nlb',
+            'bank_transaction_id' => $movement->id,
+        ])->assertStatus(422)->assertJsonValidationErrors('bank_transaction_id');
+
+        // The match endpoint is the same claim by another route.
+        $this->postJson("/api/bank-transactions/{$movement->id}/match", [
+            'target' => 'receivable', 'invoice_id' => $second->id, 'amount' => 200,
+        ])->assertStatus(422);
+
+        $this->assertSame(1000.0, (float) $movement->fresh()->nlb_amount);
+        $this->assertSame('unpaid', $second->fresh()->status);
+        $this->assertSame(1000.0, BankTransaction::accountBalances()['nlb']);
+    }
+
+    /** Deleting the invoice that booked a movement still takes its own movement with it. */
+    public function test_deleting_the_owning_invoice_removes_its_booked_movement(): void
+    {
+        $this->actingAsAdmin();
+        $invoice = $this->receivable(1000);
+        $this->bookedMovement($invoice, 1000);
+
+        $this->deleteJson("/api/receivables/{$invoice->id}", self::CONFIRM)->assertOk();
+
+        $this->assertSame(0, BankTransaction::count());
+    }
+
+    /** Money that left the bank cannot have settled a client invoice. */
+    public function test_a_movement_can_only_settle_an_invoice_of_its_own_direction(): void
+    {
+        $this->actingAsAdmin();
+        $receivable = $this->receivable(1000);
+        $payable = $this->payable(1000);
+
+        $outgoing = BankTransaction::factory()->create([
+            'category' => 'expense', 'nlb_amount' => 800, 'cash_amount' => 0, 'lovcen_amount' => 0,
+        ]);
+
+        $this->postJson("/api/bank-transactions/{$outgoing->id}/match", [
+            'target' => 'receivable', 'invoice_id' => $receivable->id, 'amount' => 800,
+        ])->assertStatus(422)->assertJsonValidationErrors('target');
+
+        $this->assertSame('unpaid', $receivable->fresh()->status);
+
+        // The same row against a supplier invoice is exactly what it is for.
+        $this->postJson("/api/bank-transactions/{$outgoing->id}/match", [
+            'target' => 'payable', 'invoice_id' => $payable->id, 'amount' => 800,
+        ])->assertCreated();
+    }
+
+    /**
+     * One statement line may settle several invoices — a single transfer
+     * covering a supplier's month — but never more than the line is worth.
+     */
+    public function test_a_movement_cannot_settle_more_than_its_own_value(): void
+    {
+        $this->actingAsAdmin();
+        $movement = BankTransaction::factory()->create([
+            'category' => 'expense', 'nlb_amount' => 100, 'cash_amount' => 0, 'lovcen_amount' => 0,
+        ]);
+
+        $first = $this->payable(1000);
+        $second = $this->payable(1000);
+
+        $this->postJson("/api/bank-transactions/{$movement->id}/match", [
+            'target' => 'payable', 'invoice_id' => $first->id, 'amount' => 100,
+        ])->assertCreated();
+
+        $this->postJson("/api/bank-transactions/{$movement->id}/match", [
+            'target' => 'payable', 'invoice_id' => $second->id, 'amount' => 100,
+        ])->assertStatus(422)->assertJsonValidationErrors('amount');
+
+        $this->assertSame('unpaid', $second->fresh()->status);
+        $this->assertSame(100.0, (float) Payment::sum('amount'));
+    }
+
+    /**
+     * A payment first recorded without a movement can be booked afterwards. The
+     * flag used to be dropped by validated(), so the API answered 200 and wrote
+     * nothing — the operator had to delete the line and re-enter it.
+     */
+    public function test_a_payment_can_be_booked_after_it_was_recorded(): void
+    {
+        $this->actingAsAdmin();
+        $invoice = $this->receivable(1000);
+
+        $this->postJson("/api/receivables/{$invoice->id}/payments", [
+            'amount' => 1000, 'payment_date' => '2026-07-05', 'method' => 'nlb',
+        ])->assertCreated();
+
+        $payment = Payment::sole();
+        $this->assertSame(0, BankTransaction::count());
+
+        $this->putJson("/api/receivables/{$invoice->id}/payments/{$payment->id}", [
+            'book_bank_transaction' => true,
+        ])->assertOk();
+
+        $movement = BankTransaction::sole();
+        $this->assertSame(PaymentBankMovement::SOURCE, $movement->source);
+        $this->assertSame(1000.0, (float) $movement->nlb_amount);
+        $this->assertSame($movement->id, $payment->fresh()->bank_transaction_id);
+
+        // Asking twice is refused rather than booking the money again.
+        $this->putJson("/api/receivables/{$invoice->id}/payments/{$payment->id}", [
+            'book_bank_transaction' => true,
+        ])->assertStatus(422)->assertJsonValidationErrors('book_bank_transaction');
+
+        $this->assertSame(1, BankTransaction::count());
+    }
+
+    /** The frontend cannot tell booked from unbooked without this field. */
+    public function test_a_payment_reports_the_movement_it_points_at(): void
+    {
+        $this->actingAsAdmin();
+        $invoice = $this->receivable(1000);
+        $movement = $this->bookedMovement($invoice, 1000);
+
+        $this->getJson("/api/receivables/{$invoice->id}")
+            ->assertOk()
+            ->assertJsonPath('data.payments.0.bank_transaction_id', $movement->id);
+    }
 }

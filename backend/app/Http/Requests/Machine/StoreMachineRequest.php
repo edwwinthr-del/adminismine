@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Machine;
 
 use App\Models\Machine;
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -25,7 +26,7 @@ class StoreMachineRequest extends FormRequest
             'seller_name' => ['nullable', 'string', 'max:255'],
             'purchase_invoice_number' => ['nullable', 'string', 'max:255'],
             'purchase_amount' => ['nullable', 'numeric', 'min:0'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'payable_invoice_id' => ['nullable', 'integer', 'exists:payable_invoices,id'],
             'bank_transaction_id' => ['nullable', 'integer', 'exists:bank_transactions,id'],
             'current_location' => ['nullable', 'string', 'max:255'],

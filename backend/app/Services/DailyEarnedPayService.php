@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
+use App\Support\MonthPeriod;
 
 /**
  * Daily earned pay from salary settings + attendance (PROJECT_LLM_APP_PROMPT.md
@@ -31,6 +32,46 @@ class DailyEarnedPayService
         $record->forceFill($computed)->save();
 
         return $record;
+    }
+
+    /**
+     * Recompute every attendance record in a month against the current divisor.
+     *
+     * The earned figures are cached on the record so they stay visible and
+     * auditable, but a cache whose input can change silently is not a cache —
+     * it is a wrong number. Overriding a month's working days changes the daily
+     * rate for that whole month, and every day already entered kept the old
+     * basis: on a 1,000 EUR monthly salary, setting July to 20 working days left
+     * the days entered beforehand at 37.04 while the days entered afterwards
+     * earned 50.00. Two workers with identical attendance were paid differently
+     * depending on the order the office typed them in.
+     *
+     * The whole month is rewritten, approved rows included, because the divisor
+     * is a statement about the month rather than about a row — leaving half of it
+     * on the old basis is the inconsistency this is fixing. The count is returned
+     * so the caller can record what the override touched.
+     */
+    public function recomputeMonth(string $month): int
+    {
+        $workingDays = $this->workingDays->forMonth($month);
+        [$start, $end] = MonthPeriod::range($month);
+        $recomputed = 0;
+
+        AttendanceRecord::query()
+            ->whereBetween('date', [$start, $end])
+            ->with('employee')
+            ->chunkById(200, function ($records) use ($workingDays, &$recomputed): void {
+                foreach ($records as $record) {
+                    if ($record->employee === null) {
+                        continue;
+                    }
+
+                    $record->forceFill($this->compute($record->employee, $record, $workingDays))->save();
+                    $recomputed++;
+                }
+            });
+
+        return $recomputed;
     }
 
     /**
@@ -76,11 +117,19 @@ class DailyEarnedPayService
         return round($dailyRate * $factor, 2);
     }
 
+    /**
+     * Overtime earns only on a day that earns at all.
+     *
+     * The status check lived in regularAmount() alone, so a day marked `absent`,
+     * `sick_leave`, `unpaid_leave` or `other` paid nothing for the day and then
+     * paid its overtime hours anyway — a worker recorded as absent could still
+     * earn. The spec's rule is that those statuses pay nothing, full stop.
+     */
     private function overtimeAmount(Employee $employee, AttendanceRecord $record, ?float $dailyRate): float
     {
         $hours = (float) $record->overtime_hours;
 
-        if ($hours <= 0) {
+        if ($hours <= 0 || ! in_array($record->status, AttendanceRecord::PAID_STATUSES, true)) {
             return 0.0;
         }
 

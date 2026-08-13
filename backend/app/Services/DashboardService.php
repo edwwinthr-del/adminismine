@@ -84,7 +84,9 @@ class DashboardService
         $query = BankTransaction::query();
         $driver = $query->getConnection()->getDriverName();
         $bucket = MonthPeriod::sqlMonth($driver, 'date');
-        $net = '(cash_amount + nlb_amount + lovcen_amount)';
+        // In EUR, like every other figure here: a TRY movement's face value
+        // added to a EUR total is not a total of anything (rule 5).
+        $net = '(cash_amount_eur + nlb_amount_eur + lovcen_amount_eur)';
 
         // Summed and bucketed by the database. The sign of a movement's net
         // decides which side it lands on, which is the same rule the module
@@ -231,7 +233,7 @@ class DashboardService
                 'description' => $transaction->description_1,
                 'category' => $transaction->category,
                 'counterparty' => $transaction->supplier?->name ?? $transaction->client?->name,
-                'amount' => $transaction->net_amount,
+                'amount' => $transaction->net_amount_eur,
                 'currency' => $transaction->currency,
                 'possible_duplicate' => isset($duplicateIds[$transaction->id]),
             ])

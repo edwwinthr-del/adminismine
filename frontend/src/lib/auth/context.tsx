@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { onSessionExpired } from "@/lib/auth/session";
 import { clearCache } from "@/lib/data/cache";
 import { clearToken, getToken, setToken } from "@/lib/token";
 import type { User } from "@/lib/types";
@@ -42,6 +43,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void loadMe();
   }, [loadMe]);
+
+  // A 401 means the server has stopped accepting this session — the account was
+  // deactivated, or its password was reset, which revokes its tokens. Dropping
+  // the user here is what makes AppLayout send the browser back to the login
+  // screen; the token and the read cache are already gone by this point.
+  useEffect(() => onSessionExpired(() => setUser(null)), []);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await apiFetch<{ token: string; user: User }>("/login", {

@@ -53,8 +53,29 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
   const y = (value: number) => padding.top + plotHeight - (value / max) * plotHeight;
   const bandCentre = (index: number) => padding.left + band * index + band / 2;
 
-  const monthLabel = (month: string) =>
-    new Intl.DateTimeFormat(locale, { month: "short" }).format(new Date(`${month}T00:00:00`));
+  /*
+   * The year appears on January, and on the first column whatever it is.
+   *
+   * The trend is six months, so it spans a year boundary half the time, and
+   * "Aug Sep Oct Nov Dec Jan" gave the reader nothing to say that the last
+   * column is a different year from the first. Labelling every column with a
+   * year would be noise; labelling the two places the year is ambiguous is not.
+   */
+  const monthLabel = (month: string, index: number) => {
+    const date = new Date(`${month}T00:00:00`);
+    const withYear = index === 0 || date.getMonth() === 0;
+
+    return new Intl.DateTimeFormat(locale, {
+      month: "short",
+      ...(withYear ? { year: "2-digit" } : {}),
+    }).format(date);
+  };
+
+  /* A single readout, where there is no neighbouring column to infer the year from. */
+  const fullMonthLabel = (month: string) =>
+    new Intl.DateTimeFormat(locale, { month: "short", year: "numeric" }).format(
+      new Date(`${month}T00:00:00`),
+    );
 
   const active = hovered === null ? null : points[hovered];
 
@@ -128,7 +149,7 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
       </div>
 
       {showTable ? (
-        <CashflowTable points={points} monthLabel={monthLabel} />
+        <CashflowTable points={points} monthLabel={fullMonthLabel} />
       ) : (
         <div ref={containerRef} className="relative w-full">
           <svg width={width} height={height} role="img" aria-label={t("dashboard.cashflowTitle")}>
@@ -200,7 +221,7 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
                     fill="var(--chart-muted)"
                     fontWeight={isLast ? 600 : 400}
                   >
-                    {monthLabel(point.month)}
+                    {monthLabel(point.month, index)}
                   </text>
                 </g>
               );
@@ -216,7 +237,7 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
                 width: 140,
               }}
             >
-              <p className="font-medium text-zinc-900 dark:text-zinc-50">{monthLabel(active.month)}</p>
+              <p className="font-medium text-zinc-900 dark:text-zinc-50">{fullMonthLabel(active.month)}</p>
               {/*
                 The columns are drawn as magnitudes against one axis, which is
                 what a paired-column chart is; the numbers beside them carry the

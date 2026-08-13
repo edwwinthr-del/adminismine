@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Housing;
 
 use App\Models\RentPayment;
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,7 +17,7 @@ class UpdateRentPaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'rent_amount_due' => ['sometimes', 'numeric', 'min:0'],
             'cost_bearer' => ['sometimes', Rule::in(RentPayment::COST_BEARERS)],
             'exception_reason' => ['nullable', 'required_if:cost_bearer,workers', 'string', 'max:255'],

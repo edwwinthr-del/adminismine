@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\GuardsPrivilegeEscalation;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Role\StoreRoleRequest;
 use App\Http\Requests\Role\UpdateRoleRequest;
@@ -14,6 +15,8 @@ use Spatie\Permission\Models\Role;
 
 class RoleController extends Controller
 {
+    use GuardsPrivilegeEscalation;
+
     public function index(): JsonResponse
     {
         $roles = Role::query()
@@ -31,6 +34,12 @@ class RoleController extends Controller
 
     public function store(StoreRoleRequest $request): JsonResponse
     {
+        // A role is a container for permissions; minting one you could not grant
+        // directly would just be the same escalation with an extra step.
+        if ($refusal = $this->refuseUngrantableAccess($request->user(), permissions: $request->input('permissions', []))) {
+            return $refusal;
+        }
+
         $role = Role::create(['name' => $request->input('name'), 'guard_name' => 'web']);
         $role->syncPermissions($request->input('permissions', []));
 
@@ -54,6 +63,31 @@ class RoleController extends Controller
             return response()->json(['message' => 'System roles cannot be renamed.'], 422);
         }
 
+        $actor = $request->user();
+
+        // Editing the role you are wearing is editing yourself. `is_system`
+        // blocked renaming but never the permission sync, so a `roles.manage`
+        // holder could simply add the other twenty-nine permissions to their own
+        // role — the widest escalation in the app, and invisible in the trail
+        // because this event used to be logged with no properties.
+        if ($actor !== null && ! $actor->isSuperAdmin() && $actor->hasRole($role->name)) {
+            return response()->json([
+                'message' => 'You cannot change the permissions of a role you hold. Ask another administrator.',
+            ], 403);
+        }
+
+        if ($role->name === User::SUPER_ADMIN && ! $actor?->isSuperAdmin()) {
+            return response()->json(['message' => 'Only a Super Admin may edit the Super Admin role.'], 403);
+        }
+
+        if ($request->has('permissions')) {
+            if ($refusal = $this->refuseUngrantableAccess($actor, permissions: $request->input('permissions', []))) {
+                return $refusal;
+            }
+        }
+
+        $before = $role->permissions->pluck('name')->sort()->values()->all();
+
         if ($request->filled('name')) {
             $role->update(['name' => $request->input('name')]);
         }
@@ -62,7 +96,20 @@ class RoleController extends Controller
             $role->syncPermissions($request->input('permissions', []));
         }
 
-        activity()->performedOn($role)->causedBy($request->user())->log('role.updated');
+        $after = $role->load('permissions')->permissions->pluck('name')->sort()->values()->all();
+
+        // Who gained which permission is the most security-relevant change the
+        // app supports; a row saying only "somebody edited role #6" cannot
+        // reconstruct an escalation after the fact (rule 3).
+        activity()
+            ->performedOn($role)
+            ->causedBy($actor)
+            ->withProperties([
+                'permissions' => ['before' => $before, 'after' => $after],
+                'granted' => array_values(array_diff($after, $before)),
+                'revoked' => array_values(array_diff($before, $after)),
+            ])
+            ->log('role.updated');
 
         return response()->json(['data' => $this->payload($role->load('permissions'), $this->holderCount($role))]);
     }
@@ -86,6 +133,14 @@ class RoleController extends Controller
     public function clone(Request $request, Role $role): JsonResponse
     {
         $request->validate(['name' => ['required', 'string', 'max:255', 'unique:roles,name']]);
+
+        // Same rule as store(): copying a role carries its permissions with it.
+        if ($refusal = $this->refuseUngrantableAccess(
+            $request->user(),
+            permissions: $role->permissions->pluck('name')->all()
+        )) {
+            return $refusal;
+        }
 
         $clone = Role::create(['name' => $request->input('name'), 'guard_name' => 'web']);
         $clone->syncPermissions($role->permissions);

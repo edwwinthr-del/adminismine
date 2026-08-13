@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Travel;
 
 use App\Models\FlightTicket;
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,7 +24,7 @@ class UpdateFlightTicketRequest extends FormRequest
             'route' => ['sometimes', 'nullable', 'string', 'max:255'],
             'airline' => ['sometimes', 'nullable', 'string', 'max:255'],
             'reference' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'amount' => ['sometimes', 'numeric', 'min:0'],
             'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'cost_status' => ['sometimes', Rule::in(FlightTicket::COST_STATUSES)],

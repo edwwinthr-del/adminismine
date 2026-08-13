@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Receivable;
 
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateReceivableRequest extends FormRequest
@@ -19,7 +20,8 @@ class UpdateReceivableRequest extends FormRequest
             'invoice_date' => ['sometimes', 'date'],
             'due_date' => ['sometimes', 'nullable', 'date'],
             'description' => ['sometimes', 'nullable', 'string', 'max:1000'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
+            'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'invoice_amount' => ['sometimes', 'numeric', 'gt:0'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ];

@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Pagination, type PageMeta } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Repayment {
   id: number;
@@ -140,8 +141,7 @@ export default function LoansPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
           <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={onlyOutstanding}
               onChange={(e) => setOnlyOutstanding(e.target.checked)}
               className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
@@ -153,7 +153,7 @@ export default function LoansPage() {
 
       {(error ?? listError) && <p className="text-sm text-red-600">{error ?? listError}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1040px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>

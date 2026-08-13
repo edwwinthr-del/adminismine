@@ -103,7 +103,9 @@ class CustomsDocumentController extends Controller
             $customsDocument->delete();
         });
 
-        activity()->performedOn($customsDocument)->causedBy($request->user())->log('customs_document.deleted');
+        activity()->performedOn($customsDocument)->causedBy($request->user())
+            ->withProperties(['removed' => $customsDocument->only(['document_type', 'document_number', 'cmr_number', 'shipment_date', 'status'])])
+            ->log('customs_document.deleted');
 
         return response()->json(['message' => 'Customs document deleted.']);
     }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ConvertsToEur;
 use App\Models\Concerns\HasAuditColumns;
 use App\Models\Concerns\Searchable;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class PayableInvoice extends Model
 {
+    use ConvertsToEur;
     use HasAuditColumns, HasFactory, Searchable;
 
     /** @var list<string> */
@@ -30,6 +32,8 @@ class PayableInvoice extends Model
         'expense_category',
         'currency',
         'original_amount',
+        'exchange_rate',
+        'exchange_rate_date',
         'source',
         'notes',
     ];
@@ -40,6 +44,8 @@ class PayableInvoice extends Model
             'invoice_date' => 'date:Y-m-d',
             'due_date' => 'date:Y-m-d',
             'original_amount' => 'decimal:2',
+            'amount_eur' => 'decimal:2',
+            'exchange_rate_date' => 'date:Y-m-d',
             'paid_amount' => 'decimal:2',
             'remaining_amount' => 'decimal:2',
         ];
@@ -61,8 +67,11 @@ class PayableInvoice extends Model
      */
     public function recalculate(): void
     {
-        $paid = round((float) $this->payments()->sum('amount'), 2);
-        $original = round((float) $this->original_amount, 2);
+        // Both sides in EUR. Comparing a TRY invoice total against EUR payments
+        // is what let a 100,000 TRY bill be closed by 100,000 EUR of payments;
+        // for an all-EUR invoice these are the same numbers as before.
+        $paid = round((float) $this->payments()->sum('amount_eur'), 2);
+        $original = round((float) $this->amount_eur, 2);
         $remaining = round($original - $paid, 2);
 
         $status = $paid <= 0 ? 'unpaid' : ($remaining > 0 ? 'partial' : 'paid');
@@ -93,5 +102,15 @@ class PayableInvoice extends Model
         return $query->outstanding()
             ->whereNotNull('due_date')
             ->whereDate('due_date', '<', now()->toDateString());
+    }
+
+    protected function eurSourceColumn(): string
+    {
+        return 'original_amount';
+    }
+
+    protected function eurRateDate(): ?string
+    {
+        return optional($this->invoice_date)->toDateString();
     }
 }

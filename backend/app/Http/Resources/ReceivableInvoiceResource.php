@@ -22,6 +22,10 @@ class ReceivableInvoiceResource extends JsonResource
             'description' => $this->description,
             'currency' => $this->currency,
             'invoice_amount' => (float) $this->invoice_amount,
+            // EUR by default, with the original currency alongside it (rule 5).
+            'amount_eur' => (float) $this->amount_eur,
+            'exchange_rate' => $this->exchange_rate === null ? null : (float) $this->exchange_rate,
+            'exchange_rate_date' => optional($this->exchange_rate_date)->toDateString(),
             'received_amount' => (float) $this->received_amount,
             'deducted_amount' => (float) $this->deducted_amount,
             'remaining_amount' => (float) $this->remaining_amount,

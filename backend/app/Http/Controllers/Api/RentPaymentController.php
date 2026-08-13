@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\CorrectsPayments;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Housing\GenerateRentRequest;
 use App\Http\Requests\Housing\RecordHousingPaymentRequest;
 use App\Http\Requests\Housing\StoreRentPaymentRequest;
 use App\Http\Requests\Housing\UpdateRentPaymentRequest;
 use App\Http\Resources\RentPaymentResource;
+use App\Models\Payment;
 use App\Models\RentPayment;
 use App\Services\RentObligationService;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 
 class RentPaymentController extends Controller
 {
+    use CorrectsPayments;
+
     public function index(Request $request): JsonResponse
     {
         $query = RentPayment::query()->with('house');
@@ -119,5 +123,45 @@ class RentPaymentController extends Controller
         return response()->json([
             'data' => new RentPaymentResource($rentPayment->fresh()->load('house', 'payments')),
         ], 201);
+    }
+
+    /**
+     * Correct a payment that was entered wrong, rather than booking its opposite.
+     *
+     * See CorrectsPayments: two rows that cancel out would both read as real
+     * money in every report and in the bank match.
+     */
+    public function updatePayment(
+        RecordHousingPaymentRequest $request,
+        RentPayment $rentPayment,
+        Payment $payment,
+    ): JsonResponse {
+        $before = $payment->only(['amount', 'payment_date', 'method']);
+
+        $this->correctPayment($rentPayment, $payment, $request->validated());
+
+        activity()->performedOn($rentPayment)->causedBy($request->user())
+            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])
+            ->log('rent_payment.payment_updated');
+
+        return response()->json([
+            'data' => new RentPaymentResource($rentPayment->fresh()->load('house', 'payments')),
+        ]);
+    }
+
+    /** Remove a payment; the obligation's figures follow from the lines that are left. */
+    public function deletePayment(Request $request, RentPayment $rentPayment, Payment $payment): JsonResponse
+    {
+        $removed = $payment->only(['amount', 'payment_date', 'method']);
+
+        $this->removePayment($rentPayment, $payment);
+
+        activity()->performedOn($rentPayment)->causedBy($request->user())
+            ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
+            ->log('rent_payment.payment_deleted');
+
+        return response()->json([
+            'data' => new RentPaymentResource($rentPayment->fresh()->load('house', 'payments')),
+        ]);
     }
 }

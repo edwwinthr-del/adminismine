@@ -16,6 +16,7 @@ use App\Models\Worksite;
 use App\Services\DailyEarnedPayService;
 use App\Services\MasterAccessService;
 use App\Services\WorkingDaysService;
+use App\Support\MonthPeriod;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -316,7 +317,7 @@ class AttendanceController extends Controller
     public function summary(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'month' => ['required', 'string', 'regex:/^\d{4}-\d{2}(-\d{2})?$/'],
+            'month' => ['required', 'string', MonthPeriod::rule()],
             'worksite_id' => ['nullable', 'integer', 'exists:worksites,id'],
             'approved_only' => ['sometimes', 'boolean'],
         ]);
@@ -379,7 +380,7 @@ class AttendanceController extends Controller
     public function payrollPreparation(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'month' => ['required', 'string', 'regex:/^\d{4}-\d{2}(-\d{2})?$/'],
+            'month' => ['required', 'string', MonthPeriod::rule()],
         ]);
 
         $month = SalaryPayment::normalizeMonth($validated['month']);

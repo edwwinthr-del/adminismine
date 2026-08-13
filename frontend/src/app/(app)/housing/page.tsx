@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
+import {Checkbox} from "@/components/ui/checkbox";
 
 interface Occupant {
   employee_id: number;
@@ -269,7 +270,7 @@ function HousesTab({ summary }: { summary: Summary | null }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[980px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -553,7 +554,7 @@ function HouseModal({
           <Input value={form.notes} onChange={(e) => set("notes", e.target.value)} />
         </div>
         <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-          <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+          <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
           {t("housing.active")}
         </label>
 
@@ -750,7 +751,7 @@ function RentTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -902,7 +903,7 @@ function BillsTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1000px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -1328,7 +1329,7 @@ function DeductionsTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[920px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>

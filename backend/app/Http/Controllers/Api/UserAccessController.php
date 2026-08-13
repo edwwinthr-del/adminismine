@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Concerns\ConfirmsPassword;
+use App\Http\Controllers\Concerns\GuardsPrivilegeEscalation;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\User\StoreUserRequest;
 use App\Http\Requests\User\UpdateUserPasswordRequest;
@@ -16,6 +17,7 @@ use Laravel\Sanctum\PersonalAccessToken;
 class UserAccessController extends Controller
 {
     use ConfirmsPassword;
+    use GuardsPrivilegeEscalation;
 
     /** Logins with their roles — used by pickers (e.g. linking a master to a login). */
     public function index(Request $request): JsonResponse
@@ -50,6 +52,14 @@ class UserAccessController extends Controller
         // is granted directly. Both are settled while the account is created, so
         // a new login does not have to be opened a second time to be usable.
         $extraPermissions = $request->input('permissions', []);
+
+        // Creating an account is the widest of the grant routes: it sets roles,
+        // grants and the password in one call, and the self-edit refusal does
+        // not apply because the target is not yet anybody. Without this check it
+        // was the way around every other guard in this file.
+        if ($refusal = $this->refuseUngrantableAccess($request->user(), $roles, $extraPermissions)) {
+            return $refusal;
+        }
 
         $user = DB::transaction(function () use ($request, $roles, $extraPermissions): User {
             $user = User::create([
@@ -176,6 +186,14 @@ class UserAccessController extends Controller
      */
     public function updatePassword(UpdateUserPasswordRequest $request, User $user): JsonResponse
     {
+        // Setting someone's password is taking their account over, so it may
+        // only ever point downwards. Otherwise `users.manage` alone was enough
+        // to reset the Super Admin's password and sign in as them, which walks
+        // straight past the self-edit and last-Super-Admin refusals below.
+        if ($refusal = $this->refuseManagingMorePrivilegedUser($request->user(), $user)) {
+            return $refusal;
+        }
+
         $user->forceFill(['password' => $request->input('password')])->save();
 
         // Tokens issued under the old password must not outlive it. The actor's
@@ -202,6 +220,10 @@ class UserAccessController extends Controller
             return $refusal;
         }
 
+        if ($refusal = $this->refuseUngrantableAccess($request->user(), $roles)) {
+            return $refusal;
+        }
+
         $user->syncRoles($roles);
 
         activity()
@@ -223,6 +245,10 @@ class UserAccessController extends Controller
         // A grant held directly (rather than through a role) can be the only
         // thing giving someone this screen, so the self rule applies here too.
         if ($refusal = $this->refuseSelfEdit($request, $user)) {
+            return $refusal;
+        }
+
+        if ($refusal = $this->refuseUngrantableAccess($request->user(), permissions: $data['permissions'] ?? [])) {
             return $refusal;
         }
 

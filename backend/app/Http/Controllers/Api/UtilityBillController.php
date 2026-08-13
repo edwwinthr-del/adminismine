@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\CorrectsPayments;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Housing\RecordHousingPaymentRequest;
 use App\Http\Requests\Housing\SplitBillRequest;
@@ -10,6 +11,7 @@ use App\Http\Requests\Housing\UpdateUtilityBillRequest;
 use App\Http\Resources\HousingDeductionResource;
 use App\Http\Resources\UtilityBillResource;
 use App\Models\HousingDeduction;
+use App\Models\Payment;
 use App\Models\UtilityBill;
 use App\Services\FileAttachmentService;
 use Illuminate\Http\JsonResponse;
@@ -18,6 +20,8 @@ use Illuminate\Support\Facades\DB;
 
 class UtilityBillController extends Controller
 {
+    use CorrectsPayments;
+
     public function index(Request $request): JsonResponse
     {
         $query = UtilityBill::query()->with('house')->withCount('attachments');
@@ -177,5 +181,45 @@ class UtilityBillController extends Controller
             'data' => HousingDeductionResource::collection(collect($deductions)),
             'meta' => ['share' => $share, 'occupants' => count($occupantIds)],
         ], 201);
+    }
+
+    /**
+     * Correct a payment that was entered wrong, rather than booking its opposite.
+     *
+     * See CorrectsPayments: two rows that cancel out would both read as real
+     * money in every report and in the bank match.
+     */
+    public function updatePayment(
+        RecordHousingPaymentRequest $request,
+        UtilityBill $bill,
+        Payment $payment,
+    ): JsonResponse {
+        $before = $payment->only(['amount', 'payment_date', 'method']);
+
+        $this->correctPayment($bill, $payment, $request->validated());
+
+        activity()->performedOn($bill)->causedBy($request->user())
+            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])
+            ->log('utility_bill.payment_updated');
+
+        return response()->json([
+            'data' => new UtilityBillResource($bill->fresh()->load('house', 'payments')),
+        ]);
+    }
+
+    /** Remove a payment; the obligation's figures follow from the lines that are left. */
+    public function deletePayment(Request $request, UtilityBill $bill, Payment $payment): JsonResponse
+    {
+        $removed = $payment->only(['amount', 'payment_date', 'method']);
+
+        $this->removePayment($bill, $payment);
+
+        activity()->performedOn($bill)->causedBy($request->user())
+            ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
+            ->log('utility_bill.payment_deleted');
+
+        return response()->json([
+            'data' => new UtilityBillResource($bill->fresh()->load('house', 'payments')),
+        ]);
     }
 }

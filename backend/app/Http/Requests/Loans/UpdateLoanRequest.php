@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Loans;
 
 use App\Models\Loan;
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -21,7 +22,7 @@ class UpdateLoanRequest extends FormRequest
             'reference_number' => ['sometimes', 'nullable', 'string', 'max:255'],
             'loan_date' => ['sometimes', 'date'],
             'due_date' => ['sometimes', 'nullable', 'date'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'original_amount' => ['sometimes', 'numeric', 'gt:0'],
             'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'supplier_id' => ['sometimes', 'nullable', 'integer', 'exists:suppliers,id'],

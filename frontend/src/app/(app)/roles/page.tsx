@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { PasswordConfirmModal } from "@/components/ui/password-confirm-modal";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Role {
   id: number;
@@ -140,7 +141,7 @@ function RolesTab() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -305,17 +306,17 @@ function RoleModal({
                   </button>
                   <div className="grid gap-1 sm:grid-cols-2">
                     {modulePermissions.map((permission) => (
-                      <label
-                        key={permission}
-                        className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selected.includes(permission)}
-                          onChange={() => toggle(permission)}
-                        />
-                        <span className="font-mono text-xs">{permission}</span>
-                      </label>
+                        <label
+                            key={permission}
+                            className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200"
+                        >
+                          <Checkbox
+                              size="sm"
+                              checked={selected.includes(permission)}
+                              onChange={() => toggle(permission)}
+                          />
+                          <span className="font-mono text-xs">{permission}</span>
+                        </label>
                     ))}
                   </div>
                 </div>
@@ -429,7 +430,7 @@ function UsersTab() {
         <Button onClick={() => setCreating(true)}>{t("users.new")}</Button>
       </div>
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[960px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -653,20 +654,23 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
               ) : (
                 <div className="grid gap-1 sm:grid-cols-2">
                   {allRoles.map((role) => (
-                    <label key={role.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
-                      <input
-                        type="checkbox"
-                        checked={roles.includes(role.name)}
-                        onChange={() =>
-                          setRoles((prev) =>
-                            prev.includes(role.name)
-                              ? prev.filter((value) => value !== role.name)
-                              : [...prev, role.name],
-                          )
-                        }
-                      />
-                      {role.name}
-                    </label>
+                      <label
+                          key={role.id}
+                          className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200"
+                      >
+                        <Checkbox
+                            size="sm"
+                            checked={roles.includes(role.name)}
+                            onChange={() =>
+                                setRoles((prev) =>
+                                    prev.includes(role.name)
+                                        ? prev.filter((value) => value !== role.name)
+                                        : [...prev, role.name],
+                                )
+                            }
+                        />
+                        <span>{role.name}</span>
+                      </label>
                   ))}
                 </div>
               )}
@@ -696,26 +700,29 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
                       {modulePermissions.map((permission) => {
                         const covered = fromRoles.has(permission);
                         return (
-                          <label
-                            key={permission}
-                            className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={covered || extras.includes(permission)}
-                              disabled={covered}
-                              onChange={() =>
-                                setExtras((prev) =>
-                                  prev.includes(permission)
-                                    ? prev.filter((value) => value !== permission)
-                                    : [...prev, permission],
-                                )
-                              }
-                            />
-                            <span className={covered ? "font-mono text-xs text-zinc-400" : "font-mono text-xs"}>
-                              {permission}
-                            </span>
-                          </label>
+                            <label
+                                key={permission}
+                                className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200"
+                            >
+                              <Checkbox
+                                  size="sm"
+                                  checked={covered || extras.includes(permission)}
+                                  disabled={covered}
+                                  onChange={() =>
+                                      setExtras((prev) =>
+                                          prev.includes(permission)
+                                              ? prev.filter((value) => value !== permission)
+                                              : [...prev, permission],
+                                      )
+                                  }
+                              />
+                              <span
+                                  className={
+                                    covered
+                                        ? "font-mono text-xs text-zinc-400"
+                                        : "font-mono text-xs"}>{permission}
+                              </span>
+                            </label>
                         );
                       })}
                     </div>
@@ -727,14 +734,14 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
         )}
 
         <div>
-          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
-            <input
-              type="checkbox"
-              checked={isActive}
-              disabled={isSelf}
-              onChange={(e) => setIsActive(e.target.checked)}
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+            <Checkbox
+                size="sm"
+                checked={isActive}
+                disabled={isSelf}
+                onChange={(e) => setIsActive(e.target.checked)}
             />
-            {t("users.activeAccount")}
+            <span>{t("users.activeAccount")}</span>
           </label>
           <p className="mt-1 text-xs text-zinc-500">
             {isSelf ? t("users.selfLocked") : t("users.activeHint")}
@@ -875,14 +882,17 @@ function UserAccessModal({ user, onClose }: { user: UserRow; onClose: () => void
           <label className={label}>{t("roles.assignedRoles")}</label>
           <div className="grid gap-1 sm:grid-cols-2">
             {allRoles.map((role) => (
-              <label key={role.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
-                <input
-                  type="checkbox"
-                  checked={roles.includes(role.name)}
-                  onChange={() => toggleRole(role.name)}
-                />
-                {role.name}
-              </label>
+                <label
+                    key={role.id}
+                    className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200"
+                >
+                  <Checkbox
+                      size="sm"
+                      checked={roles.includes(role.name)}
+                      onChange={() => toggleRole(role.name)}
+                  />
+                  <span>{role.name}</span>
+                </label>
             ))}
           </div>
         </div>
@@ -906,20 +916,26 @@ function UserAccessModal({ user, onClose }: { user: UserRow; onClose: () => void
                   {modulePermissions.map((permission) => {
                     const covered = fromRoles.has(permission);
                     return (
-                      <label
-                        key={permission}
-                        className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={covered || extras.includes(permission)}
-                          disabled={covered}
-                          onChange={() => toggleExtra(permission)}
-                        />
-                        <span className={covered ? "font-mono text-xs text-zinc-400" : "font-mono text-xs"}>
-                          {permission}
-                        </span>
-                      </label>
+                        <label
+                            key={permission}
+                            className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200"
+                        >
+                          <Checkbox
+                              size="sm"
+                              checked={covered || extras.includes(permission)}
+                              disabled={covered}
+                              onChange={() => toggleExtra(permission)}
+                          />
+                          <span
+                              className={
+                                covered
+                                    ? "font-mono text-xs text-zinc-400"
+                                    : "font-mono text-xs"
+                              }
+                          >
+    {permission}
+  </span>
+                        </label>
                     );
                   })}
                 </div>

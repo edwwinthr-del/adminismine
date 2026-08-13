@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Loans;
 
 use App\Models\Loan;
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -21,7 +22,7 @@ class StoreLoanRequest extends FormRequest
             'reference_number' => ['nullable', 'string', 'max:255'],
             'loan_date' => ['required', 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:loan_date'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'original_amount' => ['required', 'numeric', 'gt:0'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             // Optional links to who the counterparty is in the app's own records.

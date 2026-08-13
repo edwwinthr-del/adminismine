@@ -6,6 +6,7 @@ use App\Models\PayableInvoice;
 use App\Models\Payment;
 use App\Models\ReceivableDeduction;
 use App\Models\ReceivableInvoice;
+use App\Support\Currencies;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -48,7 +49,7 @@ class InvoiceSettlementService
         array $data,
         bool $bookMovement = false,
     ): Payment {
-        $this->assertFits($invoice, (float) $data['amount'], $this->settled($invoice));
+        $this->assertFits($invoice, $this->amountInEur($invoice, $data), $this->settled($invoice));
 
         return DB::transaction(function () use ($invoice, $data, $bookMovement): Payment {
             $payment = $invoice->payments()->create($data);
@@ -72,21 +73,30 @@ class InvoiceSettlementService
         PayableInvoice|ReceivableInvoice $invoice,
         Payment $payment,
         array $data,
+        bool $book = false,
     ): Payment {
         $this->assertBelongsTo($invoice, $payment);
 
-        $amount = (float) ($data['amount'] ?? $payment->amount);
+        $amount = $this->amountInEur($invoice, $data, $payment);
         // The line being edited is taken out of the total it is measured against,
         // so raising a payment from 100 to 120 is judged on the other lines only.
-        $this->assertFits($invoice, $amount, $this->settled($invoice) - (float) $payment->amount);
+        $this->assertFits($invoice, $amount, $this->settled($invoice) - (float) $payment->amount_eur);
 
-        return DB::transaction(function () use ($invoice, $payment, $data): Payment {
+        return DB::transaction(function () use ($invoice, $payment, $data, $book): Payment {
             $before = $this->movements->linked($payment);
 
             $payment->update($data);
             // A movement this payment generated follows the correction; one the
             // operator typed off a statement is left exactly as the bank has it.
             $this->movements->sync($invoice, $payment, $before);
+
+            // Booking after the fact, for a payment first recorded without one:
+            // the alternative was deleting the line and re-entering it, which
+            // loses its author and its audit history.
+            if ($book && $payment->fresh()->bank_transaction_id === null) {
+                $this->movements->create($invoice, $payment);
+            }
+
             $invoice->recalculate();
 
             return $payment->refresh();
@@ -131,7 +141,11 @@ class InvoiceSettlementService
             // Resolved before the payment goes: afterwards there is nothing left
             // to read the link from.
             $transaction = $payment->bankTransaction;
-            $remove = $deleteBankTransaction || PaymentBankMovement::isGenerated($transaction);
+            // Ownership, not merely "generated": a generated row that another
+            // payment also points at is not this payment's to take away. Asking
+            // to remove it unconditionally made the refusal below fire for both
+            // payments, so neither could ever be deleted.
+            $remove = $deleteBankTransaction || PaymentBankMovement::isOwnedBy($transaction, $payment);
 
             $payment->delete();
             $invoice->recalculate();
@@ -246,7 +260,17 @@ class InvoiceSettlementService
 
         $settled = round($this->settled($invoice), 2);
 
-        if ((float) $data[$field] + self::TOLERANCE >= $settled) {
+        // The settled total is EUR, so the proposed new amount is priced the
+        // same way before they are compared — otherwise lowering a TRY invoice
+        // would be judged against a EUR figure.
+        $proposed = (float) app(CurrencyConverter::class)->toEur(
+            $data[$field],
+            (string) ($data['currency'] ?? $invoice->currency ?? Currencies::BASE),
+            $data['exchange_rate'] ?? $invoice->exchange_rate,
+            optional($invoice->invoice_date)->toDateString(),
+        )['amount_eur'];
+
+        if ($proposed + self::TOLERANCE >= $settled) {
             return;
         }
 
@@ -262,7 +286,10 @@ class InvoiceSettlementService
     /** What has been settled so far: payments, plus deductions on a receivable. */
     private function settled(PayableInvoice|ReceivableInvoice $invoice): float
     {
-        $settled = (float) $invoice->payments()->sum('amount');
+        // EUR, matching recalculate() and the invoice's own amount_eur. Summing
+        // the original-currency column here would compare TRY against EUR the
+        // moment an invoice or a payment was not in the accounting currency.
+        $settled = (float) $invoice->payments()->sum('amount_eur');
 
         if ($invoice instanceof ReceivableInvoice) {
             $settled += (float) $invoice->deductions()->sum('amount');
@@ -271,12 +298,33 @@ class InvoiceSettlementService
         return round($settled, 2);
     }
 
+    /** The invoice's total in EUR — what every headroom check measures against. */
     private function invoiceAmount(PayableInvoice|ReceivableInvoice $invoice): float
     {
-        return round(
-            (float) ($invoice instanceof PayableInvoice ? $invoice->original_amount : $invoice->invoice_amount),
-            2,
-        );
+        return round((float) $invoice->amount_eur, 2);
+    }
+
+    /**
+     * A payment payload's value in the accounting currency.
+     *
+     * Everything the guards compare is EUR, so a payment stated in another
+     * currency has to be priced before it can be measured against the invoice.
+     * The precedence is the converter's: a rate on the request wins, otherwise
+     * the newest stored one on or before the payment's date.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function amountInEur(PayableInvoice|ReceivableInvoice $invoice, array $data, ?Payment $payment = null): float
+    {
+        $currency = $data['currency'] ?? $payment?->currency ?? Currencies::BASE;
+        $date = $data['payment_date'] ?? optional($payment?->payment_date)->toDateString();
+
+        return (float) app(CurrencyConverter::class)->toEur(
+            $data['amount'] ?? $payment?->amount ?? 0,
+            (string) $currency,
+            $data['exchange_rate'] ?? $payment?->exchange_rate,
+            $date === null ? null : (string) $date,
+        )['amount_eur'];
     }
 
     private function assertFits(PayableInvoice|ReceivableInvoice $invoice, float $amount, float $alreadySettled): void

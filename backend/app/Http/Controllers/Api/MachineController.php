@@ -86,7 +86,9 @@ class MachineController extends Controller
             $machine->delete();
         });
 
-        activity()->performedOn($machine)->causedBy($request->user())->log('machine.deleted');
+        activity()->performedOn($machine)->causedBy($request->user())
+            ->withProperties(['removed' => $machine->only(['machine_type', 'brand', 'model', 'serial_number', 'status', 'worksite_id'])])
+            ->log('machine.deleted');
 
         return response()->json(['message' => 'Machine deleted.']);
     }

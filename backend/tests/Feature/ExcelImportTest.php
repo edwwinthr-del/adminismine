@@ -18,6 +18,8 @@ use App\Services\Import\Parsers\DebtListParser;
 use App\Services\Import\Parsers\FlightTicketParser;
 use App\Services\Import\Parsers\LoanParser;
 use App\Services\Import\Parsers\SocialAssistanceParser;
+use App\Services\Import\TemplateGenerator;
+use App\Services\Import\TemplateSheetReader;
 use App\Support\Import\CellValue;
 use App\Support\Import\ImportCatalogue;
 use App\Support\Import\ImportColumn;
@@ -641,12 +643,63 @@ class ExcelImportTest extends TestCase
         $sheet = IOFactory::createReaderForFile($path)->load($path)->getSheet(0);
         $headers = array_filter($sheet->rangeToArray('A1:Z1', null, true, false)[0] ?? []);
 
+        // The sample-row marker is the app's own bookkeeping, in a hidden column
+        // past the data, and the reader never reports it to the user.
+        $marker = array_search(TemplateGenerator::EXAMPLE_MARKER_HEADER, $headers, true);
+        $this->assertNotFalse($marker, 'the template must tag its sample row');
+        $this->assertFalse($sheet->getColumnDimensionByColumn($marker + 1)->getVisible());
+        unset($headers[$marker]);
+
         $expected = array_map(
             fn (ImportColumn $column): string => $column->header,
             ImportCatalogue::find('payable_invoice')->columns,
         );
 
         $this->assertSame($expected, array_values($headers));
+        @unlink($path);
+    }
+
+    /**
+     * The template ships a greyed sample under the header, and the reader only
+     * skipped the header — so the sample parsed as a valid row and defaulted to
+     * import. Anyone who filled in from the row below it and left it in place
+     * created a fake 1,250 EUR "Acme Doo" invoice, whose "already paid" became
+     * a real payment against it.
+     */
+    public function test_the_templates_own_sample_row_is_not_imported(): void
+    {
+        $this->actingAsAdmin();
+
+        foreach (ImportCatalogue::all() as $key => $entity) {
+            $path = app(TemplateGenerator::class)->generate($entity);
+            $rows = IOFactory::load($path)->getSheet(0)->toArray(null, true, false, false);
+
+            $result = app(TemplateSheetReader::class)->read($entity, $rows);
+
+            $this->assertSame([], $result['rows'], "{$key}: the sample row was read as data");
+            $this->assertSame([], $result['unknown_columns'], "{$key}: the marker leaked to the user");
+            @unlink($path);
+        }
+    }
+
+    /** Typing over the sample keeps it: only the untouched one is dropped. */
+    public function test_a_row_typed_over_the_sample_is_still_imported(): void
+    {
+        $entity = ImportCatalogue::find('payable_invoice');
+        $path = app(TemplateGenerator::class)->generate($entity);
+        $rows = IOFactory::load($path)->getSheet(0)->toArray(null, true, false, false);
+
+        // The operator overwrites the sample in place, as most people do, and
+        // clears the marker with it.
+        $rows[1][0] = 'Real Supplier DOO';
+        $rows[1][7] = '999.00';
+        $rows[1][10] = null;
+
+        $result = app(TemplateSheetReader::class)->read($entity, $rows);
+
+        $this->assertCount(1, $result['rows']);
+        $this->assertSame('Real Supplier DOO', $result['rows'][0]->mapped['supplier_name']);
+        $this->assertSame([], $result['rows'][0]->issues);
         @unlink($path);
     }
 

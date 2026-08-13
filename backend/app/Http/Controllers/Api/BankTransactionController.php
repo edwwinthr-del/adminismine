@@ -11,6 +11,7 @@ use App\Http\Resources\BankTransactionResource;
 use App\Models\BankTransaction;
 use App\Models\PayableInvoice;
 use App\Models\ReceivableInvoice;
+use App\Services\PaymentBankMovement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -124,6 +125,16 @@ class BankTransactionController extends Controller
     {
         $data = $request->validated();
 
+        // A movement generated from another payment already belongs to an
+        // invoice; matching it again would let this payment rewrite or delete
+        // money somebody else booked.
+        if (PaymentBankMovement::isGenerated($bankTransaction)) {
+            return $this->refuseMatch(
+                'bank_transaction_id',
+                'That movement was recorded from another invoice payment and cannot be matched.',
+            );
+        }
+
         $invoice = $data['target'] === 'payable'
             ? PayableInvoice::findOrFail($data['invoice_id'])
             : ReceivableInvoice::findOrFail($data['invoice_id']);
@@ -133,6 +144,37 @@ class BankTransactionController extends Controller
                 'message' => 'Amount exceeds the invoice remaining balance.',
                 'errors' => ['amount' => ['Amount exceeds the invoice remaining balance.']],
             ], 422);
+        }
+
+        // Direction is the movement's own: money that left the bank cannot have
+        // settled a client invoice, and money that arrived cannot have paid a
+        // supplier. Without this an expense of −800 could mark a receivable as
+        // received.
+        $net = (float) $bankTransaction->net_amount;
+        $expected = $data['target'] === 'payable' ? 'expense' : 'income';
+
+        if (($expected === 'expense' && $net > 0.001) || ($expected === 'income' && $net < -0.001)) {
+            return $this->refuseMatch(
+                'target',
+                $expected === 'expense'
+                    ? 'This movement brought money in, so it cannot settle a supplier invoice.'
+                    : 'This movement paid money out, so it cannot settle a client invoice.',
+            );
+        }
+
+        // One statement line can settle several invoices — a single transfer
+        // covering a supplier's month is the ordinary case — but never more than
+        // the line itself is worth. Without a cap, one 100 EUR row could be
+        // matched to three 1,000 EUR invoices and settle 3,000 EUR.
+        $alreadyMatched = (float) $bankTransaction->payments()->sum('amount');
+
+        if ($alreadyMatched + (float) $data['amount'] > abs($net) + 0.001) {
+            $left = max(0, round(abs($net) - $alreadyMatched, 2));
+
+            return $this->refuseMatch(
+                'amount',
+                "This movement has only {$left} left to allocate against invoices.",
+            );
         }
 
         $method = $this->deriveMethod($bankTransaction);
@@ -155,6 +197,15 @@ class BankTransactionController extends Controller
         return response()->json([
             'data' => new BankTransactionResource($bankTransaction->fresh()->load('supplier', 'client', 'payments')),
         ], 201);
+    }
+
+    /** A refused match, shaped like a validation error so the form can show it on the field. */
+    private function refuseMatch(string $field, string $message): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'errors' => [$field => [$message]],
+        ], 422);
     }
 
     /**

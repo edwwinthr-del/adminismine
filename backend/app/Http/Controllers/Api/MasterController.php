@@ -88,7 +88,9 @@ class MasterController extends Controller
         $master->worksites()->detach();
         $master->delete();
 
-        activity()->performedOn($master)->causedBy($request->user())->log('master.deleted');
+        activity()->performedOn($master)->causedBy($request->user())
+            ->withProperties(['removed' => $master->only(['employee_id', 'user_id', 'is_active'])])
+            ->log('master.deleted');
 
         return response()->json(['message' => 'Master deleted.']);
     }

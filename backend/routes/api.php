@@ -52,7 +52,7 @@ use App\Http\Middleware\EnsureUserIsActive;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
 // EnsureUserIsActive re-checks the flag on every request: a token issued before
 // the account was deactivated must stop working immediately, not at next login.
@@ -158,6 +158,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::put('/salary-payments/{salaryPayment}', [SalaryPaymentController::class, 'update']);
         Route::delete('/salary-payments/{salaryPayment}', [SalaryPaymentController::class, 'destroy']);
         Route::post('/salary-payments/{salaryPayment}/payments', [SalaryPaymentController::class, 'recordPayment']);
+        Route::put('/salary-payments/{salaryPayment}/payments/{payment}', [SalaryPaymentController::class, 'updatePayment']);
+        Route::delete('/salary-payments/{salaryPayment}/payments/{payment}', [SalaryPaymentController::class, 'deletePayment']);
     });
 
     // Work structure: mines (the deposit), projects (the billed work) and
@@ -282,6 +284,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::put('/housing/rent/{rentPayment}', [RentPaymentController::class, 'update']);
         Route::delete('/housing/rent/{rentPayment}', [RentPaymentController::class, 'destroy']);
         Route::post('/housing/rent/{rentPayment}/payments', [RentPaymentController::class, 'recordPayment']);
+        Route::put('/housing/rent/{rentPayment}/payments/{payment}', [RentPaymentController::class, 'updatePayment']);
+        Route::delete('/housing/rent/{rentPayment}/payments/{payment}', [RentPaymentController::class, 'deletePayment']);
 
         Route::get('/housing/bills', [UtilityBillController::class, 'index']);
         Route::post('/housing/bills', [UtilityBillController::class, 'store']);
@@ -289,6 +293,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::put('/housing/bills/{bill}', [UtilityBillController::class, 'update']);
         Route::delete('/housing/bills/{bill}', [UtilityBillController::class, 'destroy']);
         Route::post('/housing/bills/{bill}/payments', [UtilityBillController::class, 'recordPayment']);
+        Route::put('/housing/bills/{bill}/payments/{payment}', [UtilityBillController::class, 'updatePayment']);
+        Route::delete('/housing/bills/{bill}/payments/{payment}', [UtilityBillController::class, 'deletePayment']);
         // Charging a bill on to the occupants — the explicit exception.
         Route::post('/housing/bills/{bill}/split', [UtilityBillController::class, 'split']);
 
@@ -315,6 +321,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::put('/travel/tickets/{ticket}', [FlightTicketController::class, 'update']);
         Route::delete('/travel/tickets/{ticket}', [FlightTicketController::class, 'destroy']);
         Route::post('/travel/tickets/{ticket}/payments', [FlightTicketController::class, 'recordPayment']);
+        Route::put('/travel/tickets/{ticket}/payments/{payment}', [FlightTicketController::class, 'updatePayment']);
+        Route::delete('/travel/tickets/{ticket}/payments/{payment}', [FlightTicketController::class, 'deletePayment']);
 
         Route::get('/travel/tickets/{ticket}/attachments', [FlightTicketAttachmentController::class, 'index']);
         Route::post('/travel/tickets/{ticket}/attachments', [FlightTicketAttachmentController::class, 'store']);
@@ -327,6 +335,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::put('/travel/expenses/{travelExpense}', [TravelExpenseController::class, 'update']);
         Route::delete('/travel/expenses/{travelExpense}', [TravelExpenseController::class, 'destroy']);
         Route::post('/travel/expenses/{travelExpense}/payments', [TravelExpenseController::class, 'recordPayment']);
+        Route::put('/travel/expenses/{travelExpense}/payments/{payment}', [TravelExpenseController::class, 'updatePayment']);
+        Route::delete('/travel/expenses/{travelExpense}/payments/{payment}', [TravelExpenseController::class, 'deletePayment']);
 
         Route::get('/travel/expenses/{travelExpense}/attachments', [TravelExpenseAttachmentController::class, 'index']);
         Route::post('/travel/expenses/{travelExpense}/attachments', [TravelExpenseAttachmentController::class, 'store']);
@@ -352,6 +362,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::put('/loans/{loan}', [LoanController::class, 'update']);
         Route::delete('/loans/{loan}', [LoanController::class, 'destroy']);
         Route::post('/loans/{loan}/repayments', [LoanController::class, 'recordRepayment']);
+        Route::put('/loans/{loan}/repayments/{payment}', [LoanController::class, 'updateRepayment']);
+        Route::delete('/loans/{loan}/repayments/{payment}', [LoanController::class, 'deleteRepayment']);
     });
 
     // Worker needs raised from the field and handled by the office.

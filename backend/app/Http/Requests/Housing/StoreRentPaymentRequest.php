@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Housing;
 
 use App\Models\RentPayment;
+use App\Support\Currencies;
 use App\Support\MonthPeriod;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -31,7 +32,7 @@ class StoreRentPaymentRequest extends FormRequest
                 Rule::unique('rent_payments')->where(fn ($query) => $query
                     ->where('house_id', $this->input('house_id'))),
             ],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'rent_amount_due' => ['required', 'numeric', 'min:0'],
             // Rent is a company expense unless someone says otherwise, with a reason.
             'cost_bearer' => ['sometimes', Rule::in(RentPayment::COST_BEARERS)],

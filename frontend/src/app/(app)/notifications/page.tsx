@@ -22,6 +22,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface NotificationRule {
   id: number;
@@ -155,14 +156,13 @@ function InboxTab({ canConfigure }: { canConfigure: boolean }) {
               ))}
             </Select>
           </div>
-          <label className="flex h-10 items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input
-              type="checkbox"
-              checked={history}
-              onChange={(e) => setHistory(e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+          <label className="flex h-10 cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+            <Checkbox
+                size="sm"
+                checked={history}
+                onChange={(e) => setHistory(e.target.checked)}
             />
-            {t("notifications.showHistory")}
+            <span>{t("notifications.showHistory")}</span>
           </label>
         </div>
 
@@ -327,19 +327,23 @@ function ReminderModal({ onClose }: { onClose: () => void }) {
           <label className={labelClass}>{t("notifications.recipientRoles")}</label>
           <div className="flex flex-wrap gap-3">
             {roles.map((role) => (
-              <label key={role} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                <input
-                  type="checkbox"
-                  checked={selectedRoles.includes(role)}
-                  onChange={(e) =>
-                    setSelectedRoles((prev) =>
-                      e.target.checked ? [...prev, role] : prev.filter((name) => name !== role),
-                    )
-                  }
-                  className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
-                />
-                {role}
-              </label>
+                <label
+                    key={role}
+                    className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300"
+                >
+                  <Checkbox
+                      size="sm"
+                      checked={selectedRoles.includes(role)}
+                      onChange={(e) =>
+                          setSelectedRoles((prev) =>
+                              e.target.checked
+                                  ? [...prev, role]
+                                  : prev.filter((name) => name !== role),
+                          )
+                      }
+                  />
+                  <span>{role}</span>
+                </label>
             ))}
           </div>
           <p className="mt-1 text-xs text-zinc-500">{t("notifications.recipientsHint")}</p>
@@ -423,7 +427,7 @@ function RulesTab() {
     <div className="space-y-4">
       <p className="text-sm text-zinc-500">{t("notifications.rulesHint")}</p>
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -445,11 +449,12 @@ function RulesTab() {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={rule.is_enabled}
-                    onChange={(e) => patch(rule.type, { is_enabled: e.target.checked })}
-                    className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                  <Checkbox
+                      size="sm"
+                      checked={rule.is_enabled}
+                      onChange={(e) =>
+                          patch(rule.type, { is_enabled: e.target.checked })
+                      }
                   />
                 </td>
                 <td className="px-4 py-3">
@@ -494,24 +499,23 @@ function RulesTab() {
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-2">
                     {roles.map((role) => (
-                      <label
-                        key={role}
-                        className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={rule.recipient_roles.includes(role)}
-                          onChange={(e) =>
-                            patch(rule.type, {
-                              recipient_roles: e.target.checked
-                                ? [...rule.recipient_roles, role]
-                                : rule.recipient_roles.filter((name) => name !== role),
-                            })
-                          }
-                          className="h-3.5 w-3.5 rounded border-zinc-300 dark:border-zinc-700"
-                        />
-                        {role}
-                      </label>
+                        <label
+                            key={role}
+                            className="flex cursor-pointer items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300"
+                        >
+                          <Checkbox
+                              size="sm"
+                              checked={rule.recipient_roles.includes(role)}
+                              onChange={(e) =>
+                                  patch(rule.type, {
+                                    recipient_roles: e.target.checked
+                                        ? [...rule.recipient_roles, role]
+                                        : rule.recipient_roles.filter((name) => name !== role),
+                                  })
+                              }
+                          />
+                          <span>{role}</span>
+                        </label>
                     ))}
                   </div>
                 </td>

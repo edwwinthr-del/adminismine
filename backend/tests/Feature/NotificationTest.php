@@ -202,10 +202,16 @@ class NotificationTest extends TestCase
         $this->assertSame(0, Notification::query()->count());
     }
 
+    /**
+     * Naming a user is how you include someone who does not hold the *role* —
+     * that is the point of the field and it still works. What it is not is a way
+     * around the permission: a role is not a permission (rule 6).
+     */
     public function test_a_named_user_is_notified_even_without_the_role(): void
     {
         $this->admin(false);
         $outsider = User::factory()->create();
+        $outsider->givePermissionTo('payables.view');
         $this->overdueInvoice();
 
         NotificationRule::factory()->create([
@@ -217,6 +223,83 @@ class NotificationTest extends TestCase
         $this->dispatcher()->scan();
 
         $this->assertSame(1, Notification::query()->where('user_id', $outsider->id)->count());
+    }
+
+    /**
+     * The leak this closes: a notification's `data` carries the supplier name,
+     * the invoice number and the outstanding amount, so delivering one to
+     * somebody who cannot open `/payables` hands them figures the app otherwise
+     * refuses them. Whoever configures a rule chooses among people who may
+     * already see the data; they never grant sight of it.
+     */
+    public function test_a_named_user_without_the_permission_is_not_notified(): void
+    {
+        $this->admin(false);
+        $outsider = User::factory()->create();
+        $outsider->assignRole('Worker'); // seeded with no permissions at all
+        $this->overdueInvoice();
+
+        NotificationRule::factory()->create([
+            'type' => 'payables.overdue',
+            'recipient_roles' => [],
+            'recipient_user_ids' => [$outsider->id],
+        ]);
+
+        $this->dispatcher()->scan();
+
+        $this->assertSame(0, Notification::query()->where('user_id', $outsider->id)->count());
+    }
+
+    /** A role named on the rule does not carry the data either, if it cannot see it. */
+    public function test_a_role_without_the_permission_is_not_notified(): void
+    {
+        $worker = User::factory()->create();
+        $worker->assignRole('Worker');
+        $this->overdueInvoice();
+
+        NotificationRule::factory()->create([
+            'type' => 'payables.overdue',
+            'recipient_roles' => ['Worker'],
+            'recipient_user_ids' => [],
+        ]);
+
+        $this->dispatcher()->scan();
+
+        $this->assertSame(0, Notification::query()->where('user_id', $worker->id)->count());
+    }
+
+    /** A permission held directly counts, exactly as it does everywhere else. */
+    public function test_a_direct_grant_is_enough_to_be_notified(): void
+    {
+        $viewer = User::factory()->create();
+        $viewer->givePermissionTo('payables.view');
+        $this->overdueInvoice();
+
+        NotificationRule::factory()->create([
+            'type' => 'payables.overdue',
+            'recipient_roles' => [],
+            'recipient_user_ids' => [$viewer->id],
+        ]);
+
+        $this->dispatcher()->scan();
+
+        $this->assertSame(1, Notification::query()->where('user_id', $viewer->id)->count());
+    }
+
+    /** Custom reminders carry no module data, so they are not permission-gated. */
+    public function test_a_custom_reminder_reaches_a_user_with_no_permissions(): void
+    {
+        $author = $this->admin();
+        $recipient = User::factory()->create();
+        $recipient->assignRole('Worker');
+
+        $this->postJson('/api/notifications/reminders', [
+            'title' => 'Bring the fuel receipts',
+            'user_ids' => [$recipient->id],
+        ])->assertCreated();
+
+        $this->assertSame(1, Notification::query()->where('user_id', $recipient->id)->count());
+        $this->assertNotNull($author);
     }
 
     public function test_a_user_who_opted_out_is_skipped(): void
@@ -526,6 +609,49 @@ class NotificationTest extends TestCase
         $this->assertEqualsCanonicalizing(['Admin', 'Viewer'], $rule->recipient_roles);
     }
 
+    /**
+     * Refused where it is typed, rather than accepted and then silently dropped
+     * at delivery — an administrator who names someone must not walk away
+     * believing that person is covered.
+     */
+    public function test_naming_a_user_who_cannot_see_the_module_is_refused(): void
+    {
+        $this->admin();
+        $this->seed(NotificationRulesSeeder::class);
+
+        $outsider = User::factory()->create(['name' => 'Warehouse Worker']);
+        $outsider->assignRole('Worker');
+
+        $this->putJson('/api/settings/notification-rules', [
+            'rules' => [[
+                'type' => 'payables.overdue',
+                'is_enabled' => true,
+                'timing' => 'after_due',
+                'days_before' => null,
+                'severity' => 'warning',
+                'channels' => ['in_app'],
+                'recipient_roles' => [],
+                'recipient_user_ids' => [$outsider->id],
+            ]],
+        ])->assertStatus(422)->assertJsonValidationErrors('rules.0.recipient_user_ids.0');
+
+        // Granting the permission is what makes it possible.
+        $outsider->givePermissionTo('payables.view');
+
+        $this->putJson('/api/settings/notification-rules', [
+            'rules' => [[
+                'type' => 'payables.overdue',
+                'is_enabled' => true,
+                'timing' => 'after_due',
+                'days_before' => null,
+                'severity' => 'warning',
+                'channels' => ['in_app'],
+                'recipient_roles' => [],
+                'recipient_user_ids' => [$outsider->id],
+            ]],
+        ])->assertOk();
+    }
+
     public function test_a_days_before_rule_must_say_how_many_days(): void
     {
         $this->admin();
@@ -618,5 +744,68 @@ class NotificationTest extends TestCase
         $this->postJson('/api/notifications/scan')
             ->assertOk()
             ->assertJsonPath('data.created', 1);
+    }
+
+    /**
+     * The shipped configuration on a fresh install: every seeded rule names the
+     * role `Admin`, and the only account `migrate --seed` creates is a Super
+     * Admin. The role query is literal, so nothing matched and the app raised
+     * its first notification for nobody — with no way to tell why.
+     */
+    public function test_a_rule_whose_roles_match_nobody_still_reaches_a_super_admin(): void
+    {
+        $superAdmin = User::factory()->create();
+        $superAdmin->assignRole('Super Admin');
+
+        $this->overdueInvoice();
+        $this->seed(NotificationRulesSeeder::class);
+
+        $created = $this->dispatcher()->scan();
+
+        $this->assertGreaterThan(0, $created);
+        $this->assertTrue(
+            Notification::where('user_id', $superAdmin->id)->where('type', 'payables.overdue')->exists()
+        );
+    }
+
+    /** A configured rule that does match somebody is left alone. */
+    public function test_the_fallback_does_not_fire_when_the_rule_reaches_someone(): void
+    {
+        $admin = $this->admin(authenticate: false);
+        $superAdmin = User::factory()->create();
+        $superAdmin->assignRole('Super Admin');
+
+        $this->overdueInvoice();
+        NotificationRule::factory()->create([
+            'type' => 'payables.overdue',
+            'recipient_roles' => ['Admin'],
+        ]);
+
+        $this->dispatcher()->scan();
+
+        $this->assertTrue(Notification::where('user_id', $admin->id)->exists());
+        $this->assertFalse(Notification::where('user_id', $superAdmin->id)->exists());
+    }
+
+    /**
+     * A deactivated account cannot read its bell, so writing to it only builds a
+     * backlog that greets the person if they are ever restored.
+     */
+    public function test_a_deactivated_user_stops_receiving_notifications(): void
+    {
+        $active = $this->admin(authenticate: false);
+        $deactivated = $this->admin(authenticate: false);
+        $deactivated->forceFill(['is_active' => false])->save();
+
+        $this->overdueInvoice();
+        NotificationRule::factory()->create([
+            'type' => 'payables.overdue',
+            'recipient_roles' => ['Admin'],
+        ]);
+
+        $this->dispatcher()->scan();
+
+        $this->assertTrue(Notification::where('user_id', $active->id)->exists());
+        $this->assertFalse(Notification::where('user_id', $deactivated->id)->exists());
     }
 }

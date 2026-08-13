@@ -142,7 +142,12 @@ class ReceivableController extends Controller
     ): ReceivableInvoiceResource {
         $before = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->settlements->updatePayment($receivable, $payment, $request->validated());
+        $this->settlements->updatePayment(
+            $receivable,
+            $payment,
+            $request->paymentData(),
+            book: $request->boolean('book_bank_transaction'),
+        );
 
         activity()->performedOn($receivable)->causedBy($request->user())
             ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])

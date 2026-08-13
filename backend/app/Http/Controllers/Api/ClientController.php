@@ -30,6 +30,12 @@ class ClientController extends Controller
     {
         $client = Client::create($request->validated());
 
+        // Same reason as supplier.created: every receivable points at one of
+        // these, so the row it was created from has to be answerable.
+        activity()->performedOn($client)->causedBy($request->user())
+            ->withProperties(['name' => $client->name])
+            ->log('client.created');
+
         return response()->json(['data' => new ClientResource($client)], 201);
     }
 }

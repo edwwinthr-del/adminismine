@@ -15,8 +15,15 @@ export default function LoginPage() {
   const { t, locale, locales, setLocale } = useI18n();
   const router = useRouter();
 
-  const [email, setEmail] = useState("superadmin@test.test");
-  const [password, setPassword] = useState("password");
+  /*
+   * Empty, not pre-filled. These fields used to ship the seeded Super Admin's
+   * email and password — the ones in the README — straight into the production
+   * bundle, so anyone who opened /login was one click from full access if that
+   * account still had its default password. Convenience during the first week
+   * of development; a handed-over credential afterwards.
+   */
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Salary;
 
 use App\Models\SalaryPayment;
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -32,7 +33,7 @@ class StoreSalaryPaymentRequest extends FormRequest
                     fn ($query) => $query->where('employee_id', $this->input('employee_id')),
                 ),
             ],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'base_salary' => ['required', 'numeric', 'min:0'],
             'adjustments' => ['sometimes', 'numeric'],
             'deductions' => ['sometimes', 'numeric', 'min:0'],

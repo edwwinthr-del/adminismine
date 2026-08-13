@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface ProductionRecord {
   id: number;
@@ -180,7 +181,7 @@ export default function MiningPage() {
             ))}
           </Select>
           <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input type="checkbox" checked={approvedOnly} onChange={(e) => setApprovedOnly(e.target.checked)} />
+            <Checkbox checked={approvedOnly} onChange={(e) => setApprovedOnly(e.target.checked)} />
             {t("mining.approvedOnly")}
           </label>
         </div>

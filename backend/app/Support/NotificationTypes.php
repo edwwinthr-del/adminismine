@@ -25,9 +25,18 @@ class NotificationTypes
 
     /**
      * type => defaults. `timing`/`days_before`/`severity` seed the rule and stay
-     * editable; `link` and `roles` are fixed properties of the type.
+     * editable; `link`, `permission` and `roles` are fixed properties of the type.
      *
-     * @var array<string, array{timing: string, days_before: int|null, severity: string, link: string, roles: list<string>}>
+     * `permission` is the named permission that gates the module the
+     * notification is about, and it is a floor no rule can lower: a
+     * notification's `data` carries supplier names, invoice numbers and amounts,
+     * so delivering one to somebody who cannot open the page behind it hands
+     * them figures the app otherwise refuses them. Whoever configures a rule
+     * chooses among people who may already see the data, never grants sight of
+     * it (rule 6). Null means the type carries no module data — only
+     * `custom.reminder`, which is the author's own words to a named person.
+     *
+     * @var array<string, array{timing: string, days_before: int|null, severity: string, link: string, permission: string|null, roles: list<string>}>
      */
     public const TYPES = [
         'payables.unpaid' => [
@@ -35,6 +44,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'info',
             'link' => '/payables',
+            'permission' => 'payables.view',
             'roles' => ['Admin'],
         ],
         'payables.overdue' => [
@@ -42,6 +52,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'warning',
             'link' => '/payables',
+            'permission' => 'payables.view',
             'roles' => ['Admin'],
         ],
         'housing.rent_unpaid' => [
@@ -49,6 +60,7 @@ class NotificationTypes
             'days_before' => 3,
             'severity' => 'warning',
             'link' => '/housing',
+            'permission' => 'housing.manage',
             'roles' => ['Admin'],
         ],
         'housing.bills_overdue' => [
@@ -56,6 +68,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'warning',
             'link' => '/housing',
+            'permission' => 'housing.manage',
             'roles' => ['Admin'],
         ],
         'housing.contract_expiring' => [
@@ -63,6 +76,7 @@ class NotificationTypes
             'days_before' => 30,
             'severity' => 'info',
             'link' => '/housing',
+            'permission' => 'housing.manage',
             'roles' => ['Admin'],
         ],
         'salaries.unpaid' => [
@@ -70,6 +84,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'warning',
             'link' => '/salaries',
+            'permission' => 'salary_payments.manage',
             'roles' => ['Admin'],
         ],
         'attendance.unapproved' => [
@@ -77,6 +92,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'info',
             'link' => '/attendance',
+            'permission' => 'attendance.approve',
             'roles' => ['Admin'],
         ],
         'attendance.overtime_pending' => [
@@ -84,6 +100,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'info',
             'link' => '/attendance',
+            'permission' => 'attendance.approve',
             'roles' => ['Admin'],
         ],
         'worker_needs.urgent_open' => [
@@ -91,6 +108,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'critical',
             'link' => '/worker-needs',
+            'permission' => 'worker_needs.manage',
             'roles' => ['Admin'],
         ],
         'mining.production_missing' => [
@@ -98,6 +116,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'warning',
             'link' => '/mining',
+            'permission' => 'mining_production.submit',
             'roles' => ['Admin'],
         ],
         'machines.document_expiring' => [
@@ -105,6 +124,7 @@ class NotificationTypes
             'days_before' => 30,
             'severity' => 'warning',
             'link' => '/machines',
+            'permission' => 'machines.manage',
             'roles' => ['Admin'],
         ],
         'customs.incomplete' => [
@@ -112,6 +132,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'info',
             'link' => '/customs',
+            'permission' => 'customs_documents.manage',
             'roles' => ['Admin'],
         ],
         'bank.unmatched' => [
@@ -119,6 +140,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'info',
             'link' => '/bank',
+            'permission' => 'bank_transactions.manage',
             'roles' => ['Admin'],
         ],
         'employees.missing_documents' => [
@@ -126,6 +148,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'info',
             'link' => '/workers',
+            'permission' => 'employees.manage',
             'roles' => ['Admin'],
         ],
         'employees.document_expiring' => [
@@ -133,6 +156,7 @@ class NotificationTypes
             'days_before' => 60,
             'severity' => 'warning',
             'link' => '/workers',
+            'permission' => 'employees.manage',
             'roles' => ['Admin'],
         ],
         // Not detected from data — an authorized user raises these by hand.
@@ -141,6 +165,7 @@ class NotificationTypes
             'days_before' => null,
             'severity' => 'info',
             'link' => '/notifications',
+            'permission' => null,
             'roles' => ['Admin'],
         ],
     ];
@@ -166,6 +191,12 @@ class NotificationTypes
     public static function defaults(string $type): array
     {
         return self::TYPES[$type];
+    }
+
+    /** The permission a recipient must hold to be told about this type, if any. */
+    public static function permission(string $type): ?string
+    {
+        return self::TYPES[$type]['permission'] ?? null;
     }
 
     public static function link(string $type): string

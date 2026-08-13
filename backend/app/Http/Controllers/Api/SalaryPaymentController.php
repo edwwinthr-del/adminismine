@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\CorrectsPayments;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Salary\GenerateSalaryPaymentsRequest;
 use App\Http\Requests\Salary\RecordSalaryPaymentRequest;
 use App\Http\Requests\Salary\StoreSalaryPaymentRequest;
 use App\Http\Requests\Salary\UpdateSalaryPaymentRequest;
 use App\Http\Resources\SalaryPaymentResource;
+use App\Models\Payment;
 use App\Models\SalaryPayment;
 use App\Services\SalaryObligationService;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +19,8 @@ use Illuminate\Support\Facades\DB;
 
 class SalaryPaymentController extends Controller
 {
+    use CorrectsPayments;
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $query = SalaryPayment::query()->with('employee');
@@ -148,6 +152,46 @@ class SalaryPaymentController extends Controller
                 'partial_count' => $rows->where('status', 'partial')->count(),
                 'paid_count' => $rows->where('status', 'paid')->count(),
             ],
+        ]);
+    }
+
+    /**
+     * Correct a payment that was entered wrong, rather than booking its opposite.
+     *
+     * See CorrectsPayments: two rows that cancel out would both read as real
+     * money in every report and in the bank match.
+     */
+    public function updatePayment(
+        RecordSalaryPaymentRequest $request,
+        SalaryPayment $salaryPayment,
+        Payment $payment,
+    ): JsonResponse {
+        $before = $payment->only(['amount', 'payment_date', 'method']);
+
+        $this->correctPayment($salaryPayment, $payment, $request->validated());
+
+        activity()->performedOn($salaryPayment)->causedBy($request->user())
+            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])
+            ->log('salary_payment.payment_updated');
+
+        return response()->json([
+            'data' => new SalaryPaymentResource($salaryPayment->fresh()->load('employee', 'payments')),
+        ]);
+    }
+
+    /** Remove a payment; the obligation's figures follow from the lines that are left. */
+    public function deletePayment(Request $request, SalaryPayment $salaryPayment, Payment $payment): JsonResponse
+    {
+        $removed = $payment->only(['amount', 'payment_date', 'method']);
+
+        $this->removePayment($salaryPayment, $payment);
+
+        activity()->performedOn($salaryPayment)->causedBy($request->user())
+            ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
+            ->log('salary_payment.payment_deleted');
+
+        return response()->json([
+            'data' => new SalaryPaymentResource($salaryPayment->fresh()->load('employee', 'payments')),
         ]);
     }
 }

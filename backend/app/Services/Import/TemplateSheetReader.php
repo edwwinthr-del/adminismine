@@ -36,6 +36,7 @@ class TemplateSheetReader
     {
         $header = $rows[TemplateGenerator::HEADER_ROW - 1] ?? [];
         [$positions, $unknown] = $this->mapHeader($entity, $header);
+        $markerIndex = $this->exampleMarkerIndex($header);
 
         $present = array_values($positions);
         $missing = array_values(array_map(
@@ -61,6 +62,18 @@ class TemplateSheetReader
                 continue;
             }
 
+            // The template ships a greyed sample directly under the header. It
+            // is well-formed by construction, so it parsed as a perfectly valid
+            // row and defaulted to *import* — anyone who filled in from the row
+            // below it and left the sample in place imported a fake 1,250 EUR
+            // "Acme Doo" invoice, whose "already paid" became a real payment.
+            // Skipped only while it is still untouched: overwrite any cell of it
+            // and it stops matching, so a user who types over the sample keeps
+            // their data.
+            if ($this->isUntouchedExample($entity, $cells, $rowNumber, $positions, $markerIndex)) {
+                continue;
+            }
+
             if (count($parsed) >= self::MAX_ROWS) {
                 break;
             }
@@ -69,6 +82,69 @@ class TemplateSheetReader
         }
 
         return ['rows' => $parsed, 'missing_columns' => [], 'unknown_columns' => $unknown];
+    }
+
+    /**
+     * Whether this is the generated template's own example row, still as issued.
+     *
+     * Compared against the catalogue's example values rather than skipped by
+     * position, so the check cannot swallow real data: the row is ignored only
+     * when every example cell still reads exactly as the template wrote it.
+     *
+     * @param  array<int, string>  $positions  column index → field name
+     */
+    private function isUntouchedExample(
+        ImportEntity $entity,
+        array $cells,
+        int $rowNumber,
+        array $positions,
+        ?int $markerIndex,
+    ): bool {
+        if ($rowNumber !== TemplateGenerator::HEADER_ROW + 1) {
+            return false;
+        }
+
+        // Current templates say so outright, which cannot mistake real data for
+        // the sample however the file was edited.
+        if ($markerIndex !== null) {
+            $marker = $cells[$markerIndex] ?? null;
+
+            return is_scalar($marker)
+                && trim((string) $marker) === TemplateGenerator::EXAMPLE_MARKER_VALUE;
+        }
+
+        // A template downloaded before the marker existed has to be recognised
+        // by its contents. Deliberately strict: every column the entity gives an
+        // example for must be present *and* still hold that example. A file with
+        // columns dropped or any cell edited is treated as real data, because
+        // the cost of skipping someone's row is much higher than the cost of
+        // importing a sample they can see in the preview and set to skip.
+        $columns = $entity->byKey();
+        $present = array_values($positions);
+        $compared = 0;
+
+        foreach ($entity->columns as $column) {
+            if ($column->example === null) {
+                continue;
+            }
+
+            if (! in_array($column->key, $present, true)) {
+                return false;
+            }
+
+            $index = array_search($column->key, $positions, true);
+            $cell = $cells[$index] ?? null;
+
+            if (! is_scalar($cell) || trim((string) $cell) !== trim($column->example)) {
+                return false;
+            }
+
+            $compared++;
+        }
+
+        unset($columns);
+
+        return $compared > 0;
     }
 
     /**
@@ -191,6 +267,22 @@ class TemplateSheetReader
      * @param  array<int, mixed>  $header
      * @return array{0: array<int, string>, 1: list<string>} positions, unrecognised headings
      */
+    /** Where the generated template tagged its sample row, if this file carries the tag. */
+    private function exampleMarkerIndex(array $header): ?int
+    {
+        foreach ($header as $index => $cell) {
+            if (CellValue::string($cell) === TemplateGenerator::EXAMPLE_MARKER_HEADER) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<int, mixed>  $header
+     * @return array{0: array<int, string>, 1: list<string>}
+     */
     private function mapHeader(ImportEntity $entity, array $header): array
     {
         $known = $entity->headerMap();
@@ -201,6 +293,12 @@ class TemplateSheetReader
             $text = CellValue::string($cell);
 
             if ($text === null) {
+                continue;
+            }
+
+            // The sample marker is the app's own bookkeeping, not a column the
+            // user got wrong, so it is never reported back to them.
+            if ($text === TemplateGenerator::EXAMPLE_MARKER_HEADER) {
                 continue;
             }
 

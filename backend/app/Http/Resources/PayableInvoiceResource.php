@@ -23,6 +23,10 @@ class PayableInvoiceResource extends JsonResource
             'expense_category' => $this->expense_category,
             'currency' => $this->currency,
             'original_amount' => (float) $this->original_amount,
+            // EUR by default, with the original currency alongside it (rule 5).
+            'amount_eur' => (float) $this->amount_eur,
+            'exchange_rate' => $this->exchange_rate === null ? null : (float) $this->exchange_rate,
+            'exchange_rate_date' => optional($this->exchange_rate_date)->toDateString(),
             'paid_amount' => (float) $this->paid_amount,
             'remaining_amount' => (float) $this->remaining_amount,
             'status' => $this->status,

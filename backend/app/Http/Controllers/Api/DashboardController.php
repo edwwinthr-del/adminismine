@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\DashboardService;
+use App\Support\MonthPeriod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,7 +17,7 @@ class DashboardController extends Controller
     public function __invoke(Request $request, DashboardService $dashboard): JsonResponse
     {
         $request->validate([
-            'month' => ['nullable', 'string', 'regex:/^\d{4}-\d{2}(-\d{2})?$/'],
+            'month' => ['nullable', 'string', MonthPeriod::rule()],
         ]);
 
         return response()->json([

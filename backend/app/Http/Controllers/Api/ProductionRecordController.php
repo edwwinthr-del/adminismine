@@ -52,9 +52,15 @@ class ProductionRecordController extends Controller
             ], 422);
         }
 
+        $before = $production->only(['quantity', 'unit', 'material_type', 'date', 'approval_status']);
+
         $production->update($request->validated());
 
-        activity()->performedOn($production)->causedBy($request->user())->log('production.updated');
+        // An approved record can still be edited by an approver, so what the
+        // figures moved from and to is the only way the trail can show it.
+        activity()->performedOn($production)->causedBy($request->user())
+            ->withProperties(['before' => $before, 'after' => $production->only(array_keys($before))])
+            ->log('production.updated');
 
         return response()->json([
             'data' => new ProductionRecordResource($production->fresh()->load(['worksite', 'engineer'])),
@@ -69,7 +75,9 @@ class ProductionRecordController extends Controller
 
         $production->delete();
 
-        activity()->performedOn($production)->causedBy($request->user())->log('production.deleted');
+        activity()->performedOn($production)->causedBy($request->user())
+            ->withProperties(['removed' => $production->only(['worksite_id', 'period_type', 'date', 'material_type', 'quantity', 'unit', 'approval_status'])])
+            ->log('production.deleted');
 
         return response()->json(['message' => 'Production record deleted.']);
     }
@@ -119,7 +127,7 @@ class ProductionRecordController extends Controller
     public function totals(Request $request): JsonResponse
     {
         $request->validate([
-            'month' => ['nullable', 'string', 'regex:/^\d{4}-\d{2}(-\d{2})?$/'],
+            'month' => ['nullable', 'string', MonthPeriod::rule()],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'worksite_id' => ['nullable', 'integer', 'exists:worksites,id'],
             'material_type' => ['nullable', 'string'],

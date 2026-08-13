@@ -66,6 +66,27 @@ class PaymentBankMovement
     }
 
     /**
+     * Whether this payment is the one that wrote this movement.
+     *
+     * `isGenerated()` alone answers "was this row written from *a* payment", not
+     * "from *this* payment" — and that gap was enough to lose real money. A
+     * second payment pointed at a generated row could rewrite it to its own
+     * (smaller) amount, delete it by unlinking, or invert its direction, while
+     * the invoice that booked it still read `paid`. A generated movement belongs
+     * to exactly one payment, so any second claimant means hands off.
+     */
+    public static function isOwnedBy(?BankTransaction $movement, Payment $payment): bool
+    {
+        if (! self::isGenerated($movement)) {
+            return false;
+        }
+
+        return ! $movement->payments()
+            ->whereKeyNot($payment->getKey())
+            ->exists();
+    }
+
+    /**
      * Write the movement a payment records, and link the payment to it.
      *
      * The direction is the invoice's, not the operator's to state: money
@@ -80,6 +101,7 @@ class PaymentBankMovement
             'date' => $payment->payment_date,
             'category' => $this->category($invoice),
             'currency' => $this->currency($invoice, $payment),
+            ...$this->rate($payment),
             'source' => self::SOURCE,
             ...$this->party($invoice),
             ...$this->describe($invoice, $payment),
@@ -113,11 +135,11 @@ class PaymentBankMovement
         // updated, and a cached relation would still hold the old movement.
         $movement = $this->linked($payment);
 
-        if (self::isGenerated($previous) && (int) $previous->id !== (int) $payment->bank_transaction_id) {
+        if (self::isOwnedBy($previous, $payment) && (int) $previous->id !== (int) $payment->bank_transaction_id) {
             $previous->delete();
         }
 
-        if (! self::isGenerated($movement)) {
+        if (! self::isOwnedBy($movement, $payment)) {
             return;
         }
 
@@ -134,6 +156,7 @@ class PaymentBankMovement
         $movement->update([
             'date' => $payment->payment_date,
             'currency' => $this->currency($invoice, $payment),
+            ...$this->rate($payment),
             ...$this->describe($invoice, $payment),
             // Every column is rewritten, not just the one in use: moving a
             // payment from NLB to cash has to empty the column it left.
@@ -151,7 +174,7 @@ class PaymentBankMovement
     {
         $movement = $this->linked($payment);
 
-        if (! self::isGenerated($movement)) {
+        if (! self::isOwnedBy($movement, $payment)) {
             return null;
         }
 
@@ -184,6 +207,23 @@ class PaymentBankMovement
     private function currency(PayableInvoice|ReceivableInvoice $invoice, Payment $payment): string
     {
         return $payment->currency ?: ($invoice->currency ?: 'EUR');
+    }
+
+    /**
+     * The payment's own rate, carried onto the movement.
+     *
+     * Both rows describe one movement of money, so they must price it the same
+     * way: letting the movement resolve its own rate could put the two a day
+     * apart and leave the ledger disagreeing with the invoice it settles.
+     *
+     * @return array<string, mixed>
+     */
+    private function rate(Payment $payment): array
+    {
+        return [
+            'exchange_rate' => $payment->exchange_rate,
+            'exchange_rate_date' => $payment->exchange_rate_date,
+        ];
     }
 
     /** @return array<string, int|null> */

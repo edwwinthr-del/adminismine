@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface FlightTicket {
   id: number;
@@ -237,8 +238,7 @@ function TicketsTab({ month }: { month: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={onlyUnwritten}
             onChange={(e) => setOnlyUnwritten(e.target.checked)}
             className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
@@ -249,7 +249,7 @@ function TicketsTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1040px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -564,7 +564,7 @@ function ExpensesTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[980px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -892,7 +892,7 @@ function AssistanceTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -936,7 +936,7 @@ function AssistanceTab({ month }: { month: string }) {
         </table>
       </Card>
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>

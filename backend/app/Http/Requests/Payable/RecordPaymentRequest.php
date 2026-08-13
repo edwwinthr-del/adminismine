@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Payable;
 
+use App\Models\BankTransaction;
 use App\Services\PaymentBankMovement;
+use App\Support\Currencies;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -27,6 +29,8 @@ class RecordPaymentRequest extends FormRequest
     {
         return [
             'amount' => ['required', 'numeric', 'gt:0'],
+            'currency' => Currencies::rules(),
+            'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'payment_date' => ['required', 'date'],
             'method' => ['required', 'string', 'in:cash,nlb,lovcen,other'],
             'bank_transaction_id' => ['nullable', 'integer', 'exists:bank_transactions,id'],
@@ -40,6 +44,21 @@ class RecordPaymentRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
+                // A movement this app generated from another payment is not a
+                // statement line waiting to be matched — it already belongs to
+                // an invoice. Pointing a second payment at it let that payment
+                // rewrite or delete somebody else's booked money.
+                if ($this->filled('bank_transaction_id')) {
+                    $movement = BankTransaction::find($this->input('bank_transaction_id'));
+
+                    if (PaymentBankMovement::isGenerated($movement)) {
+                        $validator->errors()->add(
+                            'bank_transaction_id',
+                            'That movement was recorded from another invoice payment. Match a movement typed from a bank statement instead.',
+                        );
+                    }
+                }
+
                 if (! $this->boolean('book_bank_transaction')) {
                     return;
                 }

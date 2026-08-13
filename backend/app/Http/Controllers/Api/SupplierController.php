@@ -30,6 +30,13 @@ class SupplierController extends Controller
     {
         $supplier = Supplier::create($request->validated());
 
+        // Every payable points at one of these rows, so creating a supplier is
+        // creating something money can be routed to. It was the only
+        // write-capable controller left with no trail behind it (rule 3).
+        activity()->performedOn($supplier)->causedBy($request->user())
+            ->withProperties(['name' => $supplier->name])
+            ->log('supplier.created');
+
         return response()->json(['data' => new SupplierResource($supplier)], 201);
     }
 }

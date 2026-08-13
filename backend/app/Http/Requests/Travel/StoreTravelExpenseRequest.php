@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Travel;
 
 use App\Models\TravelExpense;
+use App\Support\Currencies;
 use App\Support\MonthPeriod;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -33,7 +34,7 @@ class StoreTravelExpenseRequest extends FormRequest
             'period_month' => ['required', 'date'],
             'expense_type' => ['required', Rule::in(TravelExpense::TYPES)],
             'flight_ticket_id' => ['nullable', 'integer', 'exists:flight_tickets,id'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'amount' => ['required', 'numeric', 'min:0'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'cost_status' => ['sometimes', Rule::in(TravelExpense::COST_STATUSES)],

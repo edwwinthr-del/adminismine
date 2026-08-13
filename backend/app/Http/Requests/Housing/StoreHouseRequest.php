@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Housing;
 
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreHouseRequest extends FormRequest
@@ -22,7 +23,7 @@ class StoreHouseRequest extends FormRequest
             'landlord_bank_account' => ['nullable', 'string', 'max:255'],
             'monthly_rent' => ['nullable', 'numeric', 'min:0'],
             'deposit' => ['nullable', 'numeric', 'min:0'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'contract_start_date' => ['nullable', 'date'],
             'contract_end_date' => $this->filled('contract_start_date')
                 ? ['nullable', 'date', 'after_or_equal:contract_start_date']

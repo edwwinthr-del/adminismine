@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Pagination, type PageMeta } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Payment {
   id: number;
@@ -127,16 +128,16 @@ export default function ReceivablesPage() {
             <option value="partial">{t("status.partial")}</option>
             <option value="paid">{t("status.paid")}</option>
           </Select>
-          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} />
-            {t("receivables.overdueOnly")}
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+            <Checkbox size="sm" checked={overdue} onChange={(e) => setOverdue(e.target.checked)}/>
+            <span>{t("receivables.overdueOnly")}</span>
           </label>
         </div>
       </Card>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[960px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>

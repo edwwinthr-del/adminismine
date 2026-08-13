@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Bank;
 
 use App\Models\BankTransaction;
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -25,7 +26,8 @@ class UpdateBankTransactionRequest extends FormRequest
             'category' => ['sometimes', 'nullable', 'string', Rule::in(BankTransaction::CATEGORIES)],
             'supplier_id' => ['sometimes', 'nullable', 'integer', 'exists:suppliers,id'],
             'client_id' => ['sometimes', 'nullable', 'integer', 'exists:clients,id'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
+            'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ];
     }

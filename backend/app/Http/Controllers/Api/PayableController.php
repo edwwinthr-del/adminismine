@@ -54,6 +54,8 @@ class PayableController extends Controller
 
     public function store(StorePayableRequest $request): JsonResponse
     {
+        // The EUR figure and the rate behind it are derived by the model on save
+        // (ConvertsToEur), so every write path gets them, not just this one.
         $invoice = PayableInvoice::create($request->validated());
         $invoice->recalculate();
 
@@ -165,7 +167,12 @@ class PayableController extends Controller
     ): PayableInvoiceResource {
         $before = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->settlements->updatePayment($payable, $payment, $request->validated());
+        $this->settlements->updatePayment(
+            $payable,
+            $payment,
+            $request->paymentData(),
+            book: $request->boolean('book_bank_transaction'),
+        );
 
         activity()->performedOn($payable)->causedBy($request->user())
             ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])

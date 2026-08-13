@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Models\Concerns\HasAuditColumns;
 use App\Models\Concerns\Searchable;
+use App\Services\CurrencyConverter;
+use App\Support\Currencies;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -41,6 +43,22 @@ class BankTransaction extends Model
     /** The three account columns whose signed sum is the movement. */
     public const AMOUNT_COLUMNS = ['cash_amount', 'nlb_amount', 'lovcen_amount'];
 
+    /**
+     * The EUR twin of each account column, in the same order.
+     *
+     * Every balance and every dashboard figure sums these, never the originals:
+     * a movement is entered in the currency it happened in, and the accounting
+     * currency is EUR (rule 5). The originals are what the operator typed and
+     * are never rewritten.
+     *
+     * @var array<string, string>
+     */
+    public const EUR_COLUMNS = [
+        'cash_amount' => 'cash_amount_eur',
+        'nlb_amount' => 'nlb_amount_eur',
+        'lovcen_amount' => 'lovcen_amount_eur',
+    ];
+
     /** @var list<string> */
     protected array $searchable = ['description_1', 'description_2'];
 
@@ -58,6 +76,8 @@ class BankTransaction extends Model
         'supplier_id',
         'client_id',
         'currency',
+        'exchange_rate',
+        'exchange_rate_date',
         'import_source',
         'source',
         'notes',
@@ -70,6 +90,10 @@ class BankTransaction extends Model
             'cash_amount' => 'decimal:2',
             'nlb_amount' => 'decimal:2',
             'lovcen_amount' => 'decimal:2',
+            'exchange_rate_date' => 'date:Y-m-d',
+            'cash_amount_eur' => 'decimal:2',
+            'nlb_amount_eur' => 'decimal:2',
+            'lovcen_amount_eur' => 'decimal:2',
         ];
     }
 
@@ -81,7 +105,62 @@ class BankTransaction extends Model
      */
     protected static function booted(): void
     {
-        static::saving(fn (self $transaction) => $transaction->normalizeAmountSigns());
+        static::saving(function (self $transaction): void {
+            $transaction->normalizeAmountSigns();
+            $transaction->syncEurAmounts();
+        });
+    }
+
+    /**
+     * Keep the EUR columns in step with the amounts and the stored rate.
+     *
+     * On the model rather than in a controller, for the same reason the sign
+     * normalisation is: the importer, a seeder and a console command all write
+     * movements too, and an EUR column that only the API maintained would be
+     * silently wrong for every other path. A row in the accounting currency
+     * converts 1:1 and stores no rate — that null is what tells a later reader
+     * the figure was never converted.
+     */
+    public function syncEurAmounts(): void
+    {
+        $currency = strtoupper((string) ($this->currency ?: Currencies::BASE));
+
+        if ($currency === Currencies::BASE) {
+            // Already the accounting currency: 1:1, and no rate is stored, which
+            // is how a later reader knows nothing was converted.
+            $this->exchange_rate = null;
+            $this->exchange_rate_date = null;
+
+            foreach (self::EUR_COLUMNS as $column => $eurColumn) {
+                $this->{$eurColumn} = round((float) $this->{$column}, 2);
+            }
+
+            return;
+        }
+
+        $rate = (float) $this->exchange_rate;
+
+        if ($rate <= 0) {
+            // No rate pinned on the row, so use the newest one on or before its
+            // date and record it here. Falling back to 1:1 instead is precisely
+            // the bug this column set exists to end, and a movement in a
+            // currency the app cannot price is not a movement it can record —
+            // MissingExchangeRateException renders itself as a 422.
+            $resolved = app(CurrencyConverter::class)->toEur(
+                0,
+                $currency,
+                null,
+                optional($this->date)->toDateString(),
+            );
+
+            $rate = (float) $resolved['exchange_rate'];
+            $this->exchange_rate = $rate;
+            $this->exchange_rate_date = $resolved['exchange_rate_date'];
+        }
+
+        foreach (self::EUR_COLUMNS as $column => $eurColumn) {
+            $this->{$eurColumn} = round(((float) $this->{$column}) / $rate, 2);
+        }
     }
 
     /**
@@ -123,11 +202,23 @@ class BankTransaction extends Model
         return $this->hasMany(Payment::class, 'bank_transaction_id');
     }
 
+    /** The movement's net in the currency it was entered in. */
     protected function netAmount(): Attribute
     {
         return Attribute::make(
             get: fn (): float => round(
                 (float) $this->cash_amount + (float) $this->nlb_amount + (float) $this->lovcen_amount,
+                2,
+            ),
+        );
+    }
+
+    /** The same net in the accounting currency — what every total is built from. */
+    protected function netAmountEur(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): float => round(
+                (float) $this->cash_amount_eur + (float) $this->nlb_amount_eur + (float) $this->lovcen_amount_eur,
                 2,
             ),
         );
@@ -216,9 +307,11 @@ class BankTransaction extends Model
      */
     public static function accountBalances(): array
     {
+        // Summed in EUR: adding a TRY movement's face value to a EUR balance is
+        // what made a ~2,600 EUR bill read as 100,000 (rule 5).
         $totals = static::query()->selectRaw(
-            'COALESCE(SUM(cash_amount), 0) as cash, COALESCE(SUM(nlb_amount), 0) as nlb, '
-            .'COALESCE(SUM(lovcen_amount), 0) as lovcen',
+            'COALESCE(SUM(cash_amount_eur), 0) as cash, COALESCE(SUM(nlb_amount_eur), 0) as nlb, '
+            .'COALESCE(SUM(lovcen_amount_eur), 0) as lovcen',
         )->first();
 
         $cash = round((float) $totals->cash, 2);
@@ -257,7 +350,9 @@ class BankTransaction extends Model
     public function scopeWithRunningBalance(Builder $query): Builder
     {
         $table = $this->getTable();
-        $net = implode(' + ', self::AMOUNT_COLUMNS);
+        // Accumulated in EUR, so a ledger holding more than one currency still
+        // reads as a single running balance.
+        $net = implode(' + ', array_values(self::EUR_COLUMNS));
 
         $ledger = static::query()
             ->select("{$table}.*")

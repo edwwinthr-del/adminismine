@@ -18,6 +18,12 @@ class BankTransactionResource extends JsonResource
             'nlb_amount' => (float) $this->nlb_amount,
             'lovcen_amount' => (float) $this->lovcen_amount,
             'net_amount' => $this->net_amount,
+            // Every balance and dashboard figure is summed from these.
+            'cash_amount_eur' => (float) $this->cash_amount_eur,
+            'nlb_amount_eur' => (float) $this->nlb_amount_eur,
+            'lovcen_amount_eur' => (float) $this->lovcen_amount_eur,
+            'net_amount_eur' => $this->net_amount_eur,
+            'exchange_rate' => $this->exchange_rate === null ? null : (float) $this->exchange_rate,
             // Present only on the ledger list, which asks for it explicitly
             // (BankTransaction::scopeWithRunningBalance).
             'running_balance' => $this->when(

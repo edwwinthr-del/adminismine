@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Payable;
 
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StorePayableRequest extends FormRequest
@@ -20,7 +21,8 @@ class StorePayableRequest extends FormRequest
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'description' => ['nullable', 'string', 'max:1000'],
             'expense_category' => ['nullable', 'string', 'max:255'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
+            'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'original_amount' => ['required', 'numeric', 'gt:0'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];

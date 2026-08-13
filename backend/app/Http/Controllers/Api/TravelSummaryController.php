@@ -19,7 +19,7 @@ class TravelSummaryController extends Controller
     public function __invoke(Request $request): JsonResponse
     {
         $request->validate([
-            'month' => ['nullable', 'string', 'regex:/^\d{4}-\d{2}(-\d{2})?$/'],
+            'month' => ['nullable', 'string', MonthPeriod::rule()],
         ]);
 
         $month = MonthPeriod::normalize($request->input('month', now()->toDateString()));

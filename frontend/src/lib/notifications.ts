@@ -1,4 +1,5 @@
 import { formatDate, formatMoney } from "@/lib/format";
+import { dictionaries } from "@/lib/i18n/dictionaries";
 
 export interface AppNotification {
   id: number;
@@ -85,12 +86,38 @@ export function notificationMessage(t: Translate, notification: AppNotification)
       vars[key] = t(`documentField.${value}`);
     } else if (Array.isArray(value)) {
       vars[key] = value.map((entry) => t(`documentField.${entry}`)).join(", ");
+    } else if (ENUM_FAMILIES[key] !== undefined) {
+      vars[key] = translateEnum(ENUM_FAMILIES[key], value, t);
     } else {
       vars[key] = String(value);
     }
   }
 
   return t(`notifMsg.${notification.type}`, vars);
+}
+
+/**
+ * Data parameters whose value is a canonical enum, and the dictionary family
+ * that renders it.
+ *
+ * Storage is language-neutral by design (rule 4) — the row holds `electricity`,
+ * not "struja" — but everything except `document` fell through to
+ * `String(value)`, so those canonical values were dropped raw into otherwise
+ * translated sentences: a Serbian user read "Kuća 3 electricity račun je 8 dana
+ * u docnji". The backend was right; the rendering layer was where it broke.
+ */
+const ENUM_FAMILIES: Record<string, string> = {
+  bill_type: "billType",
+  need_type: "needType",
+  document_type: "documentType",
+  status: "status",
+};
+
+/** Falls back to the stored value, which is never worse than showing a key. */
+function translateEnum(family: string, value: unknown, t: (key: string) => string): string {
+  const key = `${family}.${String(value)}`;
+
+  return key in dictionaries.en ? t(key) : String(value);
 }
 
 export function severityTone(severity: string): "gray" | "amber" | "red" {

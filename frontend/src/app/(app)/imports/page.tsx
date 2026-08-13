@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import {Checkbox} from "@/components/ui/checkbox";
 
 interface ImportColumn {
   key: string;
@@ -227,7 +228,7 @@ export default function ImportsPage() {
         )}
       </Card>
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -417,8 +418,7 @@ function BatchPreview({ batchId }: { batchId: number }) {
               ))}
           </Select>
           <label className="flex h-10 items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={issuesOnly}
               onChange={(e) => setIssuesOnly(e.target.checked)}
               className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
@@ -427,8 +427,7 @@ function BatchPreview({ batchId }: { batchId: number }) {
           </label>
           {/* After a commit, the rows that did not make it are what matters. */}
           <label className="flex h-10 items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={failedOnly}
               onChange={(e) => setFailedOnly(e.target.checked)}
               className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
@@ -451,7 +450,7 @@ function BatchPreview({ batchId }: { batchId: number }) {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -512,8 +511,7 @@ function BatchPreview({ batchId }: { batchId: number }) {
                   </td>
                   <td className="px-4 py-3 text-right">
                     {row.status === "pending" ? (
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={row.action === "create"}
                         disabled={!previewed}
                         onChange={() => void toggle(row)}

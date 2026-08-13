@@ -465,4 +465,87 @@ class TravelTest extends TestCase
         $this->getJson('/api/travel/social-assistance')->assertForbidden();
         $this->getJson('/api/travel/summary')->assertForbidden();
     }
+
+    /**
+     * Payables and receivables could always correct a settlement line; every
+     * other module that takes payments shipped POST and nothing else. A rent
+     * payment or travel expense typed twice could only be undone by deleting
+     * the whole obligation — losing its history — or by booking a compensating
+     * opposite entry, which the domain rules forbid because two rows that
+     * cancel out both read as real money in every report and bank match.
+     */
+    public function test_a_travel_payment_can_be_corrected_and_removed(): void
+    {
+        $this->actingAsAdmin();
+
+        $expense = TravelExpense::factory()->create([
+            'employee_id' => Employee::factory()->create()->id,
+            'currency' => 'EUR',
+            'amount' => 500,
+            'amount_eur' => 500,
+        ]);
+        $expense->recalculate();
+
+        $this->postJson("/api/travel/expenses/{$expense->id}/payments", [
+            'amount' => 500,
+            'payment_date' => '2026-07-10',
+            'method' => 'cash',
+        ])->assertCreated();
+
+        $this->assertSame('paid', $expense->fresh()->status);
+        $payment = $expense->fresh()->payments()->sole();
+
+        // Typed as 500 when it was really 300 — corrected in place.
+        $this->putJson("/api/travel/expenses/{$expense->id}/payments/{$payment->id}", [
+            'amount' => 300,
+            'payment_date' => '2026-07-10',
+            'method' => 'cash',
+        ])->assertOk();
+
+        $expense->refresh();
+        $this->assertSame(300.0, (float) $expense->paid_amount);
+        $this->assertSame(200.0, (float) $expense->remaining_amount);
+        $this->assertSame('partial', $expense->status);
+
+        // A correction may not exceed what the expense is worth.
+        $this->putJson("/api/travel/expenses/{$expense->id}/payments/{$payment->id}", [
+            'amount' => 900,
+            'payment_date' => '2026-07-10',
+            'method' => 'cash',
+        ])->assertStatus(422)->assertJsonValidationErrors('amount');
+
+        // Removing the last line reopens the expense.
+        $this->deleteJson("/api/travel/expenses/{$expense->id}/payments/{$payment->id}")->assertOk();
+
+        $expense->refresh();
+        $this->assertSame(0.0, (float) $expense->paid_amount);
+        $this->assertSame(500.0, (float) $expense->remaining_amount);
+        $this->assertSame('unpaid', $expense->status);
+        $this->assertSame(0, $expense->payments()->count());
+    }
+
+    /** A payment reached through the wrong parent is not found, not forbidden. */
+    public function test_a_payment_cannot_be_corrected_through_another_expense(): void
+    {
+        $this->actingAsAdmin();
+        $employee = Employee::factory()->create();
+
+        $mine = TravelExpense::factory()->create([
+            'employee_id' => $employee->id, 'currency' => 'EUR', 'amount' => 500, 'amount_eur' => 500,
+        ]);
+        $other = TravelExpense::factory()->create([
+            'employee_id' => $employee->id, 'currency' => 'EUR', 'amount' => 500, 'amount_eur' => 500,
+        ]);
+        $mine->recalculate();
+        $other->recalculate();
+
+        $this->postJson("/api/travel/expenses/{$mine->id}/payments", [
+            'amount' => 100, 'payment_date' => '2026-07-10', 'method' => 'cash',
+        ])->assertCreated();
+
+        $payment = $mine->fresh()->payments()->sole();
+
+        $this->deleteJson("/api/travel/expenses/{$other->id}/payments/{$payment->id}")->assertNotFound();
+        $this->assertSame(1, $mine->fresh()->payments()->count());
+    }
 }

@@ -8,10 +8,13 @@ use App\Models\Employee;
 use App\Models\FlightTicket;
 use App\Models\Loan;
 use App\Models\Machine;
+use App\Models\Master;
 use App\Models\PayableInvoice;
+use App\Models\ProductionRecord;
 use App\Models\ReceivableInvoice;
 use App\Models\User;
 use App\Models\WorkerNeed;
+use App\Models\Worksite;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -126,6 +129,32 @@ class ListPerformanceTest extends TestCase
         $this->assertQueryCountIsFlat(
             '/api/customs-documents?per_page=100',
             fn (int $count) => CustomsDocument::factory()->count($count)->create(),
+        );
+    }
+
+    /**
+     * Both of these eager-load today; neither was guarded, so nothing would have
+     * caught a relation added to the resource later — which is exactly how an
+     * N+1 arrives.
+     */
+    public function test_production_list_does_not_query_per_row(): void
+    {
+        $this->assertQueryCountIsFlat(
+            '/api/production?per_page=100',
+            // One site with many days on it, which is the real shape — and it
+            // keeps the factory from minting a worksite per row.
+            fn (int $count) => ProductionRecord::factory()
+                ->count($count)
+                ->for(Worksite::factory())
+                ->create(),
+        );
+    }
+
+    public function test_masters_list_does_not_query_per_row(): void
+    {
+        $this->assertQueryCountIsFlat(
+            '/api/masters',
+            fn (int $count) => Master::factory()->count($count)->create(),
         );
     }
 

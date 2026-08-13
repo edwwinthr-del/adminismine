@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Attendance\OverrideWorkingDaysRequest;
 use App\Models\SalaryPayment;
 use App\Models\WorkingDaySetting;
+use App\Services\DailyEarnedPayService;
 use App\Services\WorkingDaysService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,10 @@ use Illuminate\Http\Request;
  */
 class WorkingDayController extends Controller
 {
-    public function __construct(private readonly WorkingDaysService $workingDays) {}
+    public function __construct(
+        private readonly WorkingDaysService $workingDays,
+        private readonly DailyEarnedPayService $earnedPay,
+    ) {}
 
     public function show(Request $request): JsonResponse
     {
@@ -44,9 +48,12 @@ class WorkingDayController extends Controller
         );
 
         $this->workingDays->forget();
+        // The divisor just moved, so every earned figure already cached for this
+        // month is stale until it is rebuilt.
+        $recomputed = $this->earnedPay->recomputeMonth($data['month']);
 
         activity()->performedOn($setting)->causedBy($request->user())
-            ->withProperties($data)
+            ->withProperties($data + ['recomputed_records' => $recomputed])
             ->log('working_days.overridden');
 
         return response()->json([
@@ -56,6 +63,7 @@ class WorkingDayController extends Controller
                 'derived_working_days' => $this->workingDays->derivedForMonth($data['month']),
                 'is_overridden' => true,
                 'reason' => $setting->reason,
+                'recomputed_records' => $recomputed,
             ],
         ]);
     }
@@ -65,11 +73,17 @@ class WorkingDayController extends Controller
         $month = SalaryPayment::normalizeMonth($request->input('month', now()->toDateString()));
         $override = $this->workingDays->override($month);
 
+        $recomputed = 0;
+
         if ($override !== null) {
             $override->delete();
             $this->workingDays->forget();
+            // Removing the override moves the divisor back to the derived value,
+            // which is the same staleness in the other direction.
+            $recomputed = $this->earnedPay->recomputeMonth($month);
 
-            activity()->causedBy($request->user())->withProperties(['month' => $month])
+            activity()->causedBy($request->user())
+                ->withProperties(['month' => $month, 'recomputed_records' => $recomputed])
                 ->log('working_days.override_removed');
         }
 
@@ -80,6 +94,7 @@ class WorkingDayController extends Controller
                 'derived_working_days' => $this->workingDays->derivedForMonth($month),
                 'is_overridden' => false,
                 'reason' => null,
+                'recomputed_records' => $recomputed,
             ],
         ]);
     }

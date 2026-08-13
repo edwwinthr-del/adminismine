@@ -457,4 +457,150 @@ class RolePermissionTest extends TestCase
         $this->deleteJson("/api/users/{$admin->id}", ['current_password' => 'password'])->assertStatus(422);
         $this->assertDatabaseHas('users', ['id' => $admin->id]);
     }
+
+    /** A holder of just this one permission, to prove it is not a master key. */
+    private function actingAsHolderOf(string ...$permissions): User
+    {
+        $user = User::factory()->create();
+        $user->givePermissionTo($permissions);
+        Sanctum::actingAs($user->fresh());
+
+        return $user;
+    }
+
+    /**
+     * Resetting a password is taking the account over, so it may only point
+     * downwards. This was the shortest path to owning the app: `users.manage`
+     * alone could set the Super Admin's password and then simply log in.
+     */
+    public function test_a_user_manager_cannot_reset_a_more_privileged_accounts_password(): void
+    {
+        $superAdmin = User::factory()->create(['password' => 'known-password-1']);
+        $superAdmin->assignRole('Super Admin');
+
+        $this->actingAsHolderOf('users.manage');
+
+        $this->putJson("/api/users/{$superAdmin->id}/password", ['password' => 'attacker-chosen-1'])
+            ->assertStatus(403);
+
+        // The original password still works, so the account was never taken.
+        $this->postJson('/api/login', ['email' => $superAdmin->email, 'password' => 'known-password-1'])
+            ->assertOk();
+        $this->postJson('/api/login', ['email' => $superAdmin->email, 'password' => 'attacker-chosen-1'])
+            ->assertStatus(422);
+    }
+
+    /**
+     * The self-edit refusal stopped `PUT /users/{self}/roles`; creating a puppet
+     * with the role and signing in as it went around the whole thing.
+     */
+    public function test_a_user_manager_cannot_mint_a_super_admin(): void
+    {
+        $this->actingAsHolderOf('users.manage');
+
+        $this->postJson('/api/users', [
+            'name' => 'Puppet',
+            'email' => 'puppet@adminismine.local',
+            'password' => 'first-password-1',
+            'roles' => ['Super Admin'],
+        ])->assertStatus(403);
+
+        $this->assertFalse(User::where('email', 'puppet@adminismine.local')->exists());
+    }
+
+    public function test_a_user_manager_cannot_grant_permissions_they_do_not_hold(): void
+    {
+        $this->actingAsHolderOf('users.manage');
+
+        $this->postJson('/api/users', [
+            'name' => 'Overreach',
+            'email' => 'overreach@adminismine.local',
+            'password' => 'first-password-1',
+            'permissions' => ['bank_transactions.manage'],
+        ])->assertStatus(403);
+
+        $target = User::factory()->create();
+        $this->putJson("/api/users/{$target->id}/extra-permissions", [
+            'permissions' => ['bank_transactions.manage'],
+        ])->assertStatus(403);
+
+        // The role route is closed the same way — a role is judged by what it
+        // carries, never by its name.
+        $this->putJson("/api/users/{$target->id}/roles", ['roles' => ['Admin']])->assertStatus(403);
+        $this->assertFalse($target->fresh()->can('bank_transactions.manage'));
+    }
+
+    /**
+     * `is_system` blocked renaming the role but not syncing its permissions, so
+     * a `roles.manage` holder could add the other twenty-nine to the role they
+     * were already wearing.
+     */
+    public function test_a_role_manager_cannot_widen_a_role_they_hold(): void
+    {
+        $role = Role::create(['name' => 'Ops', 'guard_name' => 'web']);
+        $role->syncPermissions(['roles.manage']);
+
+        $actor = User::factory()->create();
+        $actor->assignRole('Ops');
+        Sanctum::actingAs($actor->fresh());
+
+        $this->putJson("/api/roles/{$role->id}", [
+            'permissions' => RolesAndPermissionsSeeder::PERMISSIONS,
+        ])->assertStatus(403);
+
+        $this->assertFalse($actor->fresh()->can('users.manage'));
+        $this->assertFalse($actor->fresh()->can('bank_transactions.manage'));
+    }
+
+    public function test_a_role_manager_cannot_hand_another_role_permissions_they_lack(): void
+    {
+        $ops = Role::create(['name' => 'Ops', 'guard_name' => 'web']);
+        $ops->syncPermissions(['roles.manage']);
+
+        $other = Role::create(['name' => 'Other', 'guard_name' => 'web']);
+
+        $actor = User::factory()->create();
+        $actor->assignRole('Ops');
+        Sanctum::actingAs($actor->fresh());
+
+        $this->putJson("/api/roles/{$other->id}", ['permissions' => ['bank_transactions.manage']])
+            ->assertStatus(403);
+        $this->postJson('/api/roles', ['name' => 'Wide', 'permissions' => ['bank_transactions.manage']])
+            ->assertStatus(403);
+        $this->postJson('/api/roles/'.Role::findByName('Admin', 'web')->id.'/clone', ['name' => 'Admin Copy'])
+            ->assertStatus(403);
+
+        $this->assertEmpty($other->fresh()->permissions);
+        $this->assertFalse(Role::where('name', 'Admin Copy')->exists());
+    }
+
+    public function test_the_super_admin_role_cannot_be_edited_by_a_lesser_admin(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('Admin');
+        Sanctum::actingAs($admin);
+
+        $superAdminRole = Role::findByName('Super Admin', 'web');
+
+        $this->putJson("/api/roles/{$superAdminRole->id}", ['permissions' => []])->assertStatus(403);
+        $this->assertNotEmpty($superAdminRole->fresh()->permissions);
+    }
+
+    /** A row saying only "somebody edited role #6" cannot reconstruct an escalation. */
+    public function test_role_permission_changes_record_what_changed(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $roleId = $this->postJson('/api/roles', ['name' => 'Temp', 'permissions' => ['payables.view']])
+            ->assertCreated()->json('data.id');
+
+        $this->putJson("/api/roles/{$roleId}", ['permissions' => ['receivables.manage']])->assertOk();
+
+        $properties = Activity::where('description', 'role.updated')->latest('id')->firstOrFail()->properties;
+
+        $this->assertSame(['payables.view'], $properties['permissions']['before']);
+        $this->assertSame(['receivables.manage'], $properties['permissions']['after']);
+        $this->assertSame(['receivables.manage'], $properties['granted']);
+        $this->assertSame(['payables.view'], $properties['revoked']);
+    }
 }

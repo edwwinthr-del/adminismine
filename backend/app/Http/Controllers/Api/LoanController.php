@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\CorrectsPayments;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Loans\RecordRepaymentRequest;
 use App\Http\Requests\Loans\StoreLoanRequest;
 use App\Http\Requests\Loans\UpdateLoanRequest;
 use App\Http\Resources\LoanResource;
 use App\Models\Loan;
+use App\Models\Payment;
 use App\Services\CurrencyConverter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 
 class LoanController extends Controller
 {
+    use CorrectsPayments;
+
     public function __construct(private readonly CurrencyConverter $converter) {}
 
     public function index(Request $request): JsonResponse
@@ -165,5 +169,45 @@ class LoanController extends Controller
         return response()->json([
             'data' => new LoanResource($loan->fresh()->load('supplier', 'client', 'employee', 'repayments')),
         ], 201);
+    }
+
+    /**
+     * Correct a repayment that was entered wrong, rather than booking its opposite.
+     *
+     * See CorrectsPayments: two rows that cancel out would both read as real
+     * money in every report and in the bank match.
+     */
+    public function updateRepayment(
+        RecordRepaymentRequest $request,
+        Loan $loan,
+        Payment $payment,
+    ): JsonResponse {
+        $before = $payment->only(['amount', 'payment_date', 'method']);
+
+        $this->correctPayment($loan, $payment, $request->validated());
+
+        activity()->performedOn($loan)->causedBy($request->user())
+            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])
+            ->log('loan.repayment_updated');
+
+        return response()->json([
+            'data' => new LoanResource($loan->fresh()->load('supplier', 'client', 'employee', 'repayments')),
+        ]);
+    }
+
+    /** Remove a repayment; the obligation's figures follow from the lines that are left. */
+    public function deleteRepayment(Request $request, Loan $loan, Payment $payment): JsonResponse
+    {
+        $removed = $payment->only(['amount', 'payment_date', 'method']);
+
+        $this->removePayment($loan, $payment);
+
+        activity()->performedOn($loan)->causedBy($request->user())
+            ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
+            ->log('loan.repayment_deleted');
+
+        return response()->json([
+            'data' => new LoanResource($loan->fresh()->load('supplier', 'client', 'employee', 'repayments')),
+        ]);
     }
 }

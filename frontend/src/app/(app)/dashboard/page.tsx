@@ -272,7 +272,7 @@ export default function DashboardPage() {
             </div>
 
             {dashboard?.recent_transactions && (
-              <Card className="table-quiet overflow-x-auto p-0">
+              <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
                 <p className="px-5 pb-3 pt-5 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   {t("dashboard.recentTransactions")}
                 </p>

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Project {
   id: number;
@@ -65,7 +66,7 @@ export default function ProjectsPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[860px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -205,7 +206,7 @@ function ProjectModal({ project, onClose }: { project?: Project; onClose: () => 
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
         <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-          <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+          <Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
           {t("projects.active")}
         </label>
 

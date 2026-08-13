@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { subscribeToWrites } from "@/lib/data/cache";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate } from "@/lib/format";
 import {
@@ -33,11 +34,42 @@ export function NotificationBell() {
     }
   }, []);
 
+  const loadRecent = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiFetch<{ data: AppNotification[]; meta: NotificationCounts }>("/notifications");
+      setRecent(res.data.slice(0, 6));
+      setCounts(res.meta);
+    } catch {
+      setRecent([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+
   useEffect(() => {
     void loadCounts();
     const timer = window.setInterval(() => void loadCounts(), POLL_MS);
     return () => window.clearInterval(timer);
   }, [loadCounts]);
+
+  /*
+   * The badge is a figure derived from records this app edits, so it follows the
+   * same rule as every other one: a write anywhere invalidates it. The poll
+   * alone meant "Mark all read" emptied the list while the bell kept showing a
+   * red 12 for up to a minute, and a fresh scan's notifications did not appear
+   * until the next tick. The interval stays, for the notifications the server
+   * raises on its own schedule.
+   */
+  useEffect(
+    () =>
+      subscribeToWrites(() => {
+        void loadCounts();
+        if (open) void loadRecent();
+      }),
+    [loadCounts, loadRecent, open],
+  );
 
   // Close when clicking outside the panel.
   useEffect(() => {
@@ -55,23 +87,16 @@ export function NotificationBell() {
     setOpen(next);
     if (!next) return;
 
-    setLoading(true);
-    try {
-      const res = await apiFetch<{ data: AppNotification[]; meta: NotificationCounts }>("/notifications");
-      setRecent(res.data.slice(0, 6));
-      setCounts(res.meta);
-    } catch {
-      setRecent([]);
-    } finally {
-      setLoading(false);
-    }
+    await loadRecent();
   }
 
   async function markRead(notification: AppNotification) {
     if (notification.status !== "unread") return;
     try {
+      // apiFetch's markMutated() fires on this PUT, and the subscription above
+      // refreshes both the badge and the open list — so the row stops looking
+      // unread while the panel is still on screen.
       await apiFetch(`/notifications/${notification.id}/read`, { method: "PUT" });
-      await loadCounts();
     } catch {
       /* navigation matters more than the read flag */
     }

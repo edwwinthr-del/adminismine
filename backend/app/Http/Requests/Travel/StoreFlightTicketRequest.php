@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Travel;
 
 use App\Models\FlightTicket;
+use App\Support\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,7 +25,7 @@ class StoreFlightTicketRequest extends FormRequest
             'route' => ['nullable', 'string', 'max:255'],
             'airline' => ['nullable', 'string', 'max:255'],
             'reference' => ['nullable', 'string', 'max:255'],
-            'currency' => ['sometimes', 'string', 'size:3'],
+            'currency' => Currencies::rules(),
             'amount' => ['required', 'numeric', 'min:0'],
             // Optional override of the stored daily rate.
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],

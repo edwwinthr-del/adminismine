@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Worksite {
   id: number;
@@ -69,7 +70,7 @@ export default function WorksitesPage() {
         />
       </Card>
 
-      <Card className="table-quiet overflow-x-auto p-0">
+      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-sm">
           <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
             <tr>
@@ -234,9 +235,13 @@ function WorksiteModal({
           <label className={label}>{t("worksites.notes")}</label>
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
-        <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-          <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-          {t("worksites.active")}
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+          <Checkbox
+              size="sm"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+          />
+          <span>{t("worksites.active")}</span>
         </label>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
@@ -313,14 +318,16 @@ function RosterModal({
           <ul className="max-h-72 space-y-1 overflow-y-auto">
             {employees.map((employee) => (
               <li key={employee.id}>
-                <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(employee.id)}
-                    onChange={() => toggle(employee.id)}
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+                  <Checkbox
+                      size="sm"
+                      checked={selected.includes(employee.id)}
+                      onChange={() => toggle(employee.id)}
                   />
-                  {employee.full_name}
-                  {employee.job_role && <span className="text-xs text-zinc-500">· {employee.job_role}</span>}
+
+                  <span>{employee.full_name}{employee.job_role && (
+                      <span className="ml-1 text-xs text-zinc-500">· {employee.job_role}</span>
+                  )}</span>
                 </label>
               </li>
             ))}

@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\CorrectsPayments;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Travel\RecordTravelPaymentRequest;
 use App\Http\Requests\Travel\StoreTravelExpenseRequest;
 use App\Http\Requests\Travel\UpdateTravelExpenseRequest;
 use App\Http\Resources\TravelExpenseResource;
+use App\Models\Payment;
 use App\Models\TravelExpense;
 use App\Services\CurrencyConverter;
 use App\Services\FileAttachmentService;
@@ -16,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 
 class TravelExpenseController extends Controller
 {
+    use CorrectsPayments;
+
     public function __construct(private readonly CurrencyConverter $converter) {}
 
     public function index(Request $request): JsonResponse
@@ -131,5 +135,45 @@ class TravelExpenseController extends Controller
         return response()->json([
             'data' => new TravelExpenseResource($travelExpense->fresh()->load('employee', 'payments')),
         ], 201);
+    }
+
+    /**
+     * Correct a payment that was entered wrong, rather than booking its opposite.
+     *
+     * See CorrectsPayments: two rows that cancel out would both read as real
+     * money in every report and in the bank match.
+     */
+    public function updatePayment(
+        RecordTravelPaymentRequest $request,
+        TravelExpense $travelExpense,
+        Payment $payment,
+    ): JsonResponse {
+        $before = $payment->only(['amount', 'payment_date', 'method']);
+
+        $this->correctPayment($travelExpense, $payment, $request->validated());
+
+        activity()->performedOn($travelExpense)->causedBy($request->user())
+            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])
+            ->log('travel_expense.payment_updated');
+
+        return response()->json([
+            'data' => new TravelExpenseResource($travelExpense->fresh()->load('employee', 'payments')),
+        ]);
+    }
+
+    /** Remove a payment; the obligation's figures follow from the lines that are left. */
+    public function deletePayment(Request $request, TravelExpense $travelExpense, Payment $payment): JsonResponse
+    {
+        $removed = $payment->only(['amount', 'payment_date', 'method']);
+
+        $this->removePayment($travelExpense, $payment);
+
+        activity()->performedOn($travelExpense)->causedBy($request->user())
+            ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
+            ->log('travel_expense.payment_deleted');
+
+        return response()->json([
+            'data' => new TravelExpenseResource($travelExpense->fresh()->load('employee', 'payments')),
+        ]);
     }
 }
