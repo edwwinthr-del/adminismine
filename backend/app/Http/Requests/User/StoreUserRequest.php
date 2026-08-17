@@ -18,18 +18,18 @@ class StoreUserRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:korisnici,email'],
             // The admin types the initial password and hands it over; there is no
             // mail transport to deliver an invite link.
             'password' => ['required', 'string', Password::defaults()],
             'locale' => ['sometimes', Rule::in(User::LOCALES)],
             'is_active' => ['sometimes', 'boolean'],
             'roles' => ['array'],
-            'roles.*' => ['string', 'exists:roles,name'],
+            'roles.*' => ['string', 'exists:uloge,name'],
             // Granted on top of whatever the roles already carry — the effective
             // set is the union of the two, and Spatie computes it that way.
             'permissions' => ['array'],
-            'permissions.*' => ['string', 'exists:permissions,name'],
+            'permissions.*' => ['string', 'exists:dozvole,name'],
         ];
     }
 }

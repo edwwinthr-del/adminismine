@@ -290,8 +290,8 @@ class CustomsDocumentTest extends TestCase
         $this->deleteJson("/api/customs-documents/{$document->id}")->assertOk();
 
         Storage::disk('local')->assertMissing($path);
-        $this->assertDatabaseCount('customs_documents', 0);
-        $this->assertDatabaseCount('file_attachments', 0);
+        $this->assertDatabaseCount('carinski_dokumenti', 0);
+        $this->assertDatabaseCount('prilozi', 0);
     }
 
     public function test_customs_documents_require_permission(): void

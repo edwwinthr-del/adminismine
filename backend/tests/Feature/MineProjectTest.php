@@ -128,12 +128,12 @@ class MineProjectTest extends TestCase
         Worksite::factory()->create(['mine_id' => $mine->id]);
 
         $this->deleteJson("/api/mines/{$mine->id}")->assertOk();
-        $this->assertDatabaseHas('mines', ['id' => $mine->id, 'is_active' => false]);
+        $this->assertDatabaseHas('rudnici', ['id' => $mine->id, 'is_active' => false]);
 
         // An unused one is removed outright.
         $unused = Mine::factory()->create();
         $this->deleteJson("/api/mines/{$unused->id}")->assertOk();
-        $this->assertDatabaseMissing('mines', ['id' => $unused->id]);
+        $this->assertDatabaseMissing('rudnici', ['id' => $unused->id]);
     }
 
     public function test_project_with_worksites_is_deactivated_not_deleted(): void
@@ -144,7 +144,7 @@ class MineProjectTest extends TestCase
         Worksite::factory()->create(['project_id' => $project->id]);
 
         $this->deleteJson("/api/projects/{$project->id}")->assertOk();
-        $this->assertDatabaseHas('projects', ['id' => $project->id, 'is_active' => false]);
+        $this->assertDatabaseHas('projekti', ['id' => $project->id, 'is_active' => false]);
     }
 
     public function test_deleting_a_project_leaves_its_worksites_in_place(): void
@@ -158,7 +158,7 @@ class MineProjectTest extends TestCase
         // losing a project must never take a worksite (and its attendance) with it.
         $project->delete();
 
-        $this->assertDatabaseHas('worksites', ['id' => $worksite->id, 'project_id' => null]);
+        $this->assertDatabaseHas('gradilista', ['id' => $worksite->id, 'project_id' => null]);
     }
 
     public function test_lookups_expose_mines_and_projects(): void

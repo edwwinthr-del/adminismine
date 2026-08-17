@@ -16,6 +16,8 @@ class ImportRow extends Model
 {
     use HasFactory;
 
+    protected $table = 'uvozni_redovi';
+
     public const ACTIONS = ['create', 'skip'];
 
     public const STATUSES = ['pending', 'imported', 'skipped', 'failed'];

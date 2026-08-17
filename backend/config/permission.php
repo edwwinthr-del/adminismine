@@ -53,7 +53,7 @@ return [
          * default value but you may easily change it to any table you like.
          */
 
-        'roles' => 'roles',
+        'roles' => 'uloge',
 
         /*
          * When using the "HasPermissions" trait from this package, we need to know which
@@ -61,7 +61,7 @@ return [
          * default value but you may easily change it to any table you like.
          */
 
-        'permissions' => 'permissions',
+        'permissions' => 'dozvole',
 
         /*
          * When using the "HasPermissions" trait from this package, we need to know which
@@ -69,7 +69,7 @@ return [
          * basic default value but you may easily change it to any table you like.
          */
 
-        'model_has_permissions' => 'model_has_permissions',
+        'model_has_permissions' => 'dozvole_modela',
 
         /*
          * When using the "HasRoles" trait from this package, we need to know which
@@ -77,7 +77,7 @@ return [
          * basic default value but you may easily change it to any table you like.
          */
 
-        'model_has_roles' => 'model_has_roles',
+        'model_has_roles' => 'uloge_modela',
 
         /*
          * When using the "HasRoles" trait from this package, we need to know which
@@ -85,7 +85,7 @@ return [
          * basic default value but you may easily change it to any table you like.
          */
 
-        'role_has_permissions' => 'role_has_permissions',
+        'role_has_permissions' => 'dozvole_uloga',
     ],
 
     'column_names' => [

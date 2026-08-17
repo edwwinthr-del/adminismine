@@ -23,6 +23,8 @@ class FlightTicket extends Model
 {
     use HasAuditColumns, HasFactory, HasFileAttachments, Searchable;
 
+    protected $table = 'avionske_karte';
+
     /** Canonical directions; the workbook's GIDIS / DONUS / GITGEL are normalized into these. */
     public const DIRECTIONS = ['arrival', 'departure', 'round_trip'];
 

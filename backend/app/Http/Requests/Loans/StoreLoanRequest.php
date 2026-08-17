@@ -26,9 +26,9 @@ class StoreLoanRequest extends FormRequest
             'original_amount' => ['required', 'numeric', 'gt:0'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             // Optional links to who the counterparty is in the app's own records.
-            'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
-            'client_id' => ['nullable', 'integer', 'exists:clients,id'],
-            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'supplier_id' => ['nullable', 'integer', 'exists:dobavljaci,id'],
+            'client_id' => ['nullable', 'integer', 'exists:klijenti,id'],
+            'employee_id' => ['nullable', 'integer', 'exists:radnici,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

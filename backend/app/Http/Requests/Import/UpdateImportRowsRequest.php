@@ -18,7 +18,7 @@ class UpdateImportRowsRequest extends FormRequest
     {
         return [
             'rows' => ['required', 'array', 'min:1'],
-            'rows.*.id' => ['required', 'integer', 'exists:import_rows,id'],
+            'rows.*.id' => ['required', 'integer', 'exists:uvozni_redovi,id'],
             'rows.*.action' => ['required', Rule::in(ImportRow::ACTIONS)],
         ];
     }

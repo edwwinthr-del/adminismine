@@ -443,12 +443,12 @@ class TravelTest extends TestCase
 
         $this->deleteJson("/api/travel/tickets/{$ticket->id}")->assertOk();
 
-        $this->assertDatabaseMissing('flight_tickets', ['id' => $ticket->id]);
-        $this->assertDatabaseMissing('file_attachments', [
+        $this->assertDatabaseMissing('avionske_karte', ['id' => $ticket->id]);
+        $this->assertDatabaseMissing('prilozi', [
             'attachable_type' => FlightTicket::class,
             'attachable_id' => $ticket->id,
         ]);
-        $this->assertDatabaseMissing('payments', [
+        $this->assertDatabaseMissing('placanja', [
             'payable_type' => FlightTicket::class,
             'payable_id' => $ticket->id,
         ]);

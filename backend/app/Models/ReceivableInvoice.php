@@ -18,6 +18,8 @@ class ReceivableInvoice extends Model
     use ConvertsToEur;
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'izlazne_fakture';
+
     /** @var list<string> */
     protected array $searchable = ['invoice_number', 'description'];
 

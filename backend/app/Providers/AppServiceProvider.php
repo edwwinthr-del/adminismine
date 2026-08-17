@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\PersonalAccessToken;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
@@ -9,6 +10,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,6 +27,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Sanctum resolves its table from the model, so the move to
+        // sistem.pristupni_tokeni has to be registered here.
+        Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+
         $this->registerAuditColumnsMacro();
         $this->registerRateLimiters();
 
@@ -58,8 +64,8 @@ class AppServiceProvider extends ServiceProvider
     {
         Blueprint::macro('auditColumns', function (): void {
             /** @var Blueprint $this */
-            $this->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-            $this->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+            $this->foreignId('created_by')->nullable()->constrained('korisnici')->nullOnDelete();
+            $this->foreignId('updated_by')->nullable()->constrained('korisnici')->nullOnDelete();
             $this->string('source')->nullable();   // e.g. manual, excel_import, assistant
             $this->text('notes')->nullable();
         });

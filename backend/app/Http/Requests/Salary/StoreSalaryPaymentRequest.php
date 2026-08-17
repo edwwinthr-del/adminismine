@@ -25,11 +25,11 @@ class StoreSalaryPaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'employee_id' => ['required', 'integer', 'exists:radnici,id'],
             'salary_month' => [
                 'required',
                 'date',
-                Rule::unique('salary_payments')->where(
+                Rule::unique('isplate_zarada')->where(
                     fn ($query) => $query->where('employee_id', $this->input('employee_id')),
                 ),
             ],

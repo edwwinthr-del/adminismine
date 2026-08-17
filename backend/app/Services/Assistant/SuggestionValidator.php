@@ -28,7 +28,7 @@ class SuggestionValidator
     {
         return match ($target) {
             'utility_bill' => [
-                'house_id' => ['required', 'integer', 'exists:houses,id'],
+                'house_id' => ['required', 'integer', 'exists:kuce,id'],
                 'bill_type' => ['required', Rule::in(UtilityBill::TYPES)],
                 'billing_period' => ['required', 'date'],
                 'amount' => ['required', 'numeric', 'min:0'],
@@ -37,7 +37,7 @@ class SuggestionValidator
                 'notes' => ['nullable', 'string', 'max:2000'],
             ],
             'payable_invoice' => [
-                'supplier_id' => ['required', 'integer', 'exists:suppliers,id'],
+                'supplier_id' => ['required', 'integer', 'exists:dobavljaci,id'],
                 'invoice_number' => ['nullable', 'string', 'max:255'],
                 'invoice_date' => ['required', 'date'],
                 'due_date' => ['nullable', 'date'],
@@ -56,14 +56,14 @@ class SuggestionValidator
                 'notes' => ['nullable', 'string', 'max:2000'],
             ],
             'worker_need' => [
-                'employee_id' => ['required', 'integer', 'exists:employees,id'],
+                'employee_id' => ['required', 'integer', 'exists:radnici,id'],
                 'date' => ['required', 'date'],
                 'need_type' => ['required', Rule::in(WorkerNeed::TYPES)],
                 'description' => ['required', 'string', 'max:1000'],
                 'priority' => ['sometimes', Rule::in(WorkerNeed::PRIORITIES)],
             ],
             'travel_expense' => [
-                'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+                'employee_id' => ['nullable', 'integer', 'exists:radnici,id'],
                 'person_name' => ['nullable', 'required_without:employee_id', 'string', 'max:255'],
                 'expense_date' => ['required', 'date'],
                 'expense_type' => ['required', Rule::in(TravelExpense::TYPES)],

@@ -14,6 +14,8 @@ class AttendanceRecord extends Model
 {
     use BelongsToWorkStructure, HasAuditColumns, HasFactory;
 
+    protected $table = 'evidencija_prisustva';
+
     public const STATUSES = ['present', 'absent', 'holiday', 'sick_leave', 'unpaid_leave', 'other'];
 
     /** Statuses that earn the daily rate. Everything else earns nothing. */

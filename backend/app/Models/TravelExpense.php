@@ -21,6 +21,8 @@ class TravelExpense extends Model
 {
     use HasAuditColumns, HasFactory, HasFileAttachments, Searchable;
 
+    protected $table = 'putni_troskovi';
+
     /** Canonical types; the workbook's ARABA / UCAK are normalized into car / flight. */
     public const TYPES = ['car', 'flight', 'bus', 'taxi', 'fuel', 'accommodation', 'meal', 'other'];
 

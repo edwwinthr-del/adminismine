@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog as Activity;
 use App\Models\Employee;
 use App\Models\ProductionRecord;
 use App\Models\User;
@@ -9,7 +10,6 @@ use App\Models\Worksite;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
 
 class ProductionRecordTest extends TestCase

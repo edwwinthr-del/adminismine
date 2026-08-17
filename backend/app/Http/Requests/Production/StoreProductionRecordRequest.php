@@ -42,7 +42,7 @@ class StoreProductionRecordRequest extends FormRequest
 
         // One row per site + material + day, and one per site + material + month:
         // duplicates would silently double the totals.
-        $uniquePerPeriod = fn (string $periodType) => Rule::unique('production_records')
+        $uniquePerPeriod = fn (string $periodType) => Rule::unique('evidencija_proizvodnje')
             ->where(fn ($query) => $query
                 ->where('period_type', $periodType)
                 ->where('worksite_id', $this->input('worksite_id'))
@@ -61,8 +61,8 @@ class StoreProductionRecordRequest extends FormRequest
                 'date',
                 $monthly ? $uniquePerPeriod('monthly') : null,
             ])),
-            'worksite_id' => ['required', 'integer', 'exists:worksites,id'],
-            'engineer_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'worksite_id' => ['required', 'integer', 'exists:gradilista,id'],
+            'engineer_id' => ['nullable', 'integer', 'exists:radnici,id'],
             'material_type' => ['sometimes', Rule::in(ProductionRecord::MATERIAL_TYPES)],
             'quantity' => ['required', 'numeric', 'min:0'],
             'unit' => ['sometimes', Rule::in(ProductionRecord::UNITS)],

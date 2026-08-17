@@ -16,6 +16,8 @@ class NotificationRule extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'pravila_obavestenja';
+
     protected $fillable = [
         'type',
         'is_enabled',

@@ -15,7 +15,7 @@ class SyncWorksiteEmployeesRequest extends FormRequest
     {
         return [
             'employees' => ['present', 'array'],
-            'employees.*.employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'employees.*.employee_id' => ['required', 'integer', 'exists:radnici,id'],
             'employees.*.assigned_from' => ['nullable', 'date'],
             'employees.*.assigned_to' => ['nullable', 'date'],
         ];

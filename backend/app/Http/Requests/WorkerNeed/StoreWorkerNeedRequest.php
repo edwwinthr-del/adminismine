@@ -16,14 +16,14 @@ class StoreWorkerNeedRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
-            'worksite_id' => ['nullable', 'integer', 'exists:worksites,id'],
+            'employee_id' => ['required', 'integer', 'exists:radnici,id'],
+            'worksite_id' => ['nullable', 'integer', 'exists:gradilista,id'],
             'date' => ['required', 'date'],
             'need_type' => ['required', Rule::in(WorkerNeed::TYPES)],
             'description' => ['required', 'string', 'max:2000'],
             'priority' => ['sometimes', Rule::in(WorkerNeed::PRIORITIES)],
             'status' => ['sometimes', Rule::in(WorkerNeed::STATUSES)],
-            'assigned_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'assigned_user_id' => ['nullable', 'integer', 'exists:korisnici,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

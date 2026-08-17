@@ -14,8 +14,8 @@ class StoreOccupancyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'house_id' => ['required', 'integer', 'exists:houses,id'],
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'house_id' => ['required', 'integer', 'exists:kuce,id'],
+            'employee_id' => ['required', 'integer', 'exists:radnici,id'],
             'room' => ['nullable', 'string', 'max:255'],
             'moved_in_at' => ['required', 'date'],
             'moved_out_at' => ['nullable', 'date', 'after_or_equal:moved_in_at'],

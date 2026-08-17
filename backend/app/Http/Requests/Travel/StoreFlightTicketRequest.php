@@ -17,7 +17,7 @@ class StoreFlightTicketRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'employee_id' => ['nullable', 'integer', 'exists:radnici,id'],
             // Either a worker record or at least the name as it was written.
             'passenger_name' => ['nullable', 'required_without:employee_id', 'string', 'max:255'],
             'ticket_date' => ['required', 'date'],

@@ -55,7 +55,7 @@ class WorksiteMasterTest extends TestCase
             'employees' => [['employee_id' => $second->id]],
         ])->assertOk()->assertJsonCount(1, 'data.employees');
 
-        $this->assertDatabaseCount('employee_worksite', 1);
+        $this->assertDatabaseCount('radnik_gradiliste', 1);
     }
 
     public function test_worksite_with_attendance_is_deactivated_not_deleted(): void
@@ -65,7 +65,7 @@ class WorksiteMasterTest extends TestCase
 
         $this->deleteJson("/api/worksites/{$record->worksite_id}")->assertOk();
 
-        $this->assertDatabaseHas('worksites', ['id' => $record->worksite_id, 'is_active' => false]);
+        $this->assertDatabaseHas('gradilista', ['id' => $record->worksite_id, 'is_active' => false]);
     }
 
     public function test_unused_worksite_is_deleted(): void
@@ -75,7 +75,7 @@ class WorksiteMasterTest extends TestCase
 
         $this->deleteJson("/api/worksites/{$worksite->id}")->assertOk();
 
-        $this->assertDatabaseMissing('worksites', ['id' => $worksite->id]);
+        $this->assertDatabaseMissing('gradilista', ['id' => $worksite->id]);
     }
 
     public function test_master_is_created_with_worksites_and_one_record_per_employee(): void

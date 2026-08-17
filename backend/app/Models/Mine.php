@@ -18,6 +18,8 @@ class Mine extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'rudnici';
+
     /** @var list<string> */
     protected array $searchable = ['name', 'code', 'location', 'material_type'];
 

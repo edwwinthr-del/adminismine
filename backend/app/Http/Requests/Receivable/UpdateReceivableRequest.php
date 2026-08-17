@@ -15,7 +15,7 @@ class UpdateReceivableRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'client_id' => ['sometimes', 'integer', 'exists:clients,id'],
+            'client_id' => ['sometimes', 'integer', 'exists:klijenti,id'],
             'invoice_number' => ['sometimes', 'nullable', 'string', 'max:255'],
             'invoice_date' => ['sometimes', 'date'],
             'due_date' => ['sometimes', 'nullable', 'date'],

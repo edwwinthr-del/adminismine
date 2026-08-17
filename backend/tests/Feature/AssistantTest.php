@@ -223,7 +223,7 @@ class AssistantTest extends TestCase
         $id = $this->postJson('/api/assistant/ask', ['question' => 'add water bill'])->json('data.suggestion.id');
         $this->postJson("/api/assistant/suggestions/{$id}/confirm")->assertOk();
 
-        $this->assertDatabaseHas('activity_log', [
+        $this->assertDatabaseHas('dnevnik_aktivnosti', [
             'description' => 'assistant.suggestion_confirmed',
             'causer_id' => $user->id,
         ]);

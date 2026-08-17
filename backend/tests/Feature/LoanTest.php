@@ -215,8 +215,8 @@ class LoanTest extends TestCase
 
         $this->deleteJson("/api/loans/{$loan->id}")->assertOk();
 
-        $this->assertDatabaseMissing('loans', ['id' => $loan->id]);
-        $this->assertDatabaseMissing('payments', [
+        $this->assertDatabaseMissing('pozajmice', ['id' => $loan->id]);
+        $this->assertDatabaseMissing('placanja', [
             'payable_type' => Loan::class,
             'payable_id' => $loan->id,
         ]);

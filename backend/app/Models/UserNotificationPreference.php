@@ -16,6 +16,8 @@ class UserNotificationPreference extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'korisnicka_podesavanja';
+
     protected $fillable = [
         'user_id',
         'type',

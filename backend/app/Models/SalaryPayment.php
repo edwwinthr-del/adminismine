@@ -18,6 +18,8 @@ class SalaryPayment extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'isplate_zarada';
+
     protected $fillable = [
         'employee_id',
         'salary_month',

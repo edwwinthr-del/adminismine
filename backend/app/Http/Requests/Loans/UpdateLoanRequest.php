@@ -25,9 +25,9 @@ class UpdateLoanRequest extends FormRequest
             'currency' => Currencies::rules(),
             'original_amount' => ['sometimes', 'numeric', 'gt:0'],
             'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
-            'supplier_id' => ['sometimes', 'nullable', 'integer', 'exists:suppliers,id'],
-            'client_id' => ['sometimes', 'nullable', 'integer', 'exists:clients,id'],
-            'employee_id' => ['sometimes', 'nullable', 'integer', 'exists:employees,id'],
+            'supplier_id' => ['sometimes', 'nullable', 'integer', 'exists:dobavljaci,id'],
+            'client_id' => ['sometimes', 'nullable', 'integer', 'exists:klijenti,id'],
+            'employee_id' => ['sometimes', 'nullable', 'integer', 'exists:radnici,id'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ];
     }

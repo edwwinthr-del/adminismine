@@ -22,7 +22,7 @@ class SplitBillRequest extends FormRequest
             // Defaults to the whole bill split equally between current occupants.
             'amount' => ['nullable', 'numeric', 'min:0'],
             'employee_ids' => ['sometimes', 'array', 'min:1'],
-            'employee_ids.*' => ['integer', 'exists:employees,id'],
+            'employee_ids.*' => ['integer', 'exists:radnici,id'],
         ];
     }
 }

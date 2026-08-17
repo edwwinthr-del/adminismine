@@ -76,7 +76,7 @@ class AttendanceController extends Controller
     public function roster(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'worksite_id' => ['required', 'integer', 'exists:worksites,id'],
+            'worksite_id' => ['required', 'integer', 'exists:gradilista,id'],
             'date' => ['required', 'date'],
         ]);
 
@@ -86,7 +86,7 @@ class AttendanceController extends Controller
         $worksite = Worksite::findOrFail($validated['worksite_id']);
         $workingDays = $this->workingDays->forDate($date);
 
-        $employees = $worksite->employees()->where('employees.status', 'active')->get()
+        $employees = $worksite->employees()->where('radnici.status', 'active')->get()
             ->sortBy(fn (Employee $employee) => $employee->full_name)->values();
 
         $records = AttendanceRecord::query()
@@ -318,7 +318,7 @@ class AttendanceController extends Controller
     {
         $validated = $request->validate([
             'month' => ['required', 'string', MonthPeriod::rule()],
-            'worksite_id' => ['nullable', 'integer', 'exists:worksites,id'],
+            'worksite_id' => ['nullable', 'integer', 'exists:gradilista,id'],
             'approved_only' => ['sometimes', 'boolean'],
         ]);
 

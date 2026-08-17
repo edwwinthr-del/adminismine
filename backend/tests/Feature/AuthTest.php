@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog as Activity;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -66,7 +66,7 @@ class AuthTest extends TestCase
      * Asserted through a real bearer token, not Sanctum::actingAs.
      *
      * `actingAs` installs a transient fake token, so the old version of this
-     * test — which asserted only that logout returned 200 — passed whether or
+     * test â€” which asserted only that logout returned 200 â€” passed whether or
      * not anything was revoked. It would have survived deleting the revocation
      * entirely, while its name promised the opposite.
      */
@@ -105,7 +105,7 @@ class AuthTest extends TestCase
 
     /**
      * Changing your own password is the one account action that belongs to the
-     * account holder, so it is gated on nothing but being signed in — a Worker
+     * account holder, so it is gated on nothing but being signed in â€” a Worker
      * with no permission at all can still do it.
      */
     public function test_any_signed_in_user_can_change_their_own_password(): void
@@ -180,7 +180,7 @@ class AuthTest extends TestCase
         ])->assertStatus(429);
 
         // The lockout is per email + address, so the right password is refused
-        // too until the window passes — that is the point of it.
+        // too until the window passes â€” that is the point of it.
         $this->postJson('/api/login', [
             'email' => 'target@example.com',
             'password' => 'password',
@@ -197,7 +197,7 @@ class AuthTest extends TestCase
 
         $this->postJson('/api/login', ['email' => 'audited@example.com', 'password' => 'nope'])
             ->assertStatus(422);
-        $this->assertDatabaseHas('activity_log', ['description' => 'auth.login_failed']);
+        $this->assertDatabaseHas('dnevnik_aktivnosti', ['description' => 'auth.login_failed']);
 
         // A guess at somebody's address must not write rows that read as that
         // person's own actions.
@@ -212,7 +212,7 @@ class AuthTest extends TestCase
         $this->assertSame($user->id, $login->causer_id);
 
         $this->withHeader('Authorization', "Bearer {$token}")->postJson('/api/logout')->assertOk();
-        $this->assertDatabaseHas('activity_log', ['description' => 'auth.logout', 'causer_id' => $user->id]);
+        $this->assertDatabaseHas('dnevnik_aktivnosti', ['description' => 'auth.logout', 'causer_id' => $user->id]);
     }
 
     /** An unknown email must cost the same time as a wrong password. */

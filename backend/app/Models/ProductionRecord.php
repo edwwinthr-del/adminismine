@@ -18,6 +18,8 @@ class ProductionRecord extends Model
 {
     use BelongsToWorkStructure, HasAuditColumns, HasFactory;
 
+    protected $table = 'evidencija_proizvodnje';
+
     public const PERIOD_TYPES = ['daily', 'monthly'];
 
     public const APPROVAL_STATUSES = ['draft', 'approved', 'rejected'];

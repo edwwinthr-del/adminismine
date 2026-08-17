@@ -18,6 +18,8 @@ class BankTransaction extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'bankovne_transakcije';
+
     /** Canonical movement categories — stored as-is, translated only for display (rule 4). */
     public const CATEGORIES = ['income', 'expense', 'transfer', 'loan', 'payroll', 'housing', 'travel', 'other'];
 

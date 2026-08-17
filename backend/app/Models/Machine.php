@@ -16,6 +16,8 @@ class Machine extends Model
 {
     use BelongsToWorkStructure, HasAuditColumns, HasFactory, HasFileAttachments, Searchable;
 
+    protected $table = 'masine';
+
     public const STATUSES = ['active', 'maintenance', 'inactive', 'sold'];
 
     /** @var list<string> */

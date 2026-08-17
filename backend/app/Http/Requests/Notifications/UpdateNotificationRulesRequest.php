@@ -35,9 +35,9 @@ class UpdateNotificationRulesRequest extends FormRequest
             'rules.*.channels' => ['required', 'array', 'min:1'],
             'rules.*.channels.*' => [Rule::in(NotificationTypes::CHANNELS)],
             'rules.*.recipient_roles' => ['present', 'array'],
-            'rules.*.recipient_roles.*' => ['string', 'exists:roles,name'],
+            'rules.*.recipient_roles.*' => ['string', 'exists:uloge,name'],
             'rules.*.recipient_user_ids' => ['present', 'array'],
-            'rules.*.recipient_user_ids.*' => ['integer', 'exists:users,id'],
+            'rules.*.recipient_user_ids.*' => ['integer', 'exists:korisnici,id'],
         ];
     }
 

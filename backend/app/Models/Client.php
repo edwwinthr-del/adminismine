@@ -11,6 +11,8 @@ class Client extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'klijenti';
+
     /** @var list<string> */
     protected array $searchable = ['name', 'tax_number', 'contact_name', 'email'];
 

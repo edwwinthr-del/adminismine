@@ -18,6 +18,8 @@ class RentPayment extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'placanja_kirije';
+
     public const COST_BEARERS = ['company', 'workers'];
 
     protected $fillable = [

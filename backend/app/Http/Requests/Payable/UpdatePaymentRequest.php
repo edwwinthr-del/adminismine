@@ -29,7 +29,7 @@ class UpdatePaymentRequest extends FormRequest
             'payment_date' => ['sometimes', 'date'],
             'method' => ['sometimes', 'string', 'in:cash,nlb,lovcen,other'],
             // Explicitly nullable: clearing it is how a wrong bank match is undone.
-            'bank_transaction_id' => ['sometimes', 'nullable', 'integer', 'exists:bank_transactions,id'],
+            'bank_transaction_id' => ['sometimes', 'nullable', 'integer', 'exists:bankovne_transakcije,id'],
             // A payment recorded without a movement can be booked afterwards.
             // Without this rule the flag was dropped by validated() and the API
             // answered 200 while writing nothing at all.

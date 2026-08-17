@@ -25,11 +25,11 @@ class StoreRentPaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'house_id' => ['required', 'integer', 'exists:houses,id'],
+            'house_id' => ['required', 'integer', 'exists:kuce,id'],
             'month' => [
                 'required',
                 'date',
-                Rule::unique('rent_payments')->where(fn ($query) => $query
+                Rule::unique('placanja_kirije')->where(fn ($query) => $query
                     ->where('house_id', $this->input('house_id'))),
             ],
             'currency' => Currencies::rules(),

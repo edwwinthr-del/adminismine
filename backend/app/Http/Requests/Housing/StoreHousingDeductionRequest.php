@@ -27,15 +27,15 @@ class StoreHousingDeductionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
-            'house_id' => ['required', 'integer', 'exists:houses,id'],
+            'employee_id' => ['required', 'integer', 'exists:radnici,id'],
+            'house_id' => ['required', 'integer', 'exists:kuce,id'],
             'month' => ['required', 'date'],
             'currency' => Currencies::rules(),
             'rent_share' => ['sometimes', 'numeric', 'min:0'],
             'utility_share' => ['sometimes', 'numeric', 'min:0'],
             'amount_deducted' => ['sometimes', 'numeric', 'min:0'],
             'reason' => ['required', 'string', 'max:255'],
-            'utility_bill_id' => ['nullable', 'integer', 'exists:utility_bills,id'],
+            'utility_bill_id' => ['nullable', 'integer', 'exists:rezijski_racuni,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

@@ -13,6 +13,8 @@ class WorkerNeed extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'potrebe_radnika';
+
     public const TYPES = ['equipment', 'document', 'salary_advance', 'travel', 'housing', 'medical', 'other'];
 
     public const PRIORITIES = ['low', 'normal', 'urgent'];

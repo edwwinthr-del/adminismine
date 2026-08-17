@@ -18,6 +18,8 @@ class HousingDeduction extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'odbici_za_smestaj';
+
     protected $fillable = [
         'employee_id',
         'house_id',

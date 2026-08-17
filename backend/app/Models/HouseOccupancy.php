@@ -18,7 +18,7 @@ class HouseOccupancy extends Model
 {
     use HasAuditColumns, HasFactory;
 
-    protected $table = 'house_occupancies';
+    protected $table = 'useljenja';
 
     protected $fillable = [
         'house_id',

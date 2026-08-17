@@ -206,7 +206,7 @@ class SalaryPaymentTest extends TestCase
         // Soft-deleting the employee keeps the salary history intact.
         $this->deleteJson("/api/employees/{$obligation->employee_id}")->assertOk();
 
-        $this->assertDatabaseHas('salary_payments', ['id' => $obligation->id]);
+        $this->assertDatabaseHas('isplate_zarada', ['id' => $obligation->id]);
     }
 
     public function test_salary_payments_require_permission(): void

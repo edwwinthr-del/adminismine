@@ -14,6 +14,8 @@ class WorkingDaySetting extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'podesavanja_radnih_dana';
+
     protected $fillable = [
         'month',
         'working_days',

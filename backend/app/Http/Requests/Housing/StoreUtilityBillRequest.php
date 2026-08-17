@@ -25,7 +25,7 @@ class StoreUtilityBillRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'house_id' => ['required', 'integer', 'exists:houses,id'],
+            'house_id' => ['required', 'integer', 'exists:kuce,id'],
             'bill_type' => ['required', Rule::in(UtilityBill::TYPES)],
             'billing_period' => ['required', 'date'],
             'amount' => ['required', 'numeric', 'min:0'],

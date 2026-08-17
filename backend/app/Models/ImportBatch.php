@@ -12,6 +12,8 @@ class ImportBatch extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'uvozne_serije';
+
     public const STATUSES = ['previewed', 'imported', 'cancelled', 'failed'];
 
     protected $fillable = [

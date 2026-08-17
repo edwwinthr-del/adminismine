@@ -17,6 +17,8 @@ class AiSuggestion extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'ai_predlozi';
+
     public const STATUSES = ['pending', 'confirmed', 'rejected', 'invalid'];
 
     protected $fillable = [

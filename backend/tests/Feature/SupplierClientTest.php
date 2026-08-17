@@ -2,20 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog as Activity;
 use App\Models\Client;
 use App\Models\Supplier;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
 
 /**
  * Suppliers and clients had no test at all.
  *
  * They are two of the smallest controllers in the app, which is presumably why
- * they were skipped — but every payable points at a supplier and every
+ * they were skipped â€” but every payable points at a supplier and every
  * receivable at a client, so these are the rows money is routed *to*. Creating
  * one was also the last write in the app that left no audit trail, which is the
  * combination worth covering: an untested endpoint that creates an unrecorded
@@ -106,7 +106,7 @@ class SupplierClientTest extends TestCase
         $this->assertSame('Current', $active[0]['name']);
     }
 
-    /** Suppliers sit behind payables, clients behind receivables — never each other's. */
+    /** Suppliers sit behind payables, clients behind receivables â€” never each other's. */
     public function test_each_list_carries_the_permission_of_the_module_behind_it(): void
     {
         $user = User::factory()->create();

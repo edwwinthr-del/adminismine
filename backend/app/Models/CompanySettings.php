@@ -9,7 +9,7 @@ class CompanySettings extends Model
 {
     use HasAuditColumns;
 
-    protected $table = 'company_settings';
+    protected $table = 'podesavanja_kompanije';
 
     /**
      * Model-level defaults mirror the migration's column defaults so a freshly

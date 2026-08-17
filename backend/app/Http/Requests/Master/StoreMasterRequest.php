@@ -15,11 +15,11 @@ class StoreMasterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['required', 'integer', 'exists:employees,id', Rule::unique('masters', 'employee_id')],
-            'user_id' => ['nullable', 'integer', 'exists:users,id', Rule::unique('masters', 'user_id')],
+            'employee_id' => ['required', 'integer', 'exists:radnici,id', Rule::unique('majstori', 'employee_id')],
+            'user_id' => ['nullable', 'integer', 'exists:korisnici,id', Rule::unique('majstori', 'user_id')],
             'is_active' => ['sometimes', 'boolean'],
             'worksite_ids' => ['sometimes', 'array'],
-            'worksite_ids.*' => ['integer', 'exists:worksites,id'],
+            'worksite_ids.*' => ['integer', 'exists:gradilista,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

@@ -54,7 +54,7 @@ class DriverPortabilityTest extends TestCase
     /** Postgres gets ILIKE; a plain LIKE there would be case-sensitive. */
     public function test_search_uses_a_case_insensitive_operator_on_postgres(): void
     {
-        $query = DB::connection('pgsql_probe')->table('suppliers');
+        $query = DB::connection('pgsql_probe')->table('dobavljaci');
         SearchTerm::apply($query, 'name', 'acme');
 
         $sql = $query->toSql();
@@ -62,7 +62,7 @@ class DriverPortabilityTest extends TestCase
         $this->assertStringContainsString('ilike', strtolower($sql));
         $this->assertStringContainsString("escape '\\'", strtolower($sql));
         // The column is qualified with its table, so a later join cannot make it ambiguous.
-        $this->assertStringContainsString('"suppliers"."name"', $sql);
+        $this->assertStringContainsString('"dobavljaci"."name"', $sql);
         // Postgres folds case itself, so the term is not pre-lowered.
         $this->assertSame(['%acme%'], $query->getBindings());
     }
@@ -70,7 +70,7 @@ class DriverPortabilityTest extends TestCase
     /** SQLite folds ASCII only, so the column and the term are lowered in PHP. */
     public function test_search_lowers_both_sides_on_sqlite(): void
     {
-        $query = DB::connection('sqlite')->table('suppliers');
+        $query = DB::connection('sqlite')->table('dobavljaci');
         SearchTerm::apply($query, 'name', 'ČAČAK');
 
         $sql = strtolower($query->toSql());
@@ -114,7 +114,7 @@ class DriverPortabilityTest extends TestCase
     public function test_wildcards_typed_by_a_user_are_escaped_on_both_drivers(): void
     {
         foreach (['sqlite', 'pgsql_probe'] as $connection) {
-            $query = DB::connection($connection)->table('suppliers');
+            $query = DB::connection($connection)->table('dobavljaci');
             SearchTerm::apply($query, 'name', '50%_off');
 
             $binding = $query->getBindings()[0];

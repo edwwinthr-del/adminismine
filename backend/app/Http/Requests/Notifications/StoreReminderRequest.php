@@ -23,9 +23,9 @@ class StoreReminderRequest extends FormRequest
             'severity' => ['sometimes', Rule::in(NotificationTypes::SEVERITIES)],
             // Who to remind. Empty means the author reminds themselves.
             'user_ids' => ['sometimes', 'array'],
-            'user_ids.*' => ['integer', 'exists:users,id'],
+            'user_ids.*' => ['integer', 'exists:korisnici,id'],
             'roles' => ['sometimes', 'array'],
-            'roles.*' => ['string', 'exists:roles,name'],
+            'roles.*' => ['string', 'exists:uloge,name'],
         ];
     }
 }

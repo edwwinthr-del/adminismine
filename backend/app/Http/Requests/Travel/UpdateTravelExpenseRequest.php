@@ -25,12 +25,12 @@ class UpdateTravelExpenseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['sometimes', 'nullable', 'integer', 'exists:employees,id'],
+            'employee_id' => ['sometimes', 'nullable', 'integer', 'exists:radnici,id'],
             'person_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'expense_date' => ['sometimes', 'date'],
             'period_month' => ['sometimes', 'date'],
             'expense_type' => ['sometimes', Rule::in(TravelExpense::TYPES)],
-            'flight_ticket_id' => ['sometimes', 'nullable', 'integer', 'exists:flight_tickets,id'],
+            'flight_ticket_id' => ['sometimes', 'nullable', 'integer', 'exists:avionske_karte,id'],
             'currency' => Currencies::rules(),
             'amount' => ['sometimes', 'numeric', 'min:0'],
             'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],

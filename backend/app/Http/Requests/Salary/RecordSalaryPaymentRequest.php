@@ -17,7 +17,7 @@ class RecordSalaryPaymentRequest extends FormRequest
             'amount' => ['required', 'numeric', 'gt:0'],
             'payment_date' => ['required', 'date'],
             'method' => ['required', 'string', 'in:cash,nlb,lovcen,other'],
-            'bank_transaction_id' => ['nullable', 'integer', 'exists:bank_transactions,id'],
+            'bank_transaction_id' => ['nullable', 'integer', 'exists:bankovne_transakcije,id'],
             'reference' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];

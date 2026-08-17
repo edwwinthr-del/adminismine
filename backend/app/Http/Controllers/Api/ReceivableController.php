@@ -231,7 +231,7 @@ class ReceivableController extends Controller
      */
     public function statement(Request $request): JsonResponse
     {
-        $request->validate(['client_id' => ['required', 'integer', 'exists:clients,id']]);
+        $request->validate(['client_id' => ['required', 'integer', 'exists:klijenti,id']]);
 
         $client = Client::findOrFail($request->integer('client_id'));
         $invoices = ReceivableInvoice::with(['payments', 'deductions'])

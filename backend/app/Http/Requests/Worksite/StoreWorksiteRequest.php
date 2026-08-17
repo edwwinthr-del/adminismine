@@ -16,9 +16,9 @@ class StoreWorksiteRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
-            'mine_id' => ['nullable', 'integer', 'exists:mines,id'],
-            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
-            'client_id' => ['nullable', 'integer', 'exists:clients,id'],
+            'mine_id' => ['nullable', 'integer', 'exists:rudnici,id'],
+            'project_id' => ['nullable', 'integer', 'exists:projekti,id'],
+            'client_id' => ['nullable', 'integer', 'exists:klijenti,id'],
             'is_active' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];

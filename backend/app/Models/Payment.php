@@ -14,6 +14,8 @@ class Payment extends Model
     use ConvertsToEur;
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'placanja';
+
     protected $fillable = [
         'amount',
         'currency',

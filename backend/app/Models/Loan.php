@@ -21,6 +21,8 @@ class Loan extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'pozajmice';
+
     /** `received` = the company owes it back, `given` = the company is owed. */
     public const DIRECTIONS = ['received', 'given'];
 

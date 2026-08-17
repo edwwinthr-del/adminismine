@@ -263,10 +263,10 @@ class PayableTest extends TestCase
 
         // Refused twice and still there — a wrong password cancels, it does not
         // half-delete.
-        $this->assertDatabaseHas('payable_invoices', ['id' => $invoice->id]);
+        $this->assertDatabaseHas('ulazne_fakture', ['id' => $invoice->id]);
 
         $this->deleteJson("/api/payables/{$invoice->id}", self::CONFIRM)->assertOk();
-        $this->assertDatabaseMissing('payable_invoices', ['id' => $invoice->id]);
+        $this->assertDatabaseMissing('ulazne_fakture', ['id' => $invoice->id]);
     }
 
     public function test_removing_a_matched_payment_unpays_the_invoice_and_releases_the_movement(): void
@@ -294,8 +294,8 @@ class PayableTest extends TestCase
 
         // The movement is still there — the money left the bank whatever happens
         // to the invoice — but nothing points at it any more.
-        $this->assertDatabaseHas('bank_transactions', ['id' => $transaction->id]);
-        $this->assertDatabaseMissing('payments', ['id' => $paymentId]);
+        $this->assertDatabaseHas('bankovne_transakcije', ['id' => $transaction->id]);
+        $this->assertDatabaseMissing('placanja', ['id' => $paymentId]);
         $this->assertSame(1, BankTransaction::query()->unmatched()->count());
     }
 
@@ -320,8 +320,8 @@ class PayableTest extends TestCase
             self::CONFIRM + ['delete_bank_transaction' => true],
         )->assertOk()->assertJsonPath('data.status', 'unpaid');
 
-        $this->assertDatabaseMissing('bank_transactions', ['id' => $transaction->id]);
-        $this->assertDatabaseMissing('payments', ['id' => $paymentId]);
+        $this->assertDatabaseMissing('bankovne_transakcije', ['id' => $transaction->id]);
+        $this->assertDatabaseMissing('placanja', ['id' => $paymentId]);
     }
 
     public function test_a_movement_settling_another_invoice_is_never_deleted_with_a_payment(): void
@@ -353,8 +353,8 @@ class PayableTest extends TestCase
         )->assertStatus(422)->assertJsonValidationErrors('delete_bank_transaction');
 
         // Refused whole: the second invoice is untouched and the payment stays.
-        $this->assertDatabaseHas('bank_transactions', ['id' => $transaction->id]);
-        $this->assertDatabaseHas('payments', ['id' => $paymentId]);
+        $this->assertDatabaseHas('bankovne_transakcije', ['id' => $transaction->id]);
+        $this->assertDatabaseHas('placanja', ['id' => $paymentId]);
         $this->assertSame('paid', $second->fresh()->status);
     }
 }

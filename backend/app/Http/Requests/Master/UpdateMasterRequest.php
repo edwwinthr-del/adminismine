@@ -22,12 +22,12 @@ class UpdateMasterRequest extends FormRequest
             'user_id' => [
                 'nullable',
                 'integer',
-                'exists:users,id',
-                Rule::unique('masters', 'user_id')->ignore($master->id),
+                'exists:korisnici,id',
+                Rule::unique('majstori', 'user_id')->ignore($master->id),
             ],
             'is_active' => ['sometimes', 'boolean'],
             'worksite_ids' => ['sometimes', 'array'],
-            'worksite_ids.*' => ['integer', 'exists:worksites,id'],
+            'worksite_ids.*' => ['integer', 'exists:gradilista,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

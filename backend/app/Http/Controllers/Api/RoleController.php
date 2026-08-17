@@ -132,7 +132,7 @@ class RoleController extends Controller
 
     public function clone(Request $request, Role $role): JsonResponse
     {
-        $request->validate(['name' => ['required', 'string', 'max:255', 'unique:roles,name']]);
+        $request->validate(['name' => ['required', 'string', 'max:255', 'unique:uloge,name']]);
 
         // Same rule as store(): copying a role carries its permissions with it.
         if ($refusal = $this->refuseUngrantableAccess(

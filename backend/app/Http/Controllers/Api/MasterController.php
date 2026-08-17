@@ -23,7 +23,7 @@ class MasterController extends Controller
         }
         if ($request->filled('worksite_id')) {
             $worksiteId = $request->integer('worksite_id');
-            $query->whereHas('worksites', fn ($q) => $q->where('worksites.id', $worksiteId));
+            $query->whereHas('worksites', fn ($q) => $q->where('gradilista.id', $worksiteId));
         }
 
         $masters = $query->get()->sortBy(fn (Master $master) => $master->employee?->full_name ?? '')->values();

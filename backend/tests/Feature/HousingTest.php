@@ -333,7 +333,7 @@ class HousingTest extends TestCase
 
         $this->deleteJson("/api/housing/bills/{$bill->id}")->assertOk();
         Storage::disk('local')->assertMissing($stored->file_path);
-        $this->assertDatabaseCount('file_attachments', 0);
+        $this->assertDatabaseCount('prilozi', 0);
     }
 
     public function test_summary_reports_cost_unpaid_and_overdue_per_house(): void
@@ -380,11 +380,11 @@ class HousingTest extends TestCase
 
         $this->deleteJson("/api/houses/{$rent->house_id}")->assertOk();
 
-        $this->assertDatabaseHas('houses', ['id' => $rent->house_id, 'is_active' => false]);
+        $this->assertDatabaseHas('kuce', ['id' => $rent->house_id, 'is_active' => false]);
 
         $empty = House::factory()->create();
         $this->deleteJson("/api/houses/{$empty->id}")->assertOk();
-        $this->assertDatabaseMissing('houses', ['id' => $empty->id]);
+        $this->assertDatabaseMissing('kuce', ['id' => $empty->id]);
     }
 
     public function test_housing_requires_permission(): void

@@ -12,6 +12,8 @@ class AssistantMessage extends Model
 {
     use HasFactory;
 
+    protected $table = 'poruke_asistenta';
+
     public const ROLES = ['user', 'assistant'];
 
     protected $fillable = [

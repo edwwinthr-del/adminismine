@@ -129,7 +129,7 @@ class ProductionRecordController extends Controller
         $request->validate([
             'month' => ['nullable', 'string', MonthPeriod::rule()],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
-            'worksite_id' => ['nullable', 'integer', 'exists:worksites,id'],
+            'worksite_id' => ['nullable', 'integer', 'exists:gradilista,id'],
             'material_type' => ['nullable', 'string'],
             'approved_only' => ['sometimes', 'boolean'],
         ]);

@@ -1,8 +1,8 @@
 <?php
 
+use App\Models\ActivityLog;
 use Spatie\Activitylog\Actions\CleanActivityLogAction;
 use Spatie\Activitylog\Actions\LogActivityAction;
-use Spatie\Activitylog\Models\Activity;
 
 return [
 
@@ -40,7 +40,9 @@ return [
      * It should implement the Spatie\Activitylog\Contracts\Activity interface
      * and extend Illuminate\Database\Eloquent\Model.
      */
-    'activity_model' => Activity::class,
+    // Subclassed only to move the table to bezbednost.dnevnik_aktivnosti;
+    // Spatie's own model hardcodes the English name.
+    'activity_model' => ActivityLog::class,
 
     /*
      * These attributes will be excluded from logging for all models.

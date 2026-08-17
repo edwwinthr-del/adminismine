@@ -17,6 +17,8 @@ class PayableInvoice extends Model
     use ConvertsToEur;
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'ulazne_fakture';
+
     /** @var list<string> */
     protected array $searchable = ['invoice_number', 'description', 'expense_category'];
 

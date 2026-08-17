@@ -15,6 +15,8 @@ class Worksite extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'gradilista';
+
     /** @var list<string> */
     protected array $searchable = ['name', 'location'];
 
@@ -63,14 +65,14 @@ class Worksite extends Model
 
     public function employees(): BelongsToMany
     {
-        return $this->belongsToMany(Employee::class, 'employee_worksite')
+        return $this->belongsToMany(Employee::class, 'radnik_gradiliste')
             ->withPivot(['assigned_from', 'assigned_to'])
             ->withTimestamps();
     }
 
     public function masters(): BelongsToMany
     {
-        return $this->belongsToMany(Master::class, 'master_worksite')->withTimestamps();
+        return $this->belongsToMany(Master::class, 'majstor_gradiliste')->withTimestamps();
     }
 
     public function attendanceRecords(): HasMany

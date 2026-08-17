@@ -186,7 +186,7 @@ class MachineTest extends TestCase
         $this->deleteJson("/api/machines/{$machine->id}/attachments/{$attachment['id']}")->assertOk();
 
         Storage::disk('local')->assertMissing($stored->file_path);
-        $this->assertDatabaseCount('file_attachments', 0);
+        $this->assertDatabaseCount('prilozi', 0);
     }
 
     public function test_attachment_type_is_restricted(): void
@@ -199,7 +199,7 @@ class MachineTest extends TestCase
             'file' => UploadedFile::fake()->create('payload.exe', 10, 'application/octet-stream'),
         ])->assertStatus(422)->assertJsonValidationErrors('file');
 
-        $this->assertDatabaseCount('file_attachments', 0);
+        $this->assertDatabaseCount('prilozi', 0);
     }
 
     public function test_attachment_of_another_machine_is_not_reachable(): void
@@ -234,8 +234,8 @@ class MachineTest extends TestCase
         $this->deleteJson("/api/machines/{$machine->id}")->assertOk();
 
         Storage::disk('local')->assertMissing($path);
-        $this->assertDatabaseCount('machines', 0);
-        $this->assertDatabaseCount('file_attachments', 0);
+        $this->assertDatabaseCount('masine', 0);
+        $this->assertDatabaseCount('prilozi', 0);
     }
 
     public function test_machines_require_permission(): void

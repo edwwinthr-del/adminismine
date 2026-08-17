@@ -34,7 +34,7 @@ class MasterAccessService
             return null;
         }
 
-        return $master->worksites()->pluck('worksites.id')->all();
+        return $master->worksites()->pluck('gradilista.id')->all();
     }
 
     public function canActOn(User $user, int $worksiteId): bool

@@ -26,7 +26,7 @@ class StoreSocialAssistanceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'employee_id' => ['nullable', 'integer', 'exists:radnici,id'],
             'person_name' => ['nullable', 'required_without:employee_id', 'string', 'max:255'],
             'payment_date' => ['required', 'date'],
             'entitlement_year' => ['required', 'integer', 'min:2000', 'max:2100'],
@@ -34,7 +34,7 @@ class StoreSocialAssistanceRequest extends FormRequest
             'amount' => ['required', 'numeric', 'gt:0'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'method' => ['nullable', Rule::in(SocialAssistancePayment::METHODS)],
-            'bank_transaction_id' => ['nullable', 'integer', 'exists:bank_transactions,id'],
+            'bank_transaction_id' => ['nullable', 'integer', 'exists:bankovne_transakcije,id'],
             'reason' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];

@@ -17,12 +17,12 @@ class UpdateWorkerNeedRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'worksite_id' => ['nullable', 'integer', 'exists:worksites,id'],
+            'worksite_id' => ['nullable', 'integer', 'exists:gradilista,id'],
             'need_type' => ['sometimes', Rule::in(WorkerNeed::TYPES)],
             'description' => ['sometimes', 'string', 'max:2000'],
             'priority' => ['sometimes', Rule::in(WorkerNeed::PRIORITIES)],
             'status' => ['sometimes', Rule::in(WorkerNeed::STATUSES)],
-            'assigned_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'assigned_user_id' => ['nullable', 'integer', 'exists:korisnici,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

@@ -17,7 +17,7 @@ class UpdateFlightTicketRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['sometimes', 'nullable', 'integer', 'exists:employees,id'],
+            'employee_id' => ['sometimes', 'nullable', 'integer', 'exists:radnici,id'],
             'passenger_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'ticket_date' => ['sometimes', 'date'],
             'direction' => ['sometimes', Rule::in(FlightTicket::DIRECTIONS)],

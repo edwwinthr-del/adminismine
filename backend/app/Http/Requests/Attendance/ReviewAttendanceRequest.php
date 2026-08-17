@@ -19,9 +19,9 @@ class ReviewAttendanceRequest extends FormRequest
     {
         return [
             'date' => ['required_without:ids', 'date'],
-            'worksite_id' => ['required_with:date', 'integer', 'exists:worksites,id'],
+            'worksite_id' => ['required_with:date', 'integer', 'exists:gradilista,id'],
             'ids' => ['required_without:date', 'array', 'min:1'],
-            'ids.*' => ['integer', 'exists:attendance_records,id'],
+            'ids.*' => ['integer', 'exists:evidencija_prisustva,id'],
             'reason' => ['nullable', 'string', 'max:255'],
         ];
     }

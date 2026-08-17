@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\DbSchema;
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
@@ -95,7 +96,11 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'search_path' => 'public',
+            // Every domain schema, then `public` for extensions. Models name
+            // their tables unqualified and Postgres resolves them against this,
+            // which is what keeps the same model working on SQLite — a driver
+            // with no schemas at all. See App\Support\DbSchema.
+            'search_path' => DbSchema::searchPath(),
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
@@ -128,7 +133,8 @@ return [
     */
 
     'migrations' => [
-        'table' => 'migrations',
+        // Lives in the `sistem` schema, which is first in the search_path above.
+        'table' => 'migracije',
         'update_date_on_publish' => true,
     ],
 

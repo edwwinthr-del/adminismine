@@ -20,7 +20,7 @@ class UpdateProductionRecordRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'engineer_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'engineer_id' => ['nullable', 'integer', 'exists:radnici,id'],
             'material_type' => ['sometimes', Rule::in(ProductionRecord::MATERIAL_TYPES)],
             'quantity' => ['sometimes', 'numeric', 'min:0'],
             'unit' => ['sometimes', Rule::in(ProductionRecord::UNITS)],

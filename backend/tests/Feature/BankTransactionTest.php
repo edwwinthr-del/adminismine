@@ -226,10 +226,10 @@ class BankTransactionTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors('current_password');
 
-        $this->assertDatabaseHas('bank_transactions', ['id' => $tx->id]);
+        $this->assertDatabaseHas('bankovne_transakcije', ['id' => $tx->id]);
 
         $this->deleteJson("/api/bank-transactions/{$tx->id}", ['current_password' => 'password'])->assertOk();
-        $this->assertDatabaseMissing('bank_transactions', ['id' => $tx->id]);
+        $this->assertDatabaseMissing('bankovne_transakcije', ['id' => $tx->id]);
     }
 
     public function test_deleting_a_matched_transaction_releases_its_payment_without_unpaying_the_invoice(): void

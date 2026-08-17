@@ -17,6 +17,8 @@ class UtilityBill extends Model
 {
     use HasAuditColumns, HasFactory, HasFileAttachments;
 
+    protected $table = 'rezijski_racuni';
+
     public const TYPES = ['electricity', 'water', 'internet', 'heating', 'garbage', 'maintenance', 'other'];
 
     public const COST_BEARERS = ['company', 'workers'];

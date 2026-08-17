@@ -18,6 +18,8 @@ class Master extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'majstori';
+
     /** A master is identified by the worker behind them, so that is what is searched. */
     protected array $searchableRelations = ['employee' => ['first_name', 'last_name']];
 
@@ -52,7 +54,7 @@ class Master extends Model
 
     public function worksites(): BelongsToMany
     {
-        return $this->belongsToMany(Worksite::class, 'master_worksite')->withTimestamps();
+        return $this->belongsToMany(Worksite::class, 'majstor_gradiliste')->withTimestamps();
     }
 
     public function scopeActive(Builder $query): Builder

@@ -53,7 +53,7 @@ class SocialAssistanceController extends Controller
     {
         $request->validate([
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
-            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'employee_id' => ['nullable', 'integer', 'exists:radnici,id'],
         ]);
 
         return response()->json([

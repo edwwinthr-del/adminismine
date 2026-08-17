@@ -18,6 +18,8 @@ class Project extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'projekti';
+
     /** @var list<string> */
     protected array $searchable = ['name', 'code'];
 

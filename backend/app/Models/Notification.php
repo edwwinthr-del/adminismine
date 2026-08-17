@@ -20,6 +20,8 @@ class Notification extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'obavestenja';
+
     protected $fillable = [
         'notification_rule_id',
         'user_id',

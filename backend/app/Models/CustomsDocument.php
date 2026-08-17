@@ -20,6 +20,8 @@ class CustomsDocument extends Model
 {
     use HasAuditColumns, HasFactory, HasFileAttachments, Searchable;
 
+    protected $table = 'carinski_dokumenti';
+
     public const TYPES = [
         'cmr',
         'customs_declaration',

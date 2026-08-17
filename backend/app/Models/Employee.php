@@ -17,6 +17,8 @@ class Employee extends Model
 {
     use HasAuditColumns, HasFactory, Searchable, SoftDeletes;
 
+    protected $table = 'radnici';
+
     /** Documents whose expiry the office has to watch. */
     public const EXPIRY_FIELDS = [
         'contract_end_date',
@@ -111,7 +113,7 @@ class Employee extends Model
 
     public function worksites(): BelongsToMany
     {
-        return $this->belongsToMany(Worksite::class, 'employee_worksite')
+        return $this->belongsToMany(Worksite::class, 'radnik_gradiliste')
             ->withPivot(['assigned_from', 'assigned_to'])
             ->withTimestamps();
     }

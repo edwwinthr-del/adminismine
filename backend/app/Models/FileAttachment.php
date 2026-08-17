@@ -15,6 +15,8 @@ class FileAttachment extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'prilozi';
+
     public const KINDS = ['invoice', 'warranty', 'customs', 'cmr', 'photo', 'other'];
 
     /** URL segment per attachable model, used to build the download path. */

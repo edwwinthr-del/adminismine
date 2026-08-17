@@ -211,7 +211,7 @@ class UserAccessController extends Controller
     {
         $data = $request->validate([
             'roles' => ['array'],
-            'roles.*' => ['string', 'exists:roles,name'],
+            'roles.*' => ['string', 'exists:uloge,name'],
         ]);
 
         $roles = $data['roles'] ?? [];
@@ -239,7 +239,7 @@ class UserAccessController extends Controller
     {
         $data = $request->validate([
             'permissions' => ['array'],
-            'permissions.*' => ['string', 'exists:permissions,name'],
+            'permissions.*' => ['string', 'exists:dozvole,name'],
         ]);
 
         // A grant held directly (rather than through a role) can be the only

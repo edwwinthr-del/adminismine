@@ -11,6 +11,8 @@ class Supplier extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'dobavljaci';
+
     /** @var list<string> */
     protected array $searchable = ['name', 'tax_number', 'contact_name', 'email'];
 

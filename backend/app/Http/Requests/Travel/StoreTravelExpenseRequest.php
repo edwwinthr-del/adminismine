@@ -28,12 +28,12 @@ class StoreTravelExpenseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
+            'employee_id' => ['nullable', 'integer', 'exists:radnici,id'],
             'person_name' => ['nullable', 'required_without:employee_id', 'string', 'max:255'],
             'expense_date' => ['required', 'date'],
             'period_month' => ['required', 'date'],
             'expense_type' => ['required', Rule::in(TravelExpense::TYPES)],
-            'flight_ticket_id' => ['nullable', 'integer', 'exists:flight_tickets,id'],
+            'flight_ticket_id' => ['nullable', 'integer', 'exists:avionske_karte,id'],
             'currency' => Currencies::rules(),
             'amount' => ['required', 'numeric', 'min:0'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],

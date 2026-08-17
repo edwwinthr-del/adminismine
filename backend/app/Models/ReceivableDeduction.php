@@ -11,6 +11,8 @@ class ReceivableDeduction extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'odbici_izlaznih_faktura';
+
     protected $fillable = [
         'receivable_invoice_id',
         'amount',

@@ -13,6 +13,8 @@ class House extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'kuce';
+
     /** @var list<string> */
     protected array $searchable = ['name', 'address', 'landlord_name'];
 

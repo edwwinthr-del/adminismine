@@ -23,7 +23,7 @@ class UpdateUserRequest extends FormRequest
                 'string',
                 'email',
                 'max:255',
-                Rule::unique('users', 'email')->ignore($this->route('user')),
+                Rule::unique('korisnici', 'email')->ignore($this->route('user')),
             ],
             'locale' => ['sometimes', Rule::in(User::LOCALES)],
             'is_active' => ['sometimes', 'boolean'],

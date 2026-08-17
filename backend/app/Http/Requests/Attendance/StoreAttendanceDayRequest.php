@@ -21,9 +21,9 @@ class StoreAttendanceDayRequest extends FormRequest
     {
         return [
             'date' => ['required', 'date'],
-            'worksite_id' => ['required', 'integer', 'exists:worksites,id'],
+            'worksite_id' => ['required', 'integer', 'exists:gradilista,id'],
             'records' => ['required', 'array', 'min:1'],
-            'records.*.employee_id' => ['required', 'integer', 'distinct', 'exists:employees,id'],
+            'records.*.employee_id' => ['required', 'integer', 'distinct', 'exists:radnici,id'],
             'records.*.status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
             'records.*.regular_hours' => ['nullable', 'numeric', 'min:0', 'max:24'],
             'records.*.overtime_hours' => ['sometimes', 'numeric', 'min:0', 'max:24'],

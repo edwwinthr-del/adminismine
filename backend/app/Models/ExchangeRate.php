@@ -10,6 +10,8 @@ class ExchangeRate extends Model
 {
     use HasAuditColumns, HasFactory;
 
+    protected $table = 'kursevi_valuta';
+
     protected $fillable = [
         'base_currency',
         'quote_currency',

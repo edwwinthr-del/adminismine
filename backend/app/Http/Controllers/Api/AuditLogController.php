@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AuditLogResource;
+use App\Models\ActivityLog as Activity;
 use App\Support\SearchTerm;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Spatie\Activitylog\Models\Activity;
 
 /**
  * Read-only window onto the activity log (rule 3: everything important is
@@ -27,7 +27,7 @@ class AuditLogController extends Controller
         $request->validate([
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date'],
-            'causer_id' => ['nullable', 'integer', 'exists:users,id'],
+            'causer_id' => ['nullable', 'integer', 'exists:korisnici,id'],
             'subject_type' => ['nullable', 'string', 'max:255'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
         ]);

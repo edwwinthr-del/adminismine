@@ -104,12 +104,12 @@ class ReportController extends Controller
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date'],
-            'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
-            'client_id' => ['nullable', 'integer', 'exists:clients,id'],
-            'employee_id' => ['nullable', 'integer', 'exists:employees,id'],
-            'worksite_id' => ['nullable', 'integer', 'exists:worksites,id'],
-            'mine_id' => ['nullable', 'integer', 'exists:mines,id'],
-            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'supplier_id' => ['nullable', 'integer', 'exists:dobavljaci,id'],
+            'client_id' => ['nullable', 'integer', 'exists:klijenti,id'],
+            'employee_id' => ['nullable', 'integer', 'exists:radnici,id'],
+            'worksite_id' => ['nullable', 'integer', 'exists:gradilista,id'],
+            'mine_id' => ['nullable', 'integer', 'exists:rudnici,id'],
+            'project_id' => ['nullable', 'integer', 'exists:projekti,id'],
         ];
 
         $request->validate(array_intersect_key($rules, array_flip($accepted)));

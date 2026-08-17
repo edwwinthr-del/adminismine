@@ -15,7 +15,7 @@ class UpdatePayableRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'supplier_id' => ['sometimes', 'integer', 'exists:suppliers,id'],
+            'supplier_id' => ['sometimes', 'integer', 'exists:dobavljaci,id'],
             'invoice_number' => ['sometimes', 'nullable', 'string', 'max:255'],
             'invoice_date' => ['sometimes', 'date'],
             'due_date' => ['sometimes', 'nullable', 'date'],

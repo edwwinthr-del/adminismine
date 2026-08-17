@@ -153,7 +153,7 @@ class EmployeeTest extends TestCase
 
         $this->deleteJson("/api/employees/{$employee->id}")->assertOk();
 
-        $this->assertSoftDeleted('employees', ['id' => $employee->id]);
+        $this->assertSoftDeleted('radnici', ['id' => $employee->id]);
         $this->assertSame('inactive', Employee::withTrashed()->find($employee->id)->status);
 
         // Hidden from the default list, visible with with_removed.

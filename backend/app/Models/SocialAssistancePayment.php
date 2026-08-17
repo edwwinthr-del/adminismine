@@ -19,6 +19,8 @@ class SocialAssistancePayment extends Model
 {
     use HasAuditColumns, HasFactory, Searchable;
 
+    protected $table = 'isplate_socijalne_pomoci';
+
     public const METHODS = ['cash', 'nlb', 'lovcen', 'other'];
 
     /** @var list<string> */

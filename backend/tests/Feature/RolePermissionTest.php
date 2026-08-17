@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog as Activity;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -257,8 +257,8 @@ class RolePermissionTest extends TestCase
     }
 
     /**
-     * A token that outlives the deactivation — the flag flipped straight in the
-     * database, say — is refused on the next request, not at the next login.
+     * A token that outlives the deactivation â€” the flag flipped straight in the
+     * database, say â€” is refused on the next request, not at the next login.
      * No Sanctum::actingAs here: that would override the bearer token.
      */
     public function test_a_token_issued_before_deactivation_stops_working(): void
@@ -295,7 +295,7 @@ class RolePermissionTest extends TestCase
      *
      * It used to 500 on every call: counting holders through Spatie's `users`
      * relation resolves the model from `config('auth.defaults.guard')`, and
-     * `auth:sanctum` sets that to a guard this app never defines — so the list
+     * `auth:sanctum` sets that to a guard this app never defines â€” so the list
      * that the Roles screen and the create-user role picker both read was
      * unreachable, while the POST that creates a role worked. That is the whole
      * "I can't add a new role": roles were being saved into a list that could
@@ -413,10 +413,10 @@ class RolePermissionTest extends TestCase
         // The password is required every time, and a wrong one changes nothing.
         $this->deleteJson("/api/users/{$id}")->assertStatus(422)->assertJsonValidationErrors('current_password');
         $this->deleteJson("/api/users/{$id}", ['current_password' => 'nope'])->assertStatus(422);
-        $this->assertDatabaseHas('users', ['id' => $id]);
+        $this->assertDatabaseHas('korisnici', ['id' => $id]);
 
         $this->deleteJson("/api/users/{$id}", ['current_password' => 'password'])->assertOk();
-        $this->assertDatabaseMissing('users', ['id' => $id]);
+        $this->assertDatabaseMissing('korisnici', ['id' => $id]);
     }
 
     public function test_a_user_someone_else_created_cannot_be_deleted(): void
@@ -434,7 +434,7 @@ class RolePermissionTest extends TestCase
         $this->actingAsSuperAdmin();
 
         $this->deleteJson("/api/users/{$id}", ['current_password' => 'password'])->assertStatus(403);
-        $this->assertDatabaseHas('users', ['id' => $id]);
+        $this->assertDatabaseHas('korisnici', ['id' => $id]);
     }
 
     public function test_an_admin_who_is_not_super_admin_cannot_delete_a_user(): void
@@ -446,7 +446,7 @@ class RolePermissionTest extends TestCase
         $target = User::factory()->create(['created_by' => $admin->id]);
 
         $this->deleteJson("/api/users/{$target->id}", ['current_password' => 'password'])->assertStatus(403);
-        $this->assertDatabaseHas('users', ['id' => $target->id]);
+        $this->assertDatabaseHas('korisnici', ['id' => $target->id]);
     }
 
     public function test_you_cannot_delete_your_own_account(): void
@@ -455,7 +455,7 @@ class RolePermissionTest extends TestCase
         $admin->forceFill(['created_by' => $admin->id])->save();
 
         $this->deleteJson("/api/users/{$admin->id}", ['current_password' => 'password'])->assertStatus(422);
-        $this->assertDatabaseHas('users', ['id' => $admin->id]);
+        $this->assertDatabaseHas('korisnici', ['id' => $admin->id]);
     }
 
     /** A holder of just this one permission, to prove it is not a master key. */
@@ -524,7 +524,7 @@ class RolePermissionTest extends TestCase
             'permissions' => ['bank_transactions.manage'],
         ])->assertStatus(403);
 
-        // The role route is closed the same way — a role is judged by what it
+        // The role route is closed the same way â€” a role is judged by what it
         // carries, never by its name.
         $this->putJson("/api/users/{$target->id}/roles", ['roles' => ['Admin']])->assertStatus(403);
         $this->assertFalse($target->fresh()->can('bank_transactions.manage'));
