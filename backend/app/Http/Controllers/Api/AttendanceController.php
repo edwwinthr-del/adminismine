@@ -421,6 +421,10 @@ class AttendanceController extends Controller
             'meta' => [
                 'month' => $month,
                 'working_days_basis' => $this->workingDays->forMonth($month),
+                // Both sides in the wage's own currency, not EUR: the point of
+                // this screen is the difference between what a worker earned by
+                // attendance and what their obligation says, and attendance has
+                // no EUR twin to compare against.
                 'earned_total' => round((float) $rows->sum('earned_from_attendance'), 2),
                 'obligation_total' => round((float) $obligations->sum('net_salary_due'), 2),
             ],

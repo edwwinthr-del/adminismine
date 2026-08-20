@@ -65,11 +65,25 @@ class NotificationRuleController extends Controller
     /** Re-run the detectors now instead of waiting for the daily schedule. */
     public function scan(Request $request, NotificationDispatcher $dispatcher): JsonResponse
     {
+        // The browser re-checks on a timer as well as on the button, and sends
+        // `automatic` to say which this was.
+        $automatic = $request->boolean('automatic');
+
         $result = $dispatcher->scan();
 
-        activity()->causedBy($request->user())
-            ->withProperties(['created' => $result['created'], 'resolved' => $result['resolved']])
-            ->log('notifications.scanned');
+        // A scan the operator asked for is an action, and is logged whatever it
+        // found. A background one is only worth a row when it changed something:
+        // logging every few minutes per open tab would bury the trail under
+        // hundreds of "nothing happened" entries a day.
+        if (! $automatic || $result['created'] > 0 || $result['resolved'] > 0) {
+            activity()->causedBy($request->user())
+                ->withProperties([
+                    'created' => $result['created'],
+                    'resolved' => $result['resolved'],
+                    'automatic' => $automatic,
+                ])
+                ->log('notifications.scanned');
+        }
 
         return response()->json(['data' => $result]);
     }

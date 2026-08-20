@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Concerns\CorrectsPayments;
+use App\Http\Controllers\Concerns\SettlesWithPayments;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Loans\RecordRepaymentRequest;
 use App\Http\Requests\Loans\StoreLoanRequest;
@@ -11,6 +11,7 @@ use App\Http\Resources\LoanResource;
 use App\Models\Loan;
 use App\Models\Payment;
 use App\Services\CurrencyConverter;
+use App\Support\Currencies;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\DB;
 
 class LoanController extends Controller
 {
-    use CorrectsPayments;
+    use SettlesWithPayments;
 
     public function __construct(private readonly CurrencyConverter $converter) {}
 
@@ -135,35 +136,37 @@ class LoanController extends Controller
 
     public function destroy(Request $request, Loan $loan): JsonResponse
     {
-        DB::transaction(function () use ($loan) {
-            $loan->repayments()->delete();
+        $released = DB::transaction(function () use ($loan): array {
+            $released = $this->releaseSettlements($loan);
             $loan->delete();
+
+            return $released;
         });
 
-        activity()->performedOn($loan)->causedBy($request->user())->log('loan.deleted');
+        activity()->performedOn($loan)->causedBy($request->user())
+            ->withProperties(['released_bank_transactions' => $released])
+            ->log('loan.deleted');
 
         return response()->json(['message' => 'Loan deleted.']);
     }
 
+    /**
+     * Record a repayment, in the accounting currency. `book_bank_transaction`
+     * writes the movement it represents: money out for a loan the company took,
+     * money in for one it gave (Loan::movementDirection()).
+     */
     public function recordRepayment(RecordRepaymentRequest $request, Loan $loan): JsonResponse
     {
-        $data = $request->validated();
+        $data = $request->paymentData();
 
-        if ((float) $data['amount'] > (float) $loan->remaining_amount + 0.001) {
-            return response()->json([
-                'message' => 'Repayment exceeds the remaining balance on this loan.',
-                'errors' => ['amount' => ['Repayment exceeds the remaining balance on this loan.']],
-            ], 422);
-        }
-
-        DB::transaction(function () use ($loan, $data) {
-            // Repayments are booked in the accounting currency.
-            $loan->repayments()->create($data + ['currency' => 'EUR']);
-            $loan->recalculate();
-        });
+        $payment = $this->recordSettlement($loan, $data, Currencies::BASE, $request->booksMovement());
 
         activity()->performedOn($loan)->causedBy($request->user())
-            ->withProperties(['amount' => $data['amount'], 'method' => $data['method']])
+            ->withProperties([
+                'amount' => $data['amount'],
+                'method' => $data['method'],
+                'bank_transaction_id' => $payment->bank_transaction_id,
+            ])
             ->log('loan.repayment_recorded');
 
         return response()->json([
@@ -174,7 +177,7 @@ class LoanController extends Controller
     /**
      * Correct a repayment that was entered wrong, rather than booking its opposite.
      *
-     * See CorrectsPayments: two rows that cancel out would both read as real
+     * See SettlesWithPayments: two rows that cancel out would both read as real
      * money in every report and in the bank match.
      */
     public function updateRepayment(
@@ -184,10 +187,10 @@ class LoanController extends Controller
     ): JsonResponse {
         $before = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->correctPayment($loan, $payment, $request->validated());
+        $this->correctSettlement($loan, $payment, $request->paymentData(), $request->booksMovement());
 
         activity()->performedOn($loan)->causedBy($request->user())
-            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])
+            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->paymentData()])
             ->log('loan.repayment_updated');
 
         return response()->json([
@@ -200,10 +203,14 @@ class LoanController extends Controller
     {
         $removed = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->removePayment($loan, $payment);
+        $movement = $this->removeSettlement($loan, $payment);
 
         activity()->performedOn($loan)->causedBy($request->user())
-            ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
+            ->withProperties([
+                'payment_id' => $payment->id,
+                'removed' => $removed,
+                'released_bank_transaction' => $movement,
+            ])
             ->log('loan.repayment_deleted');
 
         return response()->json([

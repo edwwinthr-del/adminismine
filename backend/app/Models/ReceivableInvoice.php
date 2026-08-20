@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Contracts\BooksBankMovement;
+use App\Models\Concerns\BooksMovements;
 use App\Models\Concerns\ConvertsToEur;
 use App\Models\Concerns\HasAuditColumns;
 use App\Models\Concerns\Searchable;
@@ -13,8 +15,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-class ReceivableInvoice extends Model
+class ReceivableInvoice extends Model implements BooksBankMovement
 {
+    use BooksMovements;
     use ConvertsToEur;
     use HasAuditColumns, HasFactory, Searchable;
 
@@ -77,7 +80,7 @@ class ReceivableInvoice extends Model
     {
         // Both sides in EUR — see PayableInvoice::recalculate().
         $received = round((float) $this->payments()->sum('amount_eur'), 2);
-        $deducted = round((float) $this->deductions()->sum('amount'), 2);
+        $deducted = round((float) $this->deductions()->sum('amount_eur'), 2);
         $invoice = round((float) $this->amount_eur, 2);
         $remaining = round($invoice - $received - $deducted, 2);
 
@@ -111,6 +114,28 @@ class ReceivableInvoice extends Model
         return $query->outstanding()
             ->whereNotNull('due_date')
             ->whereDate('due_date', '<', now()->toDateString());
+    }
+
+    /** A client settling an invoice is money in, booked against that client. */
+    public function movementCategory(): string
+    {
+        return 'income';
+    }
+
+    public function movementDirection(): int
+    {
+        return 1;
+    }
+
+    /** @return array<string, int|null> */
+    public function movementParty(): array
+    {
+        return ['client_id' => $this->client_id];
+    }
+
+    public function movementDescription(): ?string
+    {
+        return $this->invoice_number ?: $this->description;
     }
 
     protected function eurSourceColumn(): string

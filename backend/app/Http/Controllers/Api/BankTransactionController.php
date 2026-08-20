@@ -11,7 +11,9 @@ use App\Http\Resources\BankTransactionResource;
 use App\Models\BankTransaction;
 use App\Models\PayableInvoice;
 use App\Models\ReceivableInvoice;
+use App\Services\CurrencyConverter;
 use App\Services\PaymentBankMovement;
+use App\Support\Currencies;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -166,10 +168,21 @@ class BankTransactionController extends Controller
         // covering a supplier's month is the ordinary case — but never more than
         // the line itself is worth. Without a cap, one 100 EUR row could be
         // matched to three 1,000 EUR invoices and settle 3,000 EUR.
-        $alreadyMatched = (float) $bankTransaction->payments()->sum('amount');
+        //
+        // Measured in EUR on both sides: settlements from any module may point
+        // at a movement now, and one entered in another currency compared
+        // against a EUR movement would let the same line be over-allocated.
+        $alreadyMatched = (float) $bankTransaction->payments()->sum('amount_eur');
+        $capacity = abs((float) $bankTransaction->net_amount_eur);
+        $incoming = (float) app(CurrencyConverter::class)->toEur(
+            $data['amount'],
+            (string) ($bankTransaction->currency ?: Currencies::BASE),
+            $bankTransaction->exchange_rate,
+            optional($bankTransaction->date)->toDateString(),
+        )['amount_eur'];
 
-        if ($alreadyMatched + (float) $data['amount'] > abs($net) + 0.001) {
-            $left = max(0, round(abs($net) - $alreadyMatched, 2));
+        if ($alreadyMatched + $incoming > $capacity + 0.001) {
+            $left = max(0, round($capacity - $alreadyMatched, 2));
 
             return $this->refuseMatch(
                 'amount',

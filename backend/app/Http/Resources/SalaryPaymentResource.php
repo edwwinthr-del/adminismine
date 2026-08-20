@@ -24,8 +24,14 @@ class SalaryPaymentResource extends JsonResource
             'adjustments' => (float) $this->adjustments,
             'deductions' => (float) $this->deductions,
             'net_salary_due' => (float) $this->net_salary_due,
+            // The net in the accounting currency; paid and remaining are EUR too.
+            'amount_eur' => (float) $this->amount_eur,
+            'exchange_rate' => $this->exchange_rate === null ? null : (float) $this->exchange_rate,
+            // Paid and remaining are EUR, like the obligation's own amount_eur.
             'paid_amount' => (float) $this->paid_amount,
             'remaining_amount' => (float) $this->remaining_amount,
+            // The remainder as the operator would state it when they pay it.
+            'remaining_amount_original' => $this->inOwnCurrency($this->remaining_amount),
             'status' => $this->status,
             'attachment_path' => $this->attachment_path,
             'notes' => $this->notes,

@@ -46,15 +46,18 @@ class HousingSummaryController extends Controller
                     'room' => $occupancy->room,
                 ])->values(),
                 'occupant_count' => $house->currentOccupancies->count(),
-                'rent_due' => round((float) $houseRents->sum('rent_amount_due'), 2),
+                // Every figure here is EUR — rent_amount_due and a bill's amount
+                // stay in the currency they were agreed in, and only their EUR
+                // twins are ever added together (rule 5).
+                'rent_due' => round((float) $houseRents->sum('amount_eur'), 2),
                 'rent_paid' => round((float) $houseRents->sum('paid_amount'), 2),
                 'rent_unpaid' => round((float) $houseRents->sum('remaining_amount'), 2),
                 'rent_overdue' => $houseRents->filter(fn (RentPayment $rent): bool => $rent->is_overdue)->count(),
-                'bills_total' => round((float) $houseBills->sum('amount'), 2),
+                'bills_total' => round((float) $houseBills->sum('amount_eur'), 2),
                 'bills_unpaid' => round((float) $houseBills->sum('remaining_amount'), 2),
                 'bills_overdue' => $houseBills->filter(fn (UtilityBill $bill): bool => $bill->is_overdue)->count(),
                 'monthly_cost' => round(
-                    (float) $houseRents->sum('rent_amount_due') + (float) $houseBills->sum('amount'),
+                    (float) $houseRents->sum('amount_eur') + (float) $houseBills->sum('amount_eur'),
                     2,
                 ),
                 // Present for context: a worker may have moved during the month.
@@ -73,16 +76,14 @@ class HousingSummaryController extends Controller
                 'month' => $month,
                 'houses' => $perHouse,
                 'totals' => [
-                    'rent_due' => round((float) $rents->sum('rent_amount_due'), 2),
+                    'rent_due' => round((float) $rents->sum('amount_eur'), 2),
                     'rent_paid' => round((float) $rents->sum('paid_amount'), 2),
                     'rent_unpaid' => round((float) $rents->sum('remaining_amount'), 2),
-                    'bills_total' => round((float) $bills->sum('amount'), 2),
+                    'bills_total' => round((float) $bills->sum('amount_eur'), 2),
                     'bills_unpaid' => round((float) $bills->sum('remaining_amount'), 2),
                     // What housing costs the company this month, rent + bills.
-                    'monthly_cost' => round((float) $rents->sum('rent_amount_due') + (float) $bills->sum('amount'), 2),
-                    'charged_to_workers' => round((float) $deductions->sum(
-                        fn (HousingDeduction $deduction): float => (float) $deduction->rent_share + (float) $deduction->utility_share
-                    ), 2),
+                    'monthly_cost' => round((float) $rents->sum('amount_eur') + (float) $bills->sum('amount_eur'), 2),
+                    'charged_to_workers' => round((float) $deductions->sum('amount_eur'), 2),
                     'occupants' => $houses->sum(fn (House $house): int => $house->currentOccupancies->count()),
                     'active_houses' => $houses->where('is_active', true)->count(),
                 ],

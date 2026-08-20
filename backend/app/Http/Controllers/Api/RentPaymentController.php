@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Concerns\CorrectsPayments;
+use App\Http\Controllers\Concerns\SettlesWithPayments;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Housing\GenerateRentRequest;
 use App\Http\Requests\Housing\RecordHousingPaymentRequest;
@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 
 class RentPaymentController extends Controller
 {
-    use CorrectsPayments;
+    use SettlesWithPayments;
 
     public function index(Request $request): JsonResponse
     {
@@ -66,12 +66,18 @@ class RentPaymentController extends Controller
 
     public function destroy(Request $request, RentPayment $rentPayment): JsonResponse
     {
-        DB::transaction(function () use ($rentPayment) {
-            $rentPayment->payments()->delete();
+        $released = DB::transaction(function () use ($rentPayment): array {
+            // The movements those payments booked go with them: an obligation
+            // that no longer exists cannot leave money on the dashboard.
+            $released = $this->releaseSettlements($rentPayment);
             $rentPayment->delete();
+
+            return $released;
         });
 
-        activity()->performedOn($rentPayment)->causedBy($request->user())->log('rent_payment.deleted');
+        activity()->performedOn($rentPayment)->causedBy($request->user())
+            ->withProperties(['released_bank_transactions' => $released])
+            ->log('rent_payment.deleted');
 
         return response()->json(['message' => 'Rent record deleted.']);
     }
@@ -100,24 +106,28 @@ class RentPaymentController extends Controller
         ], $preview ? 200 : 201);
     }
 
+    /**
+     * Settle rent. `book_bank_transaction` writes the movement the payment
+     * records, which is what puts it on the dashboard's balances and expenses —
+     * see SettlesWithPayments.
+     */
     public function recordPayment(RecordHousingPaymentRequest $request, RentPayment $rentPayment): JsonResponse
     {
-        $data = $request->validated();
+        $data = $request->paymentData();
 
-        if ((float) $data['amount'] > (float) $rentPayment->remaining_amount + 0.001) {
-            return response()->json([
-                'message' => 'Payment exceeds the remaining rent.',
-                'errors' => ['amount' => ['Payment exceeds the remaining rent.']],
-            ], 422);
-        }
-
-        DB::transaction(function () use ($rentPayment, $data) {
-            $rentPayment->payments()->create($data + ['currency' => $rentPayment->currency]);
-            $rentPayment->recalculate();
-        });
+        $payment = $this->recordSettlement(
+            $rentPayment,
+            $data,
+            (string) $rentPayment->currency,
+            $request->booksMovement(),
+        );
 
         activity()->performedOn($rentPayment)->causedBy($request->user())
-            ->withProperties(['amount' => $data['amount'], 'method' => $data['method']])
+            ->withProperties([
+                'amount' => $data['amount'],
+                'method' => $data['method'],
+                'bank_transaction_id' => $payment->bank_transaction_id,
+            ])
             ->log('rent_payment.payment_recorded');
 
         return response()->json([
@@ -128,8 +138,9 @@ class RentPaymentController extends Controller
     /**
      * Correct a payment that was entered wrong, rather than booking its opposite.
      *
-     * See CorrectsPayments: two rows that cancel out would both read as real
-     * money in every report and in the bank match.
+     * See SettlesWithPayments: two rows that cancel out would both read as real
+     * money in every report and in the bank match. A movement this app booked
+     * from the payment follows the correction.
      */
     public function updatePayment(
         RecordHousingPaymentRequest $request,
@@ -138,10 +149,10 @@ class RentPaymentController extends Controller
     ): JsonResponse {
         $before = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->correctPayment($rentPayment, $payment, $request->validated());
+        $this->correctSettlement($rentPayment, $payment, $request->paymentData(), $request->booksMovement());
 
         activity()->performedOn($rentPayment)->causedBy($request->user())
-            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])
+            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->paymentData()])
             ->log('rent_payment.payment_updated');
 
         return response()->json([
@@ -154,10 +165,14 @@ class RentPaymentController extends Controller
     {
         $removed = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->removePayment($rentPayment, $payment);
+        $movement = $this->removeSettlement($rentPayment, $payment);
 
         activity()->performedOn($rentPayment)->causedBy($request->user())
-            ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
+            ->withProperties([
+                'payment_id' => $payment->id,
+                'removed' => $removed,
+                'released_bank_transaction' => $movement,
+            ])
             ->log('rent_payment.payment_deleted');
 
         return response()->json([

@@ -49,10 +49,21 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   /** When provided, the value is JSON-encoded and the content-type header is set. */
   json?: unknown;
   body?: BodyInit | null;
+  /**
+   * Whether a successful write invalidates the read cache. On by default, and it
+   * should stay on for anything the user asked for — that rule is what keeps the
+   * dashboard agreeing with the module a record was just edited in.
+   *
+   * The exception it exists for is the background notification scan, which runs
+   * on a timer rather than because anyone did something. It reports whether it
+   * changed anything and calls `markMutated()` itself when it did, so a scan that
+   * finds nothing no longer refetches every mounted screen every few minutes.
+   */
+  revalidate?: boolean;
 }
 
 export async function apiFetch<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { json, headers, body, ...rest } = options;
+  const { json, headers, body, revalidate = true, ...rest } = options;
   const token = getToken();
   const method = (rest.method ?? "GET").toUpperCase();
 
@@ -84,7 +95,7 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
   // than at each call site, is what stops the dashboard (and any other screen
   // derived from the same records) from drifting out of date after an edit
   // made somewhere else — including in modules written later.
-  if (method !== "GET" && method !== "HEAD") {
+  if (method !== "GET" && method !== "HEAD" && revalidate) {
     markMutated();
   }
 

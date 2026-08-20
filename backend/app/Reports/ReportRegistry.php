@@ -133,7 +133,10 @@ class ReportRegistry
                 ->map(fn (SalaryPayment $salary): array => [
                     'worker' => $salary->employee?->full_name,
                     'salary_month' => optional($salary->salary_month)->toDateString(),
-                    'net_salary_due' => round((float) $salary->net_salary_due, 2),
+                    // EUR throughout, like every report: paid and remaining are
+                    // the accounting currency, so the net due is quoted the same
+                    // way rather than in whatever the wage was agreed in.
+                    'net_salary_due' => round((float) $salary->amount_eur, 2),
                     'paid_amount' => round((float) $salary->paid_amount, 2),
                     'remaining_amount' => round((float) $salary->remaining_amount, 2),
                     'status' => $salary->status,
@@ -433,8 +436,10 @@ class ReportRegistry
 
                 return House::query()->with('currentOccupancies')->orderBy('name')->get()
                     ->map(function ($house) use ($rents, $bills): array {
-                        $rent = round((float) $rents->where('house_id', $house->id)->sum('rent_amount_due'), 2);
-                        $bill = round((float) $bills->where('house_id', $house->id)->sum('amount'), 2);
+                        // EUR, so houses on leases in different currencies can be
+                        // totalled in one column (rule 5).
+                        $rent = round((float) $rents->where('house_id', $house->id)->sum('amount_eur'), 2);
+                        $bill = round((float) $bills->where('house_id', $house->id)->sum('amount_eur'), 2);
 
                         return [
                             'house' => $house->name,
@@ -471,7 +476,7 @@ class ReportRegistry
                         'house' => $rent->house?->name,
                         'kind' => 'rent',
                         'period' => optional($rent->month)->toDateString(),
-                        'due' => round((float) $rent->rent_amount_due, 2),
+                        'due' => round((float) $rent->amount_eur, 2),
                         'paid' => round((float) $rent->paid_amount, 2),
                         'remaining' => round((float) $rent->remaining_amount, 2),
                     ]);
@@ -483,7 +488,7 @@ class ReportRegistry
                         'house' => $bill->house?->name,
                         'kind' => $bill->bill_type,
                         'period' => optional($bill->billing_period)->toDateString(),
-                        'due' => round((float) $bill->amount, 2),
+                        'due' => round((float) $bill->amount_eur, 2),
                         'paid' => round((float) $bill->paid_amount, 2),
                         'remaining' => round((float) $bill->remaining_amount, 2),
                     ]);

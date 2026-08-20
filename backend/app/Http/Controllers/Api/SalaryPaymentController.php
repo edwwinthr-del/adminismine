@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Concerns\CorrectsPayments;
+use App\Http\Controllers\Concerns\SettlesWithPayments;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Salary\GenerateSalaryPaymentsRequest;
 use App\Http\Requests\Salary\RecordSalaryPaymentRequest;
@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
 
 class SalaryPaymentController extends Controller
 {
-    use CorrectsPayments;
+    use SettlesWithPayments;
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -72,12 +72,16 @@ class SalaryPaymentController extends Controller
 
     public function destroy(Request $request, SalaryPayment $salaryPayment): JsonResponse
     {
-        DB::transaction(function () use ($salaryPayment) {
-            $salaryPayment->payments()->delete();
+        $released = DB::transaction(function () use ($salaryPayment): array {
+            $released = $this->releaseSettlements($salaryPayment);
             $salaryPayment->delete();
+
+            return $released;
         });
 
-        activity()->performedOn($salaryPayment)->causedBy($request->user())->log('salary_payment.deleted');
+        activity()->performedOn($salaryPayment)->causedBy($request->user())
+            ->withProperties(['released_bank_transactions' => $released])
+            ->log('salary_payment.deleted');
 
         return response()->json(['message' => 'Salary record deleted.']);
     }
@@ -109,24 +113,28 @@ class SalaryPaymentController extends Controller
         ], $preview ? 200 : 201);
     }
 
+    /**
+     * Pay a worker. `book_bank_transaction` writes the movement the payment
+     * records, which is what takes the wages off the dashboard's balances —
+     * see SettlesWithPayments.
+     */
     public function recordPayment(RecordSalaryPaymentRequest $request, SalaryPayment $salaryPayment): JsonResponse
     {
-        $data = $request->validated();
+        $data = $request->paymentData();
 
-        if ((float) $data['amount'] > (float) $salaryPayment->remaining_amount + 0.001) {
-            return response()->json([
-                'message' => 'Payment exceeds the remaining salary amount.',
-                'errors' => ['amount' => ['Payment exceeds the remaining salary amount.']],
-            ], 422);
-        }
-
-        DB::transaction(function () use ($salaryPayment, $data) {
-            $salaryPayment->payments()->create($data + ['currency' => $salaryPayment->currency]);
-            $salaryPayment->recalculate();
-        });
+        $payment = $this->recordSettlement(
+            $salaryPayment,
+            $data,
+            (string) $salaryPayment->currency,
+            $request->booksMovement(),
+        );
 
         activity()->performedOn($salaryPayment)->causedBy($request->user())
-            ->withProperties(['amount' => $data['amount'], 'method' => $data['method']])
+            ->withProperties([
+                'amount' => $data['amount'],
+                'method' => $data['method'],
+                'bank_transaction_id' => $payment->bank_transaction_id,
+            ])
             ->log('salary_payment.payment_recorded');
 
         return response()->json([
@@ -145,7 +153,9 @@ class SalaryPaymentController extends Controller
             'data' => [
                 'month' => $month,
                 'employees' => $rows->count(),
-                'net_due' => round((float) $rows->sum('net_salary_due'), 2),
+                // In EUR: wages agreed in different currencies are one total
+                // only once they are priced the same way (rule 5).
+                'net_due' => round((float) $rows->sum('amount_eur'), 2),
                 'paid' => round((float) $rows->sum('paid_amount'), 2),
                 'remaining' => round((float) $rows->sum('remaining_amount'), 2),
                 'unpaid_count' => $rows->where('status', 'unpaid')->count(),
@@ -158,8 +168,9 @@ class SalaryPaymentController extends Controller
     /**
      * Correct a payment that was entered wrong, rather than booking its opposite.
      *
-     * See CorrectsPayments: two rows that cancel out would both read as real
-     * money in every report and in the bank match.
+     * See SettlesWithPayments: two rows that cancel out would both read as real
+     * money in every report and in the bank match. A movement this app booked
+     * from the payment follows the correction.
      */
     public function updatePayment(
         RecordSalaryPaymentRequest $request,
@@ -168,10 +179,10 @@ class SalaryPaymentController extends Controller
     ): JsonResponse {
         $before = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->correctPayment($salaryPayment, $payment, $request->validated());
+        $this->correctSettlement($salaryPayment, $payment, $request->paymentData(), $request->booksMovement());
 
         activity()->performedOn($salaryPayment)->causedBy($request->user())
-            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])
+            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->paymentData()])
             ->log('salary_payment.payment_updated');
 
         return response()->json([
@@ -184,10 +195,14 @@ class SalaryPaymentController extends Controller
     {
         $removed = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->removePayment($salaryPayment, $payment);
+        $movement = $this->removeSettlement($salaryPayment, $payment);
 
         activity()->performedOn($salaryPayment)->causedBy($request->user())
-            ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
+            ->withProperties([
+                'payment_id' => $payment->id,
+                'removed' => $removed,
+                'released_bank_transaction' => $movement,
+            ])
             ->log('salary_payment.payment_deleted');
 
         return response()->json([

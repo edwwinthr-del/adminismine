@@ -7,6 +7,12 @@ import { useEmployeeOptions, type EmployeeOption } from "@/lib/data/use-options"
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, formatMoney, todayISO } from "@/lib/format";
 import { AttachmentsModal } from "@/components/attachments-modal";
+import {
+  BankRecordField,
+  bankRecordPayload,
+  canBook,
+  type BankRecordMode,
+} from "@/components/bank-record-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -62,8 +68,10 @@ interface RentPayment {
   month: string | null;
   currency: string;
   rent_amount_due: number;
+  /** Paid and remaining are EUR; the original is what the operator types to settle it. */
   paid_amount: number;
   remaining_amount: number;
+  remaining_amount_original: number;
   status: string;
   due_date: string;
   is_overdue: boolean;
@@ -81,8 +89,10 @@ interface UtilityBill {
   currency: string;
   due_date: string | null;
   paid_date: string | null;
+  /** Paid and remaining are EUR; the original is what the operator types to settle it. */
   paid_amount: number;
   remaining_amount: number;
+  remaining_amount_original: number;
   status: string;
   is_overdue: boolean;
   cost_bearer: string;
@@ -791,9 +801,9 @@ function RentTab({ month }: { month: string }) {
                   <td className="px-4 py-3 text-right tabular-nums">
                     {formatMoney(row.rent_amount_due, row.currency)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.paid_amount, row.currency)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.paid_amount)}</td>
                   <td className="px-4 py-3 text-right font-medium tabular-nums">
-                    {formatMoney(row.remaining_amount, row.currency)}
+                    {formatMoney(row.remaining_amount)}
                   </td>
                   <td className="px-4 py-3">
                     <Badge tone={statusTone(row.status)}>{t(`status.${row.status}`)}</Badge>
@@ -871,7 +881,7 @@ function RentTab({ month }: { month: string }) {
         <PaymentModal
           title={t("housing.recordPayment")}
           subtitle={paying.house?.name ?? ""}
-          remaining={paying.remaining_amount}
+          remaining={paying.remaining_amount_original}
           currency={paying.currency}
           path={`/housing/rent/${paying.id}/payments`}
           onClose={() => setPaying(null)}
@@ -943,7 +953,7 @@ function BillsTab({ month }: { month: string }) {
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.amount, row.currency)}</td>
                   <td className="px-4 py-3 text-right font-medium tabular-nums">
-                    {formatMoney(row.remaining_amount, row.currency)}
+                    {formatMoney(row.remaining_amount)}
                   </td>
                   <td className="px-4 py-3">
                     <Badge tone={statusTone(row.status)}>{t(`status.${row.status}`)}</Badge>
@@ -992,7 +1002,7 @@ function BillsTab({ month }: { month: string }) {
         <PaymentModal
           title={t("housing.recordPayment")}
           subtitle={`${paying.house?.name ?? ""} · ${t(`billType.${paying.bill_type}`)}`}
-          remaining={paying.remaining_amount}
+          remaining={paying.remaining_amount_original}
           currency={paying.currency}
           path={`/housing/bills/${paying.id}/payments`}
           onClose={() => setPaying(null)}
@@ -1229,6 +1239,23 @@ function PaymentModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  /*
+   * Rent and bills only reach the balances, the cashflow and the dashboard if a
+   * bank movement records them — those figures are summed from that table
+   * alone. So a payment defaults to booking one, which is what the operator
+   * means by choosing cash/NLB/Lovćen.
+   */
+  const [bankMode, setBankMode] = useState<BankRecordMode>(canBook("cash") ? "book" : "none");
+  const [movementId, setMovementId] = useState<number | null>(null);
+
+  function changeMethod(next: string) {
+    setMethod(next);
+
+    // `other` names no account, so there is nothing to book into.
+    if (!canBook(next) && bankMode === "book") setBankMode("none");
+    if (canBook(next) && bankMode === "none") setBankMode("book");
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -1236,7 +1263,12 @@ function PaymentModal({
     try {
       await apiFetch(path, {
         method: "POST",
-        json: { amount: Number(amount), payment_date: paymentDate, method },
+        json: {
+          amount: Number(amount),
+          payment_date: paymentDate,
+          method,
+          ...bankRecordPayload(bankMode, movementId),
+        },
       });
       // Only closes the modal — the lists behind it are revalidated by the
       // markMutated() that the POST above already triggered.
@@ -1275,7 +1307,7 @@ function PaymentModal({
         </div>
         <div>
           <label className={label}>{t("housing.method")}</label>
-          <Select value={method} onChange={(e) => setMethod(e.target.value)}>
+          <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
             {METHODS.map((value) => (
               <option key={value} value={value}>
                 {t(`method.${value}`)}
@@ -1283,6 +1315,14 @@ function PaymentModal({
             ))}
           </Select>
         </div>
+        <BankRecordField
+          mode={bankMode}
+          onModeChange={setBankMode}
+          movementId={movementId}
+          onMovementChange={setMovementId}
+          method={method}
+          editing={false}
+        />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -1369,7 +1409,7 @@ function DeductionsTab({ month }: { month: string }) {
                     {formatMoney(row.amount_deducted, row.currency)}
                   </td>
                   <td className="px-4 py-3 text-right font-medium tabular-nums">
-                    {formatMoney(row.remaining_amount, row.currency)}
+                    {formatMoney(row.remaining_amount)}
                   </td>
                   <td className="max-w-[16rem] px-4 py-3 text-xs text-zinc-600 dark:text-zinc-300">{row.reason}</td>
                   <td className="px-4 py-3 text-right">

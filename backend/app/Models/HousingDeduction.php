@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ConvertsToEur;
 use App\Models\Concerns\HasAuditColumns;
 use App\Support\MonthPeriod;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class HousingDeduction extends Model
 {
+    use ConvertsToEur;
     use HasAuditColumns, HasFactory;
 
     protected $table = 'odbici_za_smestaj';
@@ -25,6 +28,8 @@ class HousingDeduction extends Model
         'house_id',
         'month',
         'currency',
+        'exchange_rate',
+        'exchange_rate_date',
         'rent_share',
         'utility_share',
         'amount_deducted',
@@ -45,9 +50,12 @@ class HousingDeduction extends Model
     {
         return [
             'month' => 'date:Y-m-d',
+            'exchange_rate_date' => 'date:Y-m-d',
             'rent_share' => 'decimal:2',
             'utility_share' => 'decimal:2',
             'amount_deducted' => 'decimal:2',
+            'exchange_rate' => 'decimal:10',
+            'amount_eur' => 'decimal:2',
             'remaining_amount' => 'decimal:2',
         ];
     }
@@ -67,14 +75,31 @@ class HousingDeduction extends Model
         return $this->belongsTo(UtilityBill::class);
     }
 
+    /** What the worker is charged in total: the rent share plus the utility share. */
+    protected function chargedAmount(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): float => round((float) $this->rent_share + (float) $this->utility_share, 2),
+        );
+    }
+
     /** Remaining is derived: what was charged minus what has been deducted. */
     public function recalculate(): void
     {
-        $charged = round((float) $this->rent_share + (float) $this->utility_share, 2);
-
         $this->forceFill([
-            'remaining_amount' => round($charged - (float) $this->amount_deducted, 2),
+            'remaining_amount' => round($this->charged_amount - (float) $this->amount_deducted, 2),
         ])->save();
+    }
+
+    /** The charge is two shares together, so that — not one column — is what is priced. */
+    protected function eurSourceColumn(): string
+    {
+        return 'charged_amount';
+    }
+
+    protected function eurRateDate(): ?string
+    {
+        return optional($this->month)->toDateString();
     }
 
     public function scopeForMonth(Builder $query, string $month): Builder

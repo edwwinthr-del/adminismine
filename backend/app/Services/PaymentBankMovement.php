@@ -2,42 +2,57 @@
 
 namespace App\Services;
 
+use App\Contracts\BooksBankMovement;
+use App\Contracts\SettlementLine;
 use App\Models\BankTransaction;
-use App\Models\PayableInvoice;
-use App\Models\Payment;
-use App\Models\ReceivableInvoice;
 
 /**
- * The bank or cash movement behind an invoice payment.
+ * The bank or cash movement behind a settlement.
  *
  * Why this exists: every money figure on the dashboard — the three account
  * balances, the income/expense split, the cashflow trend, the recent list — is
- * summed from `bank_transactions` and from nothing else. Recording a payment
- * against an invoice wrote a `payments` row and stopped there, so telling the
- * app that 95,000 EUR had arrived in NLB moved the invoice to `paid` and left
- * every balance exactly where it was. The money existed to the receivables
- * module and nowhere else.
+ * summed from `bank_transactions` and from nothing else. Recording a settlement
+ * against its own module wrote a `payments` row and stopped there, so telling
+ * the app that 95,000 EUR had arrived in NLB moved the invoice to `paid` and
+ * left every balance exactly where it was. The money existed to the receivables
+ * module and nowhere else — and the same held for paying rent, a utility bill,
+ * a worker's salary, a plane ticket, a travel expense, a loan instalment or a
+ * social assistance payout.
  *
  * There are two honest ways to close that gap, and the operator picks per
- * payment because they are different claims about the world:
+ * settlement because they are different claims about the world:
  *
- * - **Book it.** The payment is itself the record that money moved. This class
- *   writes the movement, stamps it `source = invoice_payment`, and from then on
- *   it follows its payment: correcting the amount corrects it, deleting the
- *   payment deletes it.
+ * - **Book it.** The settlement is itself the record that money moved. This
+ *   class writes the movement, stamps it {@see SOURCE}, and from then on it
+ *   follows its line: correcting the amount corrects it, deleting the line
+ *   deletes it.
  * - **Match it.** The movement was already typed off a real bank statement and
- *   the payment merely points at it. Nothing here ever rewrites such a row —
- *   the money moved whatever later happens to the invoice, and editing it to
- *   follow an invoice would put the app's balance out of step with the bank's.
+ *   the settlement merely points at it. Nothing here ever rewrites such a row —
+ *   the money moved whatever later happens to the obligation, and editing it to
+ *   follow one would put the app's balance out of step with the bank's.
  *
  * `source` is what tells the two apart. A generated row carries the marker
- * rather than being recognised by "has a payment attached", because a
- * hand-entered movement acquires payments too the moment it is matched.
+ * rather than being recognised by "has a settlement attached", because a
+ * hand-entered movement acquires those too the moment it is matched.
+ *
+ * Nothing here knows what is being settled: the record answers that through
+ * {@see BooksBankMovement} and the line through {@see SettlementLine}, which is
+ * why one class serves all nine modules.
  */
 class PaymentBankMovement
 {
-    /** Marks a movement this app wrote from a payment, not one an operator typed. */
-    public const SOURCE = 'invoice_payment';
+    /** Marks a movement this app wrote from a settlement, not one an operator typed. */
+    public const SOURCE = 'settlement';
+
+    /**
+     * Every marker that means "generated". `invoice_payment` is what the column
+     * held while payables and receivables were the only modules that could book
+     * one; those rows are still owned by their payment and must keep being
+     * recognised, so the value is read as legacy rather than migrated.
+     *
+     * @var list<string>
+     */
+    public const GENERATED_SOURCES = [self::SOURCE, 'invoice_payment'];
 
     /**
      * Payment methods that name an account column. `other` names none — it is
@@ -59,122 +74,122 @@ class PaymentBankMovement
         return $method !== null && array_key_exists($method, self::ACCOUNT_COLUMNS);
     }
 
-    /** Whether this movement was written from a payment (and so may be rewritten with it). */
+    /** Whether this movement was written from a settlement (and so may be rewritten with it). */
     public static function isGenerated(?BankTransaction $movement): bool
     {
-        return $movement !== null && $movement->source === self::SOURCE;
+        return $movement !== null && in_array($movement->source, self::GENERATED_SOURCES, true);
     }
 
     /**
-     * Whether this payment is the one that wrote this movement.
+     * Whether this line is the one that wrote this movement.
      *
-     * `isGenerated()` alone answers "was this row written from *a* payment", not
-     * "from *this* payment" — and that gap was enough to lose real money. A
-     * second payment pointed at a generated row could rewrite it to its own
+     * `isGenerated()` alone answers "was this row written from *a* settlement",
+     * not "from *this* one" — and that gap was enough to lose real money. A
+     * second line pointed at a generated row could rewrite it to its own
      * (smaller) amount, delete it by unlinking, or invert its direction, while
-     * the invoice that booked it still read `paid`. A generated movement belongs
-     * to exactly one payment, so any second claimant means hands off.
+     * the record that booked it still read as settled.
      */
-    public static function isOwnedBy(?BankTransaction $movement, Payment $payment): bool
+    public static function isOwnedBy(?BankTransaction $movement, SettlementLine $line): bool
     {
         if (! self::isGenerated($movement)) {
             return false;
         }
 
-        return ! $movement->payments()
-            ->whereKeyNot($payment->getKey())
-            ->exists();
+        return ! $line->movementHasOtherClaims($movement);
     }
 
     /**
-     * Write the movement a payment records, and link the payment to it.
+     * Write the movement a settlement records, and link the line to it.
      *
-     * The direction is the invoice's, not the operator's to state: money
-     * arriving against a receivable is income, money leaving against a payable
-     * is an expense. The sign follows from that category — BankTransaction
-     * normalises it on save — so the magnitude entered on the payment is the
-     * magnitude stored, and a receipt can never be booked as a withdrawal.
+     * The direction is the record's, not the operator's to state: money arriving
+     * against a receivable is income, money leaving for rent, a wage or a ticket
+     * is an expense. The magnitude entered on the line is the magnitude stored —
+     * only its sign comes from elsewhere — so a receipt can never be booked as a
+     * withdrawal.
      */
-    public function create(PayableInvoice|ReceivableInvoice $invoice, Payment $payment): BankTransaction
+    public function create(BooksBankMovement $record, SettlementLine $line): BankTransaction
     {
         $movement = BankTransaction::create([
-            'date' => $payment->payment_date,
-            'category' => $this->category($invoice),
-            'currency' => $this->currency($invoice, $payment),
-            ...$this->rate($payment),
+            'date' => $line->lineDate(),
+            'category' => $record->movementCategory(),
+            'currency' => $this->currency($record, $line),
+            'exchange_rate' => $line->lineExchangeRate(),
+            'exchange_rate_date' => $line->lineExchangeRateDate(),
             'source' => self::SOURCE,
-            ...$this->party($invoice),
-            ...$this->describe($invoice, $payment),
-            ...$this->amounts($payment),
+            ...$record->movementParty(),
+            ...$this->describe($record, $line),
+            ...$this->amounts($record, $line),
         ]);
 
-        $payment->update(['bank_transaction_id' => $movement->id]);
+        $line->linkMovement($movement->id);
 
         return $movement;
     }
 
     /**
-     * Carry an edited payment through to the movement it generated.
+     * Carry an edited settlement through to the movement it generated.
      *
-     * Only ever touches a row this class wrote. A payment pointing at a
-     * hand-entered movement is left alone, and so is a payment pointing at
-     * nothing — both are correct states, not stale ones.
+     * Only ever touches a row this class wrote. A line pointing at a
+     * hand-entered movement is left alone, and so is a line pointing at nothing
+     * — both are correct states, not stale ones.
      *
-     * @param  BankTransaction|null  $previous  what the payment was linked to before
+     * @param  BankTransaction|null  $previous  what the line was linked to before
      *                                          the edit, so a generated row it has
      *                                          just been pointed away from can go
      *                                          with the link instead of being
      *                                          stranded on the dashboard
      */
     public function sync(
-        PayableInvoice|ReceivableInvoice $invoice,
-        Payment $payment,
+        BooksBankMovement $record,
+        SettlementLine $line,
         ?BankTransaction $previous = null,
     ): void {
-        // Read through the id rather than the relation: the payment was just
-        // updated, and a cached relation would still hold the old movement.
-        $movement = $this->linked($payment);
+        // Read through the id rather than a relation: the line was just updated,
+        // and a cached relation would still hold the old movement.
+        $movement = $this->linked($line);
 
-        if (self::isOwnedBy($previous, $payment) && (int) $previous->id !== (int) $payment->bank_transaction_id) {
+        if (self::isOwnedBy($previous, $line) && (int) $previous->id !== (int) $line->linkedMovementId()) {
             $previous->delete();
         }
 
-        if (! self::isOwnedBy($movement, $payment)) {
+        if (! self::isOwnedBy($movement, $line)) {
             return;
         }
 
-        // A payment switched to `other` no longer claims to have moved money
+        // A settlement switched to `other` no longer claims to have moved money
         // through an account, so the movement it wrote is withdrawn rather than
         // left behind at its old amount.
-        if (! self::supports($payment->method)) {
-            $payment->update(['bank_transaction_id' => null]);
+        if (! self::supports($line->lineMethod())) {
+            $line->linkMovement(null);
             $movement->delete();
 
             return;
         }
 
         $movement->update([
-            'date' => $payment->payment_date,
-            'currency' => $this->currency($invoice, $payment),
-            ...$this->rate($payment),
-            ...$this->describe($invoice, $payment),
+            'date' => $line->lineDate(),
+            'category' => $record->movementCategory(),
+            'currency' => $this->currency($record, $line),
+            'exchange_rate' => $line->lineExchangeRate(),
+            'exchange_rate_date' => $line->lineExchangeRateDate(),
+            ...$this->describe($record, $line),
             // Every column is rewritten, not just the one in use: moving a
-            // payment from NLB to cash has to empty the column it left.
-            ...$this->amounts($payment),
+            // settlement from NLB to cash has to empty the column it left.
+            ...$this->amounts($record, $line),
         ]);
     }
 
     /**
-     * Remove the movement a payment generated, if it generated one.
+     * Remove the movement a settlement generated, if it generated one.
      *
-     * Used when the payment itself goes. Returns the id that was removed so the
+     * Used when the line itself goes. Returns the id that was removed so the
      * caller can record it, since afterwards there is nothing left to read.
      */
-    public function discard(Payment $payment): ?int
+    public function discard(SettlementLine $line): ?int
     {
-        $movement = $this->linked($payment);
+        $movement = $this->linked($line);
 
-        if (! self::isOwnedBy($movement, $payment)) {
+        if (! self::isOwnedBy($movement, $line)) {
             return null;
         }
 
@@ -184,83 +199,60 @@ class PaymentBankMovement
         return $id;
     }
 
-    /** The movement a payment currently points at, read fresh from its id. */
-    public function linked(Payment $payment): ?BankTransaction
+    /** The movement a line currently points at, read fresh from its id. */
+    public function linked(SettlementLine $line): ?BankTransaction
     {
-        return $payment->bank_transaction_id === null
-            ? null
-            : BankTransaction::find($payment->bank_transaction_id);
-    }
+        $id = $line->linkedMovementId();
 
-    private function category(PayableInvoice|ReceivableInvoice $invoice): string
-    {
-        return $invoice instanceof ReceivableInvoice ? 'income' : 'expense';
+        return $id === null ? null : BankTransaction::find($id);
     }
 
     /**
-     * The payment's currency, falling back to the invoice's.
+     * The line's currency, falling back to the record's.
      *
-     * A payment created without one takes the column default in the database
-     * and so reads as null on the model that was just written — the movement
-     * would then be inserted with an explicit null against a NOT NULL column.
+     * A line created without one takes the column default in the database and so
+     * reads as null on the model that was just written — the movement would then
+     * be inserted with an explicit null against a NOT NULL column.
      */
-    private function currency(PayableInvoice|ReceivableInvoice $invoice, Payment $payment): string
+    private function currency(BooksBankMovement $record, SettlementLine $line): string
     {
-        return $payment->currency ?: ($invoice->currency ?: 'EUR');
-    }
-
-    /**
-     * The payment's own rate, carried onto the movement.
-     *
-     * Both rows describe one movement of money, so they must price it the same
-     * way: letting the movement resolve its own rate could put the two a day
-     * apart and leave the ledger disagreeing with the invoice it settles.
-     *
-     * @return array<string, mixed>
-     */
-    private function rate(Payment $payment): array
-    {
-        return [
-            'exchange_rate' => $payment->exchange_rate,
-            'exchange_rate_date' => $payment->exchange_rate_date,
-        ];
-    }
-
-    /** @return array<string, int|null> */
-    private function party(PayableInvoice|ReceivableInvoice $invoice): array
-    {
-        return $invoice instanceof ReceivableInvoice
-            ? ['client_id' => $invoice->client_id]
-            : ['supplier_id' => $invoice->supplier_id];
+        return $line->lineCurrency() ?: ($record->movementCurrency() ?: 'EUR');
     }
 
     /**
      * The movement's own text, taken from the records rather than composed.
      *
-     * Nothing here writes a sentence: an invoice number, the invoice's own
-     * description and the payment's reference are data the operator typed, so
-     * the row reads the same in all three languages (rule 4) and no generated
-     * prose ends up in a financial record.
+     * Nothing here writes a sentence: an invoice number, a house name, a
+     * worker's name and the line's reference are data the operator typed, so the
+     * row reads the same in all three languages (rule 4) and no generated prose
+     * ends up in a financial record.
      *
      * @return array<string, string|null>
      */
-    private function describe(PayableInvoice|ReceivableInvoice $invoice, Payment $payment): array
+    private function describe(BooksBankMovement $record, SettlementLine $line): array
     {
         return [
-            'description_1' => $invoice->invoice_number ?: $invoice->description,
-            'description_2' => $payment->reference,
+            'description_1' => $record->movementDescription(),
+            'description_2' => $line->lineReference(),
         ];
     }
 
     /**
-     * The payment's amount in its account's column, every other column zeroed.
+     * The line's amount in its account's column, every other column zeroed, with
+     * the record's direction as its sign.
+     *
+     * The sign is applied here rather than left to the category, because only
+     * `income` and `expense` normalise themselves: a `payroll` or `housing` row
+     * keeps whatever sign it is given, and an unsigned one would be added to the
+     * balance instead of taken off it.
      *
      * @return array<string, float>
      */
-    private function amounts(Payment $payment): array
+    private function amounts(BooksBankMovement $record, SettlementLine $line): array
     {
         $columns = array_fill_keys(BankTransaction::AMOUNT_COLUMNS, 0.0);
-        $columns[self::ACCOUNT_COLUMNS[$payment->method]] = abs((float) $payment->amount);
+        $sign = $record->movementDirection() < 0 ? -1 : 1;
+        $columns[self::ACCOUNT_COLUMNS[$line->lineMethod()]] = $sign * abs($line->lineAmount());
 
         return $columns;
     }

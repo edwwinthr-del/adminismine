@@ -8,13 +8,18 @@ use App\Http\Requests\Travel\UpdateSocialAssistanceRequest;
 use App\Http\Resources\SocialAssistancePaymentResource;
 use App\Models\SocialAssistancePayment;
 use App\Services\CurrencyConverter;
+use App\Services\PaymentBankMovement;
 use App\Services\SocialAssistanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SocialAssistanceController extends Controller
 {
-    public function __construct(private readonly CurrencyConverter $converter) {}
+    public function __construct(
+        private readonly CurrencyConverter $converter,
+        private readonly PaymentBankMovement $movements,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -64,22 +69,44 @@ class SocialAssistanceController extends Controller
         ]);
     }
 
+    /**
+     * Record a payout. `book_bank_transaction` writes the bank or cash movement
+     * it represents — without it the payout is known to this module and to
+     * nothing else, least of all the dashboard's balances.
+     */
     public function store(StoreSocialAssistanceRequest $request): JsonResponse
     {
-        $data = $this->converter->fill($request->validated(), dateKey: 'payment_date');
+        $data = $this->converter->fill($request->paymentData(), dateKey: 'payment_date');
 
-        $payment = SocialAssistancePayment::create($data);
+        $payment = DB::transaction(function () use ($data, $request): SocialAssistancePayment {
+            $payout = SocialAssistancePayment::create($data);
 
-        activity()->performedOn($payment)->causedBy($request->user())->log('social_assistance.created');
+            if ($request->booksMovement()) {
+                // The payout is both the reason and the line: there is no
+                // separate obligation behind it.
+                $this->movements->create($payout, $payout);
+            }
+
+            return $payout;
+        });
+
+        activity()->performedOn($payment)->causedBy($request->user())
+            ->withProperties(['bank_transaction_id' => $payment->bank_transaction_id])
+            ->log('social_assistance.created');
 
         return (new SocialAssistancePaymentResource($payment->load('employee')))->response()->setStatusCode(201);
     }
 
+    /**
+     * Correct a payout in place. A movement this app booked from it follows the
+     * correction; one typed off a bank statement is left exactly as the bank has
+     * it (PaymentBankMovement).
+     */
     public function update(
         UpdateSocialAssistanceRequest $request,
         SocialAssistancePayment $socialAssistance,
     ): SocialAssistancePaymentResource {
-        $data = $request->validated();
+        $data = $request->paymentData();
 
         if (array_intersect_key($data, array_flip(['amount', 'currency', 'exchange_rate', 'payment_date'])) !== []) {
             $data = $this->converter->fill($data + [
@@ -90,18 +117,36 @@ class SocialAssistanceController extends Controller
             ], dateKey: 'payment_date');
         }
 
-        $socialAssistance->update($data);
+        DB::transaction(function () use ($socialAssistance, $data, $request): void {
+            $before = $this->movements->linked($socialAssistance);
+
+            $socialAssistance->update($data);
+            $this->movements->sync($socialAssistance, $socialAssistance, $before);
+
+            if ($request->booksMovement() && $socialAssistance->fresh()->bank_transaction_id === null) {
+                $this->movements->create($socialAssistance, $socialAssistance);
+            }
+        });
 
         activity()->performedOn($socialAssistance)->causedBy($request->user())->log('social_assistance.updated');
 
-        return new SocialAssistancePaymentResource($socialAssistance->load('employee'));
+        return new SocialAssistancePaymentResource($socialAssistance->refresh()->load('employee'));
     }
 
     public function destroy(Request $request, SocialAssistancePayment $socialAssistance): JsonResponse
     {
-        $socialAssistance->delete();
+        $released = DB::transaction(function () use ($socialAssistance): ?int {
+            // A movement booked from this payout goes with it; one typed off a
+            // statement stays, because the money left the account regardless.
+            $released = $this->movements->discard($socialAssistance);
+            $socialAssistance->delete();
 
-        activity()->performedOn($socialAssistance)->causedBy($request->user())->log('social_assistance.deleted');
+            return $released;
+        });
+
+        activity()->performedOn($socialAssistance)->causedBy($request->user())
+            ->withProperties(['released_bank_transaction' => $released])
+            ->log('social_assistance.deleted');
 
         return response()->json(['message' => 'Social assistance payment deleted.']);
     }

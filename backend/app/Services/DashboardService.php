@@ -195,12 +195,14 @@ class DashboardService
     /** @return array{monthly_cost: float, unpaid_rent: float, unpaid_bills: float, overdue_bills_count: int} */
     private function housing(string $month): array
     {
+        // Summed in EUR, like every other figure here: a TRY rent's face value
+        // added to a EUR one is not a total of anything (rule 5).
         $rents = RentPayment::query()->forMonth($month)->selectRaw(
-            'COALESCE(SUM(rent_amount_due), 0) as due, COALESCE(SUM(remaining_amount), 0) as remaining',
+            'COALESCE(SUM(amount_eur), 0) as due, COALESCE(SUM(remaining_amount), 0) as remaining',
         )->first();
 
         $bills = UtilityBill::query()->forMonth($month)->selectRaw(
-            'COALESCE(SUM(amount), 0) as due, COALESCE(SUM(remaining_amount), 0) as remaining',
+            'COALESCE(SUM(amount_eur), 0) as due, COALESCE(SUM(remaining_amount), 0) as remaining',
         )->first();
 
         return [

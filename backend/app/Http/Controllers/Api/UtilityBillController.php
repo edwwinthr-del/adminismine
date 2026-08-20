@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Concerns\CorrectsPayments;
+use App\Http\Controllers\Concerns\SettlesWithPayments;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Housing\RecordHousingPaymentRequest;
 use App\Http\Requests\Housing\SplitBillRequest;
@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\DB;
 
 class UtilityBillController extends Controller
 {
-    use CorrectsPayments;
+    use SettlesWithPayments;
 
     public function index(Request $request): JsonResponse
     {
@@ -79,35 +79,37 @@ class UtilityBillController extends Controller
 
     public function destroy(Request $request, UtilityBill $bill, FileAttachmentService $files): JsonResponse
     {
-        DB::transaction(function () use ($bill, $files) {
+        $released = DB::transaction(function () use ($bill, $files): array {
             $files->deleteAllFor($bill);
-            $bill->payments()->delete();
+            $released = $this->releaseSettlements($bill);
             $bill->delete();
+
+            return $released;
         });
 
-        activity()->performedOn($bill)->causedBy($request->user())->log('utility_bill.deleted');
+        activity()->performedOn($bill)->causedBy($request->user())
+            ->withProperties(['released_bank_transactions' => $released])
+            ->log('utility_bill.deleted');
 
         return response()->json(['message' => 'Utility bill deleted.']);
     }
 
+    /**
+     * Settle a bill. `book_bank_transaction` writes the movement the payment
+     * records, which is what puts it on the dashboard — see SettlesWithPayments.
+     */
     public function recordPayment(RecordHousingPaymentRequest $request, UtilityBill $bill): JsonResponse
     {
-        $data = $request->validated();
+        $data = $request->paymentData();
 
-        if ((float) $data['amount'] > (float) $bill->remaining_amount + 0.001) {
-            return response()->json([
-                'message' => 'Payment exceeds the remaining amount on this bill.',
-                'errors' => ['amount' => ['Payment exceeds the remaining amount on this bill.']],
-            ], 422);
-        }
-
-        DB::transaction(function () use ($bill, $data) {
-            $bill->payments()->create($data + ['currency' => $bill->currency]);
-            $bill->recalculate();
-        });
+        $payment = $this->recordSettlement($bill, $data, (string) $bill->currency, $request->booksMovement());
 
         activity()->performedOn($bill)->causedBy($request->user())
-            ->withProperties(['amount' => $data['amount'], 'method' => $data['method']])
+            ->withProperties([
+                'amount' => $data['amount'],
+                'method' => $data['method'],
+                'bank_transaction_id' => $payment->bank_transaction_id,
+            ])
             ->log('utility_bill.payment_recorded');
 
         return response()->json([
@@ -186,7 +188,7 @@ class UtilityBillController extends Controller
     /**
      * Correct a payment that was entered wrong, rather than booking its opposite.
      *
-     * See CorrectsPayments: two rows that cancel out would both read as real
+     * See SettlesWithPayments: two rows that cancel out would both read as real
      * money in every report and in the bank match.
      */
     public function updatePayment(
@@ -196,10 +198,10 @@ class UtilityBillController extends Controller
     ): JsonResponse {
         $before = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->correctPayment($bill, $payment, $request->validated());
+        $this->correctSettlement($bill, $payment, $request->paymentData(), $request->booksMovement());
 
         activity()->performedOn($bill)->causedBy($request->user())
-            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])
+            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->paymentData()])
             ->log('utility_bill.payment_updated');
 
         return response()->json([
@@ -212,10 +214,14 @@ class UtilityBillController extends Controller
     {
         $removed = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->removePayment($bill, $payment);
+        $movement = $this->removeSettlement($bill, $payment);
 
         activity()->performedOn($bill)->causedBy($request->user())
-            ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
+            ->withProperties([
+                'payment_id' => $payment->id,
+                'removed' => $removed,
+                'released_bank_transaction' => $movement,
+            ])
             ->log('utility_bill.payment_deleted');
 
         return response()->json([

@@ -57,9 +57,12 @@ class RentObligationService
             $created = collect($toCreate)->map(function (array $row) use ($houses): RentPayment {
                 $rent = new RentPayment($row);
                 $rent->setRelation('house', $houses->firstWhere('id', $row['house_id']));
+                // Priced without being saved, so the preview shows the same EUR
+                // figures the rows would carry once they are created.
+                $rent->syncEurAmount();
                 $rent->forceFill([
                     'paid_amount' => 0,
-                    'remaining_amount' => $row['rent_amount_due'],
+                    'remaining_amount' => (float) $rent->amount_eur,
                     'status' => 'unpaid',
                 ]);
 

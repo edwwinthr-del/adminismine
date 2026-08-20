@@ -9,6 +9,12 @@ import { useI18n } from "@/lib/i18n/context";
 import { formatDate, formatMoney, todayISO } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { AttachmentsModal } from "@/components/attachments-modal";
+import {
+  BankRecordField,
+  bankRecordPayload,
+  canBook,
+  type BankRecordMode,
+} from "@/components/bank-record-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -76,6 +82,8 @@ interface AssistancePayment {
   exchange_rate: number | null;
   amount_eur: number;
   method: string | null;
+  /** The movement this payout booked or was matched to, if any. */
+  bank_transaction_id: number | null;
   reason: string | null;
   notes: string | null;
 }
@@ -1121,6 +1129,25 @@ function AssistanceModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  /*
+   * A payout is its own settlement: unless a bank movement records it, the
+   * money is known to this page and to nothing else. A new one defaults to
+   * booking that movement; an edit defaults to changing nothing.
+   */
+  const editing = Boolean(payment);
+  const [bankMode, setBankMode] = useState<BankRecordMode>(
+    editing ? "keep" : canBook(payment?.method ?? "cash") ? "book" : "none",
+  );
+  const [movementId, setMovementId] = useState<number | null>(payment?.bank_transaction_id ?? null);
+
+  function changeMethod(next: string) {
+    setMethod(next);
+
+    // `other` names no account, so there is nothing to book into.
+    if (!canBook(next) && bankMode === "book") setBankMode("none");
+    if (canBook(next) && bankMode === "none" && !editing) setBankMode("book");
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -1139,6 +1166,7 @@ function AssistanceModal({
           method,
           reason: reason.trim() || null,
           notes: notes.trim() || null,
+          ...bankRecordPayload(bankMode, movementId),
         },
       });
       onClose();
@@ -1221,13 +1249,23 @@ function AssistanceModal({
           </div>
           <div>
             <label className={labelClass}>{t("travel.method")}</label>
-            <Select value={method} onChange={(e) => setMethod(e.target.value)}>
+            <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
               {METHODS.map((value) => (
                 <option key={value} value={value}>
                   {t(`method.${value}`)}
                 </option>
               ))}
             </Select>
+          </div>
+          <div className="col-span-2">
+            <BankRecordField
+              mode={bankMode}
+              onModeChange={setBankMode}
+              movementId={movementId}
+              onMovementChange={setMovementId}
+              method={method}
+              editing={editing}
+            />
           </div>
           <div className="col-span-2">
             <label className={labelClass}>{t("travel.assistanceReason")}</label>
@@ -1273,6 +1311,22 @@ function PaymentModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  /*
+   * A ticket or an expense only reaches the balances, the cashflow and the
+   * dashboard if a bank movement records the payment, so it defaults to
+   * booking one.
+   */
+  const [bankMode, setBankMode] = useState<BankRecordMode>(canBook("cash") ? "book" : "none");
+  const [movementId, setMovementId] = useState<number | null>(null);
+
+  function changeMethod(next: string) {
+    setMethod(next);
+
+    // `other` names no account, so there is nothing to book into.
+    if (!canBook(next) && bankMode === "book") setBankMode("none");
+    if (canBook(next) && bankMode === "none") setBankMode("book");
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -1285,6 +1339,7 @@ function PaymentModal({
           payment_date: paymentDate,
           method,
           notes: notes.trim() || null,
+          ...bankRecordPayload(bankMode, movementId),
         },
       });
       onClose();
@@ -1320,7 +1375,7 @@ function PaymentModal({
           </div>
           <div>
             <label className={labelClass}>{t("travel.method")}</label>
-            <Select value={method} onChange={(e) => setMethod(e.target.value)}>
+            <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
               {METHODS.map((value) => (
                 <option key={value} value={value}>
                   {t(`method.${value}`)}
@@ -1333,6 +1388,15 @@ function PaymentModal({
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>
+
+        <BankRecordField
+          mode={bankMode}
+          onModeChange={setBankMode}
+          movementId={movementId}
+          onMovementChange={setMovementId}
+          method={method}
+          editing={false}
+        />
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">

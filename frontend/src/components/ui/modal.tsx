@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useEscapeLayer } from "@/lib/overlay-layers";
+
+/** How much of the dialog must stay in view, however far it is dragged. */
+const KEEP_VISIBLE = 96;
 
 interface ModalProps {
   open: boolean;
@@ -15,20 +20,12 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
 
   const dragStart = useRef({ x: 0, y: 0 });
   const startPosition = useRef({ x: 0, y: 0 });
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-
-    if (open) {
-      document.addEventListener("keydown", onKey);
-    }
-
-    return () => {
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
+  // Escape closes the topmost layer only. A dialog opened from inside another
+  // one, or a lookup list open over this dialog, used to go down together with
+  // it on one keypress — see lib/overlay-layers.
+  useEscapeLayer(open, onClose);
 
   // Reset position whenever a new modal opens.
   useEffect(() => {
@@ -62,10 +59,39 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
     const dx = e.clientX - dragStart.current.x;
     const dy = e.clientY - dragStart.current.y;
 
-    setPosition({
-      x: startPosition.current.x + dx,
-      y: startPosition.current.y + dy,
-    });
+    setPosition(clampToViewport(startPosition.current.x + dx, startPosition.current.y + dy));
+  }
+
+  /**
+   * Keeps the dragged dialog reachable.
+   *
+   * Dragging is unbounded otherwise, and a dialog pulled past the top of the
+   * window takes its header — the drag handle and the close button — with it,
+   * leaving a form that can only be dismissed by reloading the page. The bounds
+   * are measured against the dialog's *untranslated* origin, which is where the
+   * flex container centres it, so they hold at any size.
+   */
+  function clampToViewport(x: number, y: number) {
+    const dialog = dialogRef.current;
+
+    if (!dialog) return { x, y };
+
+    const rect = dialog.getBoundingClientRect();
+    const originLeft = rect.left - position.x;
+    const originTop = rect.top - position.y;
+
+    const between = (value: number, min: number, max: number) =>
+      max < min ? min : Math.min(Math.max(value, min), max);
+
+    return {
+      x: between(
+        x,
+        KEEP_VISIBLE - rect.width - originLeft,
+        window.innerWidth - KEEP_VISIBLE - originLeft,
+      ),
+      // Never above the top edge: the header is the only way to drag it back.
+      y: between(y, -originTop, window.innerHeight - KEEP_VISIBLE - originTop),
+    };
   }
 
   function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
@@ -76,9 +102,16 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
     }
   }
 
-  if (!open) return null;
+  // Rendered into <body>, never in place. A modal opened from inside another
+  // one — recording a payment from the settlement dialog — was laid out inside
+  // its parent and cut off by it: the parent's drag `transform` makes it the
+  // containing block for `position: fixed`, so `inset-0` stopped meaning the
+  // viewport, and its `overflow-hidden` clipped whatever did not fit. A portal
+  // escapes both, and the later-opened modal still stacks on top because its
+  // node is appended after.
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
         <div
@@ -89,6 +122,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
 
         {/* Modal */}
         <div
+            ref={dialogRef}
             style={{
               transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
             }}
@@ -132,6 +166,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
             {children}
           </div>
         </div>
-      </div>
+      </div>,
+      document.body,
   );
 }

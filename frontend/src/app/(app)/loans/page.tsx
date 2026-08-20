@@ -8,6 +8,12 @@ import { ApiError, apiFetch, errorMessage } from "@/lib/api";
 import { useI18n } from "@/lib/i18n/context";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { formatDate, formatMoney, todayISO } from "@/lib/format";
+import {
+  BankRecordField,
+  bankRecordPayload,
+  canBook,
+  type BankRecordMode,
+} from "@/components/bank-record-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -478,6 +484,22 @@ function RepaymentModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  /*
+   * A repayment only reaches the balances, the cashflow and the dashboard if a
+   * bank movement records it, so it defaults to booking one — money out for a
+   * loan the company took, money in for one it gave.
+   */
+  const [bankMode, setBankMode] = useState<BankRecordMode>(canBook("cash") ? "book" : "none");
+  const [movementId, setMovementId] = useState<number | null>(null);
+
+  function changeMethod(next: string) {
+    setMethod(next);
+
+    // `other` names no account, so there is nothing to book into.
+    if (!canBook(next) && bankMode === "book") setBankMode("none");
+    if (canBook(next) && bankMode === "none") setBankMode("book");
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -491,6 +513,7 @@ function RepaymentModal({
           method,
           reference: reference.trim() || null,
           notes: notes.trim() || null,
+          ...bankRecordPayload(bankMode, movementId),
         },
       });
       onClose();
@@ -526,7 +549,7 @@ function RepaymentModal({
           </div>
           <div>
             <label className={labelClass}>{t("loans.method")}</label>
-            <Select value={method} onChange={(e) => setMethod(e.target.value)}>
+            <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
               {METHODS.map((value) => (
                 <option key={value} value={value}>
                   {t(`method.${value}`)}
@@ -537,6 +560,16 @@ function RepaymentModal({
           <div>
             <label className={labelClass}>{t("loans.reference")}</label>
             <Input value={reference} onChange={(e) => setReference(e.target.value)} />
+          </div>
+          <div className="col-span-2">
+            <BankRecordField
+              mode={bankMode}
+              onModeChange={setBankMode}
+              movementId={movementId}
+              onMovementChange={setMovementId}
+              method={method}
+              editing={false}
+            />
           </div>
           <div className="col-span-2">
             <label className={labelClass}>{t("loans.notes")}</label>

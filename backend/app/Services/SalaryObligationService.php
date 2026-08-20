@@ -61,10 +61,13 @@ class SalaryObligationService
             $created = collect($toCreate)->map(function (array $row) use ($employees): SalaryPayment {
                 $obligation = new SalaryPayment($row);
                 $obligation->setRelation('employee', $employees->firstWhere('id', $row['employee_id']));
+                $obligation->forceFill(['net_salary_due' => $row['base_salary']]);
+                // Priced without being saved, so the preview shows the same EUR
+                // figures the rows would carry once they are created.
+                $obligation->syncEurAmount();
                 $obligation->forceFill([
-                    'net_salary_due' => $row['base_salary'],
                     'paid_amount' => 0,
-                    'remaining_amount' => $row['base_salary'],
+                    'remaining_amount' => (float) $obligation->amount_eur,
                     'status' => 'unpaid',
                 ]);
 

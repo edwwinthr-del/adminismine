@@ -201,7 +201,7 @@ class InvoiceSettlementService
     /** @param array<string, mixed> $data */
     public function recordDeduction(ReceivableInvoice $invoice, array $data): ReceivableDeduction
     {
-        $this->assertFits($invoice, (float) $data['amount'], $this->settled($invoice));
+        $this->assertFits($invoice, $this->deductionInEur($invoice, $data), $this->settled($invoice));
 
         return DB::transaction(function () use ($invoice, $data): ReceivableDeduction {
             $deduction = $invoice->deductions()->create($data);
@@ -219,8 +219,8 @@ class InvoiceSettlementService
     ): ReceivableDeduction {
         $this->assertOwnsDeduction($invoice, $deduction);
 
-        $amount = (float) ($data['amount'] ?? $deduction->amount);
-        $this->assertFits($invoice, $amount, $this->settled($invoice) - (float) $deduction->amount);
+        $amount = $this->deductionInEur($invoice, $data, $deduction);
+        $this->assertFits($invoice, $amount, $this->settled($invoice) - (float) $deduction->amount_eur);
 
         return DB::transaction(function () use ($invoice, $deduction, $data): ReceivableDeduction {
             $deduction->update($data);
@@ -292,7 +292,7 @@ class InvoiceSettlementService
         $settled = (float) $invoice->payments()->sum('amount_eur');
 
         if ($invoice instanceof ReceivableInvoice) {
-            $settled += (float) $invoice->deductions()->sum('amount');
+            $settled += (float) $invoice->deductions()->sum('amount_eur');
         }
 
         return round($settled, 2);
@@ -323,6 +323,31 @@ class InvoiceSettlementService
             $data['amount'] ?? $payment?->amount ?? 0,
             (string) $currency,
             $data['exchange_rate'] ?? $payment?->exchange_rate,
+            $date === null ? null : (string) $date,
+        )['amount_eur'];
+    }
+
+    /**
+     * A deduction payload's value in the accounting currency.
+     *
+     * A deduction stated without a currency is EUR, which is what every existing
+     * row is — the column was added with that default precisely so the figures
+     * already stored keep meaning what they meant.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function deductionInEur(
+        ReceivableInvoice $invoice,
+        array $data,
+        ?ReceivableDeduction $deduction = null,
+    ): float {
+        $currency = $data['currency'] ?? $deduction?->currency ?? Currencies::BASE;
+        $date = $data['deduction_date'] ?? optional($deduction?->deduction_date)->toDateString();
+
+        return (float) app(CurrencyConverter::class)->toEur(
+            $data['amount'] ?? $deduction?->amount ?? 0,
+            (string) $currency,
+            $data['exchange_rate'] ?? $deduction?->exchange_rate,
             $date === null ? null : (string) $date,
         )['amount_eur'];
     }

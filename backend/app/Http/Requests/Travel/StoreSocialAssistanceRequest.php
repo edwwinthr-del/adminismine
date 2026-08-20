@@ -2,14 +2,22 @@
 
 namespace App\Http\Requests\Travel;
 
+use App\Http\Requests\Concerns\ValidatesBankRecord;
 use App\Models\SocialAssistancePayment;
 use App\Support\Currencies;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
+/**
+ * A social assistance payout. It is its own settlement, so the bank-record rules
+ * apply to it directly ({@see ValidatesBankRecord}).
+ */
 class StoreSocialAssistanceRequest extends FormRequest
 {
+    use ValidatesBankRecord;
+
     public function authorize(): bool
     {
         return true; // gated by can:travel.manage
@@ -34,10 +42,15 @@ class StoreSocialAssistanceRequest extends FormRequest
             'amount' => ['required', 'numeric', 'gt:0'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'method' => ['nullable', Rule::in(SocialAssistancePayment::METHODS)],
-            'bank_transaction_id' => ['nullable', 'integer', 'exists:bankovne_transakcije,id'],
             'reason' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            ...$this->bankRecordRules(),
         ];
+    }
+
+    public function after(): array
+    {
+        return [fn (Validator $validator) => $this->validateBankRecord($validator)];
     }
 
     public function messages(): array

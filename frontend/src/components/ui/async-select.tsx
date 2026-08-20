@@ -1,10 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useI18n } from "@/lib/i18n/context";
+import { useEscapeLayer } from "@/lib/overlay-layers";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+
+/** Tallest the option list is allowed to be, and the least it will settle for. */
+const MAX_LIST_HEIGHT = 288;
+const MIN_LIST_HEIGHT = 120;
 
 export interface LookupOption {
   value: number;
@@ -81,8 +87,11 @@ export function AsyncSelect({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   /** Guards against a slow early response overwriting a fast later one. */
   const requestId = useRef(0);
+  /** Where to draw the list, in viewport coordinates — see {@link place}. */
+  const [box, setBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
 
   const debouncedTerm = useDebouncedValue(term);
 
@@ -180,15 +189,88 @@ export function AsyncSelect({
     if (!open) return;
 
     const onPointerDown = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-        setTerm("");
-      }
+      const target = event.target as Node;
+
+      // The list lives in <body>, so "outside" has to mean outside both parts —
+      // otherwise clicking an option closes the field before the click lands on
+      // it, and nothing is ever selected.
+      if (containerRef.current?.contains(target) || listRef.current?.contains(target)) return;
+
+      setOpen(false);
+      setTerm("");
     };
 
     document.addEventListener("mousedown", onPointerDown);
 
     return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  // Escape closes the list and stops there. It used to reach the dialog behind
+  // the field as well, so dismissing a dropdown threw away the form — see
+  // lib/overlay-layers.
+  useEscapeLayer(open, () => {
+    setOpen(false);
+    setTerm("");
+  });
+
+  /**
+   * Keep the list on its field, in viewport coordinates.
+   *
+   * The list is drawn into <body> rather than next to the input, because inside
+   * a modal the input sits in a scrolling box (`overflow-y-auto`) that clipped
+   * the list the moment the field was anywhere near the bottom — the options
+   * were there, cut in half. Drawn from the body it can also flip above the
+   * field when there is more room up than down, instead of being squeezed.
+   *
+   * The cost of leaving the field is that the list no longer moves with it, and
+   * the anchor moves for reasons that fire no event to listen for: the dialog
+   * holding it is dragged by its header, an error line appears above it, an
+   * async label resolves and rewraps a row. So it is measured every frame while
+   * open — one `getBoundingClientRect` on one element, for as long as a
+   * dropdown is on screen — and the state is only written when the numbers
+   * actually move, so a still field costs no renders.
+   */
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    let frame = 0;
+
+    function place() {
+      const anchor = containerRef.current;
+
+      if (anchor) {
+        const rect = anchor.getBoundingClientRect();
+        const gap = 4;
+        const below = window.innerHeight - rect.bottom - gap;
+        const above = rect.top - gap;
+        const flip = below < Math.min(MAX_LIST_HEIGHT, above) && above > below;
+        const height = Math.min(MAX_LIST_HEIGHT, Math.max(flip ? above : below, MIN_LIST_HEIGHT));
+
+        // With room on neither side the floor above wins and the list would
+        // hang off the edge it was placed against — the very thing the portal
+        // was for. Pinning it inside the window instead lets it overlap the
+        // field, which is the lesser of the two.
+        const top = flip
+          ? Math.max(gap, rect.top - gap - height)
+          : Math.max(gap, Math.min(rect.bottom + gap, window.innerHeight - gap - height));
+
+        setBox((current) =>
+          current &&
+          current.top === top &&
+          current.left === rect.left &&
+          current.width === rect.width &&
+          current.height === height
+            ? current
+            : { top, left: rect.left, width: rect.width, height },
+        );
+      }
+
+      frame = requestAnimationFrame(place);
+    }
+
+    place();
+
+    return () => cancelAnimationFrame(frame);
   }, [open]);
 
   function choose(option: LookupOption | null) {
@@ -225,11 +307,8 @@ export function AsyncSelect({
       return;
     }
 
-    if (event.key === "Escape" && open) {
-      event.preventDefault();
-      setOpen(false);
-      setTerm("");
-    }
+    // Escape is not handled here: it belongs to the topmost layer on screen,
+    // which the effect above registers this list as while it is open.
   }
 
   const label = selected?.label ?? "";
@@ -255,6 +334,10 @@ export function AsyncSelect({
           if (!open) setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        // Focus alone is not enough to reopen it: after picking an option the
+        // field keeps focus, so clicking it again to choose a different one
+        // fired nothing and the list stayed shut.
+        onMouseDown={() => setOpen(true)}
         onKeyDown={onKeyDown}
         className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 pr-8 text-sm text-zinc-900 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
       />
@@ -273,11 +356,13 @@ export function AsyncSelect({
         </button>
       )}
 
-      {open && (
+      {open && box && typeof document !== "undefined" && createPortal(
         <ul
+          ref={listRef}
           id={`${inputId}-listbox`}
           role="listbox"
-          className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          style={{ top: box.top, left: box.left, width: box.width, maxHeight: box.height }}
+          className="fixed z-[60] overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
         >
           {emptyLabel && (
             <li>
@@ -325,7 +410,8 @@ export function AsyncSelect({
               {t("select.refine")}
             </li>
           )}
-        </ul>
+        </ul>,
+        document.body,
       )}
     </div>
   );

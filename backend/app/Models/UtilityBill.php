@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Contracts\BooksBankMovement;
+use App\Models\Concerns\BooksMovements;
+use App\Models\Concerns\ConvertsToEur;
 use App\Models\Concerns\HasAuditColumns;
 use App\Models\Concerns\HasFileAttachments;
 use App\Support\MonthPeriod;
@@ -13,8 +16,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-class UtilityBill extends Model
+class UtilityBill extends Model implements BooksBankMovement
 {
+    use BooksMovements;
+    use ConvertsToEur;
     use HasAuditColumns, HasFactory, HasFileAttachments;
 
     protected $table = 'rezijski_racuni';
@@ -29,6 +34,8 @@ class UtilityBill extends Model
         'billing_period',
         'amount',
         'currency',
+        'exchange_rate',
+        'exchange_rate_date',
         'due_date',
         'cost_bearer',
         'exception_reason',
@@ -48,7 +55,10 @@ class UtilityBill extends Model
             'billing_period' => 'date:Y-m-d',
             'due_date' => 'date:Y-m-d',
             'paid_date' => 'date:Y-m-d',
+            'exchange_rate_date' => 'date:Y-m-d',
             'amount' => 'decimal:2',
+            'exchange_rate' => 'decimal:10',
+            'amount_eur' => 'decimal:2',
             'paid_amount' => 'decimal:2',
             'remaining_amount' => 'decimal:2',
         ];
@@ -70,12 +80,15 @@ class UtilityBill extends Model
         return $this->hasMany(HousingDeduction::class);
     }
 
-    /** Recompute paid/remaining/status and the settlement date from the payments. */
+    /**
+     * Recompute paid/remaining/status and the settlement date from the payments,
+     * both sides in EUR (rule 5).
+     */
     public function recalculate(): void
     {
-        $amount = round((float) $this->amount, 2);
+        $amount = round((float) $this->amount_eur, 2);
         $payments = $this->payments()->get();
-        $paid = round((float) $payments->sum('amount'), 2);
+        $paid = round((float) $payments->sum('amount_eur'), 2);
         $remaining = round($amount - $paid, 2);
         $status = $paid <= 0 ? 'unpaid' : ($remaining > 0.001 ? 'partial' : 'paid');
 
@@ -113,5 +126,36 @@ class UtilityBill extends Model
         return $query->outstanding()
             ->whereNotNull('due_date')
             ->whereDate('due_date', '<', now()->toDateString());
+    }
+
+    /** A bill paid for a house: money out, under the housing category. */
+    public function movementCategory(): string
+    {
+        return 'housing';
+    }
+
+    public function movementDirection(): int
+    {
+        return -1;
+    }
+
+    /**
+     * The house's name. The bill type stays out of it: it is a canonical enum
+     * (`electricity`), and putting it in a movement's text would show a
+     * key rather than a word in two of the three languages (rule 4).
+     */
+    public function movementDescription(): ?string
+    {
+        return $this->house?->name;
+    }
+
+    protected function eurSourceColumn(): string
+    {
+        return 'amount';
+    }
+
+    protected function eurRateDate(): ?string
+    {
+        return optional($this->billing_period)->toDateString();
     }
 }

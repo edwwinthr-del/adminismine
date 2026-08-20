@@ -2,14 +2,22 @@
 
 namespace App\Models;
 
+use App\Contracts\SettlementLine;
 use App\Models\Concerns\ConvertsToEur;
 use App\Models\Concerns\HasAuditColumns;
+use App\Services\PaymentBankMovement;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
-class Payment extends Model
+/**
+ * One line settling something: an invoice, rent, a utility bill, a salary, a
+ * ticket, a travel expense or a loan. All of them morph here, which is what lets
+ * any settlement be booked into — or matched against — the bank ledger through
+ * the same service ({@see PaymentBankMovement}).
+ */
+class Payment extends Model implements SettlementLine
 {
     use ConvertsToEur;
     use HasAuditColumns, HasFactory;
@@ -57,5 +65,56 @@ class Payment extends Model
     protected function eurRateDate(): ?string
     {
         return optional($this->payment_date)->toDateString();
+    }
+
+    public function lineDate(): ?string
+    {
+        return optional($this->payment_date)->toDateString();
+    }
+
+    public function lineAmount(): float
+    {
+        return (float) $this->amount;
+    }
+
+    public function lineCurrency(): ?string
+    {
+        return $this->currency;
+    }
+
+    public function lineExchangeRate(): int|float|string|null
+    {
+        return $this->exchange_rate;
+    }
+
+    public function lineExchangeRateDate(): ?string
+    {
+        return optional($this->exchange_rate_date)->toDateString();
+    }
+
+    public function lineMethod(): ?string
+    {
+        return $this->method;
+    }
+
+    public function lineReference(): ?string
+    {
+        return $this->reference;
+    }
+
+    public function linkedMovementId(): ?int
+    {
+        return $this->bank_transaction_id === null ? null : (int) $this->bank_transaction_id;
+    }
+
+    public function linkMovement(?int $movementId): void
+    {
+        $this->update(['bank_transaction_id' => $movementId]);
+    }
+
+    public function movementHasOtherClaims(BankTransaction $movement): bool
+    {
+        return $movement->payments()->whereKeyNot($this->getKey())->exists()
+            || $movement->socialAssistancePayments()->exists();
     }
 }

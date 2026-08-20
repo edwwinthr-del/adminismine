@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Contracts\BooksBankMovement;
+use App\Models\Concerns\BooksMovements;
 use App\Models\Concerns\HasAuditColumns;
 use App\Models\Concerns\HasFileAttachments;
 use App\Models\Concerns\Searchable;
@@ -19,8 +21,9 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * was paid in and is never rewritten; `amount_eur` plus `exchange_rate` record
  * what it cost the books.
  */
-class FlightTicket extends Model
+class FlightTicket extends Model implements BooksBankMovement
 {
+    use BooksMovements;
     use HasAuditColumns, HasFactory, HasFileAttachments, Searchable;
 
     protected $table = 'avionske_karte';
@@ -95,7 +98,7 @@ class FlightTicket extends Model
     public function recalculate(): void
     {
         $due = round((float) $this->amount_eur, 2);
-        $paid = round((float) $this->payments()->sum('amount'), 2);
+        $paid = round((float) $this->payments()->sum('amount_eur'), 2);
         $remaining = round($due - $paid, 2);
 
         $this->forceFill([
@@ -127,5 +130,22 @@ class FlightTicket extends Model
         [$start, $end] = MonthPeriod::range($month);
 
         return $query->whereBetween('ticket_date', [$start, $end]);
+    }
+
+    /** Paying for a flight is money out, under the travel category. */
+    public function movementCategory(): string
+    {
+        return 'travel';
+    }
+
+    public function movementDirection(): int
+    {
+        return -1;
+    }
+
+    /** The airline's own reference if there is one, otherwise who flew. */
+    public function movementDescription(): ?string
+    {
+        return $this->reference ?: $this->traveller_name;
     }
 }

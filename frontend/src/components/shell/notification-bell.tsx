@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { subscribeToWrites } from "@/lib/data/cache";
+import { useAuth } from "@/lib/auth/context";
+import { markMutated, subscribeToWrites } from "@/lib/data/cache";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate } from "@/lib/format";
 import {
@@ -14,16 +15,55 @@ import {
 } from "@/lib/notifications";
 import { cn } from "@/lib/cn";
 
-/** How often the bell re-checks; the scan itself runs daily on the server. */
+/** How often the bell re-reads its counts. */
 const POLL_MS = 60_000;
+
+/**
+ * How often the app asks the server to re-run the scan.
+ *
+ * The server's own scheduled scan runs once a day, so until this existed a
+ * notification raised by something entered this morning did not appear until
+ * someone pressed "Re-scan" by hand. Re-running it on a timer is what makes the
+ * bell reflect today's records without anyone asking it to.
+ */
+const SCAN_MS = 180_000;
+
+/**
+ * The last scan's timestamp, shared through localStorage so that N open tabs
+ * still produce one scan per interval rather than N of them.
+ */
+const SCAN_STAMP_KEY = "notifications:last-scan";
+
+/**
+ * Take the next scan slot, or report that it is not due yet (or that another
+ * tab has it). Storage can be unavailable — private windows, a blocked origin —
+ * and the scan is harmless to repeat, so a failure to read it scans anyway.
+ */
+function claimScanSlot(): boolean {
+  try {
+    const last = Number(window.localStorage.getItem(SCAN_STAMP_KEY) ?? 0);
+
+    if (Number.isFinite(last) && Date.now() - last < SCAN_MS) return false;
+
+    window.localStorage.setItem(SCAN_STAMP_KEY, String(Date.now()));
+
+    return true;
+  } catch {
+    return true;
+  }
+}
 
 export function NotificationBell() {
   const { t } = useI18n();
+  const { hasPermission } = useAuth();
   const [counts, setCounts] = useState<NotificationCounts>({ unread: 0, open: 0, critical: 0 });
   const [recent, setRecent] = useState<AppNotification[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // The scan route is an Admin one, same as the manual button on the
+  // notifications page; a user without it just reads what the scan produced.
+  const canScan = hasPermission("notifications.configure");
 
   const loadCounts = useCallback(async () => {
     try {
@@ -53,6 +93,53 @@ export function NotificationBell() {
     const timer = window.setInterval(() => void loadCounts(), POLL_MS);
     return () => window.clearInterval(timer);
   }, [loadCounts]);
+
+  /*
+   * Re-run the scan on a timer, so notifications appear on their own instead of
+   * waiting for the daily scheduled run or for someone to press "Re-scan".
+   *
+   * Three things keep it from being expensive. A hidden tab does nothing — the
+   * scan runs when it is next looked at, since a notification nobody is there to
+   * see is not urgent. The slot is shared across tabs, so several open windows
+   * still scan once. And the write is reported as revalidate: false: a scan that
+   * changed nothing is not a write anyone should see, and only one that created
+   * or resolved something invalidates the read cache — which is also what
+   * refreshes the counts and the panel below, through the subscription.
+   */
+  useEffect(() => {
+    if (!canScan) return;
+
+    async function scan() {
+      if (document.visibilityState !== "visible") return;
+      if (!claimScanSlot()) return;
+
+      try {
+        const res = await apiFetch<{ data: { created: number; resolved: number } }>("/notifications/scan", {
+          method: "POST",
+          json: { automatic: true },
+          revalidate: false,
+        });
+
+        if (res.data.created > 0 || res.data.resolved > 0) markMutated();
+      } catch {
+        /* the bell must never break the shell */
+      }
+    }
+
+    const run = () => void scan();
+
+    run();
+
+    const timer = window.setInterval(run, SCAN_MS);
+    // Returning to a tab left open past its slot should not wait out another
+    // full interval before it re-checks.
+    document.addEventListener("visibilitychange", run);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", run);
+    };
+  }, [canScan]);
 
   /*
    * The badge is a figure derived from records this app edits, so it follows the

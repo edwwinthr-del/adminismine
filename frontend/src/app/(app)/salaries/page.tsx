@@ -5,6 +5,12 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useI18n } from "@/lib/i18n/context";
 import { formatMoney, todayISO } from "@/lib/format";
+import {
+  BankRecordField,
+  bankRecordPayload,
+  canBook,
+  type BankRecordMode,
+} from "@/components/bank-record-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,8 +28,10 @@ interface SalaryPayment {
   adjustments: number;
   deductions: number;
   net_salary_due: number;
+  /** Paid and remaining are EUR; the original is what the operator types to settle it. */
   paid_amount: number;
   remaining_amount: number;
+  remaining_amount_original: number;
   status: string;
   notes: string | null;
 }
@@ -176,9 +184,10 @@ export default function SalariesPage() {
                   <td className="px-4 py-3 text-right font-medium tabular-nums">
                     {formatMoney(row.net_salary_due, row.currency)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.paid_amount, row.currency)}</td>
+                  {/* Paid and remaining are the accounting currency, whatever the wage is agreed in. */}
+                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.paid_amount)}</td>
                   <td className="px-4 py-3 text-right font-medium tabular-nums">
-                    {formatMoney(row.remaining_amount, row.currency)}
+                    {formatMoney(row.remaining_amount)}
                   </td>
                   <td className="px-4 py-3">
                     <Badge tone={statusTone(row.status)}>{t(`status.${row.status}`)}</Badge>
@@ -314,11 +323,28 @@ function RecordPaymentModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const [amount, setAmount] = useState(String(row.remaining_amount));
+  // Entered in the currency the wage is agreed in, which is what the obligation
+  // states — the books hold the EUR twin of it.
+  const [amount, setAmount] = useState(String(row.remaining_amount_original));
   const [paymentDate, setPaymentDate] = useState(todayISO());
   const [method, setMethod] = useState<string>("cash");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  /*
+   * Wages only reach the balances, the cashflow and the dashboard if a bank
+   * movement records them, so paying a worker defaults to booking one.
+   */
+  const [bankMode, setBankMode] = useState<BankRecordMode>(canBook("cash") ? "book" : "none");
+  const [movementId, setMovementId] = useState<number | null>(null);
+
+  function changeMethod(next: string) {
+    setMethod(next);
+
+    // `other` names no account, so there is nothing to book into.
+    if (!canBook(next) && bankMode === "book") setBankMode("none");
+    if (canBook(next) && bankMode === "none") setBankMode("book");
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -327,7 +353,12 @@ function RecordPaymentModal({
     try {
       await apiFetch(`/salary-payments/${row.id}/payments`, {
         method: "POST",
-        json: { amount: Number(amount), payment_date: paymentDate, method },
+        json: {
+          amount: Number(amount),
+          payment_date: paymentDate,
+          method,
+          ...bankRecordPayload(bankMode, movementId),
+        },
       });
       onClose();
     } catch (err) {
@@ -362,7 +393,7 @@ function RecordPaymentModal({
         </div>
         <div>
           <label className={label}>{t("salaries.method")}</label>
-          <Select value={method} onChange={(e) => setMethod(e.target.value)}>
+          <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
             {METHODS.map((m) => (
               <option key={m} value={m}>
                 {t(`method.${m}`)}
@@ -370,6 +401,14 @@ function RecordPaymentModal({
             ))}
           </Select>
         </div>
+        <BankRecordField
+          mode={bankMode}
+          onModeChange={setBankMode}
+          movementId={movementId}
+          onMovementChange={setMovementId}
+          method={method}
+          editing={false}
+        />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>

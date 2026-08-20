@@ -65,6 +65,23 @@ trait ConvertsToEur
                 : ($converted['exchange_rate_date'] ?? $this->eurRateDate());
     }
 
+    /**
+     * A EUR figure read back in the record's own currency, at the record's own
+     * rate.
+     *
+     * Paid and remaining are derived in EUR, but an operator settling a lease
+     * written in TRY types TRY — so the amount a form offers has to be the
+     * remainder as they would state it, not as the books hold it. Derived on
+     * the way out and never stored (rule 1); a record already in the accounting
+     * currency is returned unchanged.
+     */
+    public function inOwnCurrency(float|int|string|null $eurAmount): float
+    {
+        $rate = (float) $this->exchange_rate;
+
+        return round(((float) $eurAmount) * ($rate > 0 ? $rate : 1), 2);
+    }
+
     /** The column holding the amount in the record's own currency. */
     abstract protected function eurSourceColumn(): string;
 

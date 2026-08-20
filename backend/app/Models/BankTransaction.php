@@ -198,10 +198,21 @@ class BankTransaction extends Model
         return $this->belongsTo(Client::class);
     }
 
-    /** Invoice payments settled by this movement (match links). */
+    /** Settlement lines this movement settles (booked or matched). */
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class, 'bank_transaction_id');
+    }
+
+    /**
+     * Social assistance payouts pointing at this movement. They settle nothing
+     * else — the payout *is* the settlement — so they carry the link themselves
+     * instead of going through `payments`, and every question about who claims a
+     * movement has to ask both tables.
+     */
+    public function socialAssistancePayments(): HasMany
+    {
+        return $this->hasMany(SocialAssistancePayment::class, 'bank_transaction_id');
     }
 
     /** The movement's net in the currency it was entered in. */
@@ -328,10 +339,10 @@ class BankTransaction extends Model
         ];
     }
 
-    /** Movements no payment points at — nothing has been matched to them yet. */
+    /** Movements no settlement points at — nothing has been matched to them yet. */
     public function scopeUnmatched(Builder $query): Builder
     {
-        return $query->doesntHave('payments');
+        return $query->doesntHave('payments')->doesntHave('socialAssistancePayments');
     }
 
     /**

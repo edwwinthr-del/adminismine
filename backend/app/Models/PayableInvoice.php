@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Contracts\BooksBankMovement;
+use App\Models\Concerns\BooksMovements;
 use App\Models\Concerns\ConvertsToEur;
 use App\Models\Concerns\HasAuditColumns;
 use App\Models\Concerns\Searchable;
@@ -12,8 +14,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-class PayableInvoice extends Model
+class PayableInvoice extends Model implements BooksBankMovement
 {
+    use BooksMovements;
     use ConvertsToEur;
     use HasAuditColumns, HasFactory, Searchable;
 
@@ -104,6 +107,28 @@ class PayableInvoice extends Model
         return $query->outstanding()
             ->whereNotNull('due_date')
             ->whereDate('due_date', '<', now()->toDateString());
+    }
+
+    /** Paying a supplier is money out, booked against the supplier it went to. */
+    public function movementCategory(): string
+    {
+        return 'expense';
+    }
+
+    public function movementDirection(): int
+    {
+        return -1;
+    }
+
+    /** @return array<string, int|null> */
+    public function movementParty(): array
+    {
+        return ['supplier_id' => $this->supplier_id];
+    }
+
+    public function movementDescription(): ?string
+    {
+        return $this->invoice_number ?: $this->description;
     }
 
     protected function eurSourceColumn(): string

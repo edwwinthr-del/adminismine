@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Contracts\BooksBankMovement;
+use App\Models\Concerns\BooksMovements;
 use App\Models\Concerns\HasAuditColumns;
 use App\Models\Concerns\Searchable;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,8 +19,9 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * like every other settlement in the app; the remaining balance is always
  * recomputed from them and never edited directly.
  */
-class Loan extends Model
+class Loan extends Model implements BooksBankMovement
 {
+    use BooksMovements;
     use HasAuditColumns, HasFactory, Searchable;
 
     protected $table = 'pozajmice';
@@ -76,6 +79,16 @@ class Loan extends Model
         return $this->morphMany(Payment::class, 'payable')->orderByDesc('payment_date');
     }
 
+    /**
+     * The same rows under the name every settlement flow uses. A loan calls them
+     * repayments and the shared machinery calls them payments; both are this one
+     * relation, so neither has to know about the other's vocabulary.
+     */
+    public function payments(): MorphMany
+    {
+        return $this->morphMany(Payment::class, 'payable');
+    }
+
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
@@ -95,7 +108,7 @@ class Loan extends Model
     public function recalculate(): void
     {
         $due = round((float) $this->amount_eur, 2);
-        $repaid = round((float) $this->repayments()->sum('amount'), 2);
+        $repaid = round((float) $this->repayments()->sum('amount_eur'), 2);
         $remaining = round($due - $repaid, 2);
 
         $this->forceFill([
@@ -124,5 +137,40 @@ class Loan extends Model
         return $query->outstanding()
             ->whereNotNull('due_date')
             ->whereDate('due_date', '<', now()->toDateString());
+    }
+
+    public function movementCategory(): string
+    {
+        return 'loan';
+    }
+
+    /**
+     * Which way a *repayment* moves money, which is the opposite of the loan
+     * itself: paying back what the company borrowed is money out, while a loan
+     * the company gave being repaid is money coming back in.
+     */
+    public function movementDirection(): int
+    {
+        return $this->direction === 'given' ? 1 : -1;
+    }
+
+    /**
+     * The registered counterparty, when the loan names one. Employees are left
+     * off: `bank_transactions` has no worker column, and the name is already in
+     * the description.
+     *
+     * @return array<string, int|null>
+     */
+    public function movementParty(): array
+    {
+        return array_filter([
+            'supplier_id' => $this->supplier_id,
+            'client_id' => $this->client_id,
+        ], fn ($id): bool => $id !== null);
+    }
+
+    public function movementDescription(): ?string
+    {
+        return $this->reference_number ?: $this->counterparty;
     }
 }

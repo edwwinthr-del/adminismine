@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Concerns\CorrectsPayments;
+use App\Http\Controllers\Concerns\SettlesWithPayments;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Travel\RecordTravelPaymentRequest;
 use App\Http\Requests\Travel\StoreFlightTicketRequest;
@@ -12,13 +12,14 @@ use App\Models\FlightTicket;
 use App\Models\Payment;
 use App\Services\CurrencyConverter;
 use App\Services\FileAttachmentService;
+use App\Support\Currencies;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class FlightTicketController extends Controller
 {
-    use CorrectsPayments;
+    use SettlesWithPayments;
 
     public function __construct(private readonly CurrencyConverter $converter) {}
 
@@ -104,36 +105,38 @@ class FlightTicketController extends Controller
 
     public function destroy(Request $request, FlightTicket $ticket, FileAttachmentService $files): JsonResponse
     {
-        DB::transaction(function () use ($ticket, $files) {
+        $released = DB::transaction(function () use ($ticket, $files): array {
             $files->deleteAllFor($ticket);
-            $ticket->payments()->delete();
+            $released = $this->releaseSettlements($ticket);
             $ticket->delete();
+
+            return $released;
         });
 
-        activity()->performedOn($ticket)->causedBy($request->user())->log('flight_ticket.deleted');
+        activity()->performedOn($ticket)->causedBy($request->user())
+            ->withProperties(['released_bank_transactions' => $released])
+            ->log('flight_ticket.deleted');
 
         return response()->json(['message' => 'Flight ticket deleted.']);
     }
 
+    /**
+     * Settle a ticket, in the accounting currency rather than the ticket's own.
+     * `book_bank_transaction` writes the movement the payment records — see
+     * SettlesWithPayments.
+     */
     public function recordPayment(RecordTravelPaymentRequest $request, FlightTicket $ticket): JsonResponse
     {
-        $data = $request->validated();
+        $data = $request->paymentData();
 
-        if ((float) $data['amount'] > (float) $ticket->remaining_amount + 0.001) {
-            return response()->json([
-                'message' => 'Payment exceeds the remaining amount on this ticket.',
-                'errors' => ['amount' => ['Payment exceeds the remaining amount on this ticket.']],
-            ], 422);
-        }
-
-        DB::transaction(function () use ($ticket, $data) {
-            // Settlement is booked in the accounting currency, not the ticket's.
-            $ticket->payments()->create($data + ['currency' => 'EUR']);
-            $ticket->recalculate();
-        });
+        $payment = $this->recordSettlement($ticket, $data, Currencies::BASE, $request->booksMovement());
 
         activity()->performedOn($ticket)->causedBy($request->user())
-            ->withProperties(['amount' => $data['amount'], 'method' => $data['method']])
+            ->withProperties([
+                'amount' => $data['amount'],
+                'method' => $data['method'],
+                'bank_transaction_id' => $payment->bank_transaction_id,
+            ])
             ->log('flight_ticket.payment_recorded');
 
         return response()->json([
@@ -144,7 +147,7 @@ class FlightTicketController extends Controller
     /**
      * Correct a payment that was entered wrong, rather than booking its opposite.
      *
-     * See CorrectsPayments: two rows that cancel out would both read as real
+     * See SettlesWithPayments: two rows that cancel out would both read as real
      * money in every report and in the bank match.
      */
     public function updatePayment(
@@ -154,10 +157,10 @@ class FlightTicketController extends Controller
     ): JsonResponse {
         $before = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->correctPayment($ticket, $payment, $request->validated());
+        $this->correctSettlement($ticket, $payment, $request->paymentData(), $request->booksMovement());
 
         activity()->performedOn($ticket)->causedBy($request->user())
-            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->validated()])
+            ->withProperties(['payment_id' => $payment->id, 'before' => $before, 'after' => $request->paymentData()])
             ->log('flight_ticket.payment_updated');
 
         return response()->json([
@@ -170,10 +173,14 @@ class FlightTicketController extends Controller
     {
         $removed = $payment->only(['amount', 'payment_date', 'method']);
 
-        $this->removePayment($ticket, $payment);
+        $movement = $this->removeSettlement($ticket, $payment);
 
         activity()->performedOn($ticket)->causedBy($request->user())
-            ->withProperties(['payment_id' => $payment->id, 'removed' => $removed])
+            ->withProperties([
+                'payment_id' => $payment->id,
+                'removed' => $removed,
+                'released_bank_transaction' => $movement,
+            ])
             ->log('flight_ticket.payment_deleted');
 
         return response()->json([

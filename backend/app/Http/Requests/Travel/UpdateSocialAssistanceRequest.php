@@ -2,13 +2,23 @@
 
 namespace App\Http\Requests\Travel;
 
+use App\Contracts\SettlementLine;
+use App\Http\Requests\Concerns\ValidatesBankRecord;
 use App\Models\SocialAssistancePayment;
 use App\Support\Currencies;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+/**
+ * Correcting a social assistance payout. The line being corrected is the record
+ * itself, which is what {@see existingLine()} tells the shared bank-record rules
+ * — so a payout that already has a movement cannot book a second one.
+ */
 class UpdateSocialAssistanceRequest extends FormRequest
 {
+    use ValidatesBankRecord;
+
     public function authorize(): bool
     {
         return true; // gated by can:travel.manage
@@ -25,9 +35,21 @@ class UpdateSocialAssistanceRequest extends FormRequest
             'amount' => ['sometimes', 'numeric', 'gt:0'],
             'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'method' => ['sometimes', 'nullable', Rule::in(SocialAssistancePayment::METHODS)],
-            'bank_transaction_id' => ['sometimes', 'nullable', 'integer', 'exists:bankovne_transakcije,id'],
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            ...$this->bankRecordRules(),
         ];
+    }
+
+    public function after(): array
+    {
+        return [fn (Validator $validator) => $this->validateBankRecord($validator)];
+    }
+
+    protected function existingLine(): ?SettlementLine
+    {
+        $payout = $this->route('socialAssistance');
+
+        return $payout instanceof SettlementLine ? $payout : null;
     }
 }
