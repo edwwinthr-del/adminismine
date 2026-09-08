@@ -2,7 +2,7 @@
 
 An internal finance and operations system for **AdminisMine DOO**, replacing the workbook that the company runs
 on today. It covers supplier debt, client receivables, bank and cash movements,
-workers and payroll, attendance and daily earned pay, mining production,
+workers and payroll also attendance and daily earned pay, mining production,
 machines, customs paperwork, worker housing, travel and loans — with an audit
 trail, three interface languages and an LLM assistant that can never write to a
 record without a human confirming it.
