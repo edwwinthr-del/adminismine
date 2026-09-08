@@ -61,7 +61,7 @@ class PayableTest extends TestCase
         $invoice->recalculate();
 
         $this->postJson("/api/payables/{$invoice->id}/payments", [
-            'amount' => 400, 'payment_date' => '2026-07-05', 'method' => 'cash',
+            'amount' => 400, 'payment_date' => '2026-07-05', 'account_id' => $this->cashAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'partial')
@@ -69,7 +69,7 @@ class PayableTest extends TestCase
             ->assertJsonPath('data.remaining_amount', 600);
 
         $this->postJson("/api/payables/{$invoice->id}/payments", [
-            'amount' => 600, 'payment_date' => '2026-07-10', 'method' => 'nlb',
+            'amount' => 600, 'payment_date' => '2026-07-10', 'account_id' => $this->nlbAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'paid')
@@ -83,7 +83,7 @@ class PayableTest extends TestCase
         $invoice->recalculate();
 
         $this->postJson("/api/payables/{$invoice->id}/payments", [
-            'amount' => 600, 'payment_date' => '2026-07-05', 'method' => 'cash',
+            'amount' => 600, 'payment_date' => '2026-07-05', 'account_id' => $this->cashAccount()->id,
         ])->assertStatus(422);
 
         $this->assertSame('unpaid', $invoice->fresh()->status);
@@ -94,7 +94,7 @@ class PayableTest extends TestCase
         $this->actingAsAdmin();
 
         $paid = PayableInvoice::factory()->create(['original_amount' => 100]);
-        $paid->payments()->create(['amount' => 100, 'currency' => 'EUR', 'payment_date' => '2026-07-01', 'method' => 'cash']);
+        $paid->payments()->create(['amount' => 100, 'currency' => 'EUR', 'payment_date' => '2026-07-01', 'account_id' => $this->cashAccount()->id]);
         $paid->recalculate();
 
         PayableInvoice::factory()->create(['original_amount' => 200]); // stays unpaid
@@ -141,7 +141,7 @@ class PayableTest extends TestCase
         $invoice->recalculate();
 
         $paymentId = $this->postJson("/api/payables/{$invoice->id}/payments", [
-            'amount' => $amount, 'payment_date' => '2026-07-05', 'method' => 'cash',
+            'amount' => $amount, 'payment_date' => '2026-07-05', 'account_id' => $this->cashAccount()->id,
         ])->assertCreated()->json('data.payments.0.id');
 
         return [$invoice->refresh(), $paymentId];
@@ -223,11 +223,11 @@ class PayableTest extends TestCase
         $invoice->recalculate();
 
         $first = $this->postJson("/api/payables/{$invoice->id}/payments", [
-            'amount' => 500, 'payment_date' => '2026-07-05', 'method' => 'cash',
+            'amount' => 500, 'payment_date' => '2026-07-05', 'account_id' => $this->cashAccount()->id,
         ])->json('data.payments.0.id');
 
         $this->postJson("/api/payables/{$invoice->id}/payments", [
-            'amount' => 500, 'payment_date' => '2026-07-05', 'method' => 'cash',
+            'amount' => 500, 'payment_date' => '2026-07-05', 'account_id' => $this->cashAccount()->id,
         ])->assertCreated();
 
         $this->deleteJson("/api/payables/{$invoice->id}/payments/{$first}", self::CONFIRM)
@@ -275,9 +275,8 @@ class PayableTest extends TestCase
         $invoice = PayableInvoice::factory()->create(['original_amount' => 500]);
         $invoice->recalculate();
 
-        $transaction = BankTransaction::factory()->create([
-            'category' => 'expense', 'nlb_amount' => 500, 'cash_amount' => 0, 'lovcen_amount' => 0,
-        ]);
+        $transaction = BankTransaction::factory()->onAccount($this->nlbAccount(), 500)->create([
+            'category' => 'expense']);
 
         $this->postJson("/api/bank-transactions/{$transaction->id}/match", [
             'target' => 'payable', 'invoice_id' => $invoice->id, 'amount' => 500,
@@ -305,9 +304,8 @@ class PayableTest extends TestCase
         $invoice = PayableInvoice::factory()->create(['original_amount' => 500]);
         $invoice->recalculate();
 
-        $transaction = BankTransaction::factory()->create([
-            'category' => 'expense', 'nlb_amount' => 500, 'cash_amount' => 0, 'lovcen_amount' => 0,
-        ]);
+        $transaction = BankTransaction::factory()->onAccount($this->nlbAccount(), 500)->create([
+            'category' => 'expense']);
 
         $this->postJson("/api/bank-transactions/{$transaction->id}/match", [
             'target' => 'payable', 'invoice_id' => $invoice->id, 'amount' => 500,
@@ -333,9 +331,8 @@ class PayableTest extends TestCase
         $first->recalculate();
         $second->recalculate();
 
-        $transaction = BankTransaction::factory()->create([
-            'category' => 'expense', 'nlb_amount' => 500, 'cash_amount' => 0, 'lovcen_amount' => 0,
-        ]);
+        $transaction = BankTransaction::factory()->onAccount($this->nlbAccount(), 500)->create([
+            'category' => 'expense']);
 
         // One movement paying two invoices — the ordinary case for a single
         // bank line covering a supplier's whole month.

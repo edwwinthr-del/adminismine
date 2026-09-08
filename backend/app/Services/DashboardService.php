@@ -9,6 +9,7 @@ use App\Models\ReceivableInvoice;
 use App\Models\RentPayment;
 use App\Models\User;
 use App\Models\UtilityBill;
+use App\Support\CompanyConfig;
 use App\Support\MonthPeriod;
 use Illuminate\Support\Carbon;
 
@@ -35,15 +36,23 @@ class DashboardService
     {
         $month = MonthPeriod::normalize($month ?? now()->toDateString());
 
-        $canBank = $user->can('bank_transactions.manage');
-        $canPayables = $user->can('payables.view');
-        $canReceivables = $user->can('receivables.manage');
-        $canHousing = $user->can('housing.manage');
+        // Both questions, per section: may this user see it, and does this
+        // company have the module behind it. A section that fails either is
+        // absent from the payload rather than zeroed — a zero is still a claim
+        // about data that is not there.
+        $config = app(CompanyConfig::class);
+        $shows = fn (string $permission): bool => $user->can($permission)
+            && $config->permissionEnabled($permission);
+
+        $canBank = $shows('bank_transactions.manage');
+        $canPayables = $shows('payables.view');
+        $canReceivables = $shows('receivables.manage');
+        $canHousing = $shows('housing.manage');
 
         $data = ['month' => $month];
 
         if ($canBank) {
-            $data['balances'] = $this->balances();
+            $data['balances'] = $this->balances($month);
             $data['cashflow'] = $this->cashflow($month);
             $data['recent_transactions'] = $this->recentTransactions();
         }
@@ -62,12 +71,29 @@ class DashboardService
         return $data;
     }
 
-    /** @return array{cash: float, nlb: float, lovcen: float, total: float} */
-    private function balances(): array
+    /**
+     * @return array{accounts: list<array{id: int, name: string, kind: string, balance: float, trend: list<float>}>, total: float, trend: list<float>}
+     */
+    private function balances(string $month): array
     {
         // The same computation the bank page shows — one definition, so the two
         // screens cannot quote different balances.
-        return BankTransaction::accountBalances();
+        $balances = BankTransaction::accountBalances();
+
+        // …and the same figure over time, so an account carries the shape of how
+        // it got here rather than only today's number. Two grouped queries for
+        // every account, not one each.
+        $history = BankTransaction::accountBalanceHistory($month, self::TREND_MONTHS);
+
+        $balances['accounts'] = array_map(
+            fn (array $account): array => $account + [
+                'trend' => $history['accounts'][$account['id']] ?? [],
+            ],
+            $balances['accounts'],
+        );
+        $balances['trend'] = $history['total'];
+
+        return $balances;
     }
 
     /**
@@ -86,7 +112,7 @@ class DashboardService
         $bucket = MonthPeriod::sqlMonth($driver, 'date');
         // In EUR, like every other figure here: a TRY movement's face value
         // added to a EUR total is not a total of anything (rule 5).
-        $net = '(cash_amount_eur + nlb_amount_eur + lovcen_amount_eur)';
+        $net = 'amount_eur';
 
         // Summed and bucketed by the database. The sign of a movement's net
         // decides which side it lands on, which is the same rule the module

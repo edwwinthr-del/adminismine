@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, formatMoney, todayISO } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useVocabularies, useVocabularyLabel } from "@/lib/vocabulary";
 import { AttachmentsModal } from "@/components/attachments-modal";
 import {
   BankRecordField,
@@ -15,6 +16,7 @@ import {
   canBook,
   type BankRecordMode,
 } from "@/components/bank-record-field";
+import { AccountField } from "@/components/account-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -81,7 +83,8 @@ interface AssistancePayment {
   amount: number;
   exchange_rate: number | null;
   amount_eur: number;
-  method: string | null;
+  account_id: number | null;
+  account: { id: number; name: string } | null;
   /** The movement this payout booked or was matched to, if any. */
   bank_transaction_id: number | null;
   reason: string | null;
@@ -128,8 +131,6 @@ interface Summary {
 
 const DIRECTIONS = ["arrival", "departure", "round_trip"] as const;
 const COST_STATUSES = ["not_written", "written"] as const;
-const EXPENSE_TYPES = ["car", "flight", "bus", "taxi", "fuel", "accommodation", "meal", "other"] as const;
-const METHODS = ["cash", "nlb", "lovcen", "other"] as const;
 const CURRENCIES = ["TRY", "EUR"] as const;
 const TABS = ["tickets", "expenses", "assistance"] as const;
 
@@ -160,7 +161,6 @@ export default function TravelPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("travel.title")}</h1>
         <Input className="w-[10rem]" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
       </div>
 
@@ -257,38 +257,38 @@ function TicketsTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1040px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("travel.traveller")}</th>
-              <th className="px-4 py-3">{t("travel.ticketDate")}</th>
-              <th className="px-4 py-3">{t("travel.direction")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.amount")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.amountEur")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.remaining")}</th>
-              <th className="px-4 py-3">{t("travel.status")}</th>
-              <th className="px-4 py-3">{t("travel.costStatus")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.actions")}</th>
+              <th>{t("travel.traveller")}</th>
+              <th>{t("travel.ticketDate")}</th>
+              <th>{t("travel.direction")}</th>
+              <th className="text-right">{t("travel.amount")}</th>
+              <th className="text-right">{t("travel.amountEur")}</th>
+              <th className="text-right">{t("travel.remaining")}</th>
+              <th>{t("travel.status")}</th>
+              <th>{t("travel.costStatus")}</th>
+              <th className="text-right">{t("travel.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : tickets.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("travel.noTickets")}
                 </td>
               </tr>
             ) : (
               tickets.map((ticket) => (
                 <tr key={ticket.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col">
                       <span className="font-medium">{ticket.traveller_name ?? "—"}</span>
                       {(ticket.route || ticket.airline) && (
@@ -298,9 +298,9 @@ function TicketsTab({ month }: { month: string }) {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3">{formatDate(ticket.ticket_date)}</td>
-                  <td className="px-4 py-3">{t(`direction.${ticket.direction}`)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td>{formatDate(ticket.ticket_date)}</td>
+                  <td>{t(`direction.${ticket.direction}`)}</td>
+                  <td className="text-right tabular-nums">
                     <span className="flex flex-col">
                       <span>{formatMoney(ticket.amount, ticket.currency)}</span>
                       {ticket.exchange_rate !== null && (
@@ -310,17 +310,17 @@ function TicketsTab({ month }: { month: string }) {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(ticket.amount_eur)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(ticket.remaining_amount)}</td>
-                  <td className="px-4 py-3">
+                  <td className="text-right tabular-nums">{formatMoney(ticket.amount_eur)}</td>
+                  <td className="text-right tabular-nums">{formatMoney(ticket.remaining_amount)}</td>
+                  <td>
                     <Badge tone={statusTone(ticket.status)}>{t(`status.${ticket.status}`)}</Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={ticket.cost_status === "written" ? "green" : "amber"}>
                       {t(`costStatus.${ticket.cost_status}`)}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex flex-wrap justify-end gap-2">
                       {ticket.remaining_amount > 0 && (
                         <Button variant="secondary" className="h-8 px-3" onClick={() => setPaying(ticket)}>
@@ -546,6 +546,7 @@ function TicketModal({
 
 function ExpensesTab({ month }: { month: string }) {
   const { t } = useI18n();
+  const vocabularyLabel = useVocabularyLabel();
   const { options: employees } = useEmployeeOptions();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<TravelExpense | null>(null);
@@ -572,54 +573,54 @@ function ExpensesTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[980px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("travel.traveller")}</th>
-              <th className="px-4 py-3">{t("travel.expenseDate")}</th>
-              <th className="px-4 py-3">{t("travel.expenseType")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.amount")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.amountEur")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.remaining")}</th>
-              <th className="px-4 py-3">{t("travel.status")}</th>
-              <th className="px-4 py-3">{t("travel.costStatus")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.actions")}</th>
+              <th>{t("travel.traveller")}</th>
+              <th>{t("travel.expenseDate")}</th>
+              <th>{t("travel.expenseType")}</th>
+              <th className="text-right">{t("travel.amount")}</th>
+              <th className="text-right">{t("travel.amountEur")}</th>
+              <th className="text-right">{t("travel.remaining")}</th>
+              <th>{t("travel.status")}</th>
+              <th>{t("travel.costStatus")}</th>
+              <th className="text-right">{t("travel.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : expenses.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("travel.noExpenses")}
                 </td>
               </tr>
             ) : (
               expenses.map((expense) => (
                 <tr key={expense.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{expense.traveller_name ?? "—"}</td>
-                  <td className="px-4 py-3">{formatDate(expense.expense_date)}</td>
-                  <td className="px-4 py-3">{t(`expenseType.${expense.expense_type}`)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className="font-medium">{expense.traveller_name ?? "—"}</td>
+                  <td>{formatDate(expense.expense_date)}</td>
+                  <td>{vocabularyLabel("travel_expense_type", "expenseType", expense.expense_type)}</td>
+                  <td className="text-right tabular-nums">
                     {formatMoney(expense.amount, expense.currency)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(expense.amount_eur)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(expense.remaining_amount)}</td>
-                  <td className="px-4 py-3">
+                  <td className="text-right tabular-nums">{formatMoney(expense.amount_eur)}</td>
+                  <td className="text-right tabular-nums">{formatMoney(expense.remaining_amount)}</td>
+                  <td>
                     <Badge tone={statusTone(expense.status)}>{t(`status.${expense.status}`)}</Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={expense.cost_status === "written" ? "green" : "amber"}>
                       {t(`costStatus.${expense.cost_status}`)}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex flex-wrap justify-end gap-2">
                       {expense.remaining_amount > 0 && (
                         <Button variant="secondary" className="h-8 px-3" onClick={() => setPaying(expense)}>
@@ -688,6 +689,8 @@ function ExpenseModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const vocabularyLabel = useVocabularyLabel();
+  const vocabularies = useVocabularies();
   const [employeeId, setEmployeeId] = useState(expense?.employee_id ? String(expense.employee_id) : "");
   const [personName, setPersonName] = useState(expense?.person_name ?? "");
   const [expenseDate, setExpenseDate] = useState(expense?.expense_date ?? todayISO());
@@ -763,9 +766,9 @@ function ExpenseModal({
           <div>
             <label className={labelClass}>{t("travel.expenseType")}</label>
             <Select value={expenseType} onChange={(e) => setExpenseType(e.target.value)}>
-              {EXPENSE_TYPES.map((value) => (
+              {vocabularies.values("travel_expense_type").map((value) => (
                 <option key={value} value={value}>
-                  {t(`expenseType.${value}`)}
+                  {vocabularyLabel("travel_expense_type", "expenseType", value)}
                 </option>
               ))}
             </Select>
@@ -900,32 +903,32 @@ function AssistanceTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("travel.recipient")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.assistancePaid")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.assistancePayable")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.actions")}</th>
+              <th>{t("travel.recipient")}</th>
+              <th className="text-right">{t("travel.assistancePaid")}</th>
+              <th className="text-right">{t("travel.assistancePayable")}</th>
+              <th className="text-right">{t("travel.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {outstanding.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={4} className="py-6 text-center text-zinc-500">
                   {t("travel.noAssistance")}
                 </td>
               </tr>
             ) : (
               outstanding.map((row) => (
                 <tr key={`${row.employee_id ?? row.full_name}`} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3">{row.full_name ?? "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.paid)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td>{row.full_name ?? "—"}</td>
+                  <td className="text-right tabular-nums">{formatMoney(row.paid)}</td>
+                  <td className="text-right tabular-nums">
                     {row.payable === null ? "—" : formatMoney(row.payable)}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     {/* Paying a worker from the row that says what they are owed. */}
                     {canManage && row.employee_id !== null && (row.payable ?? 0) > 0 && (
                       <Button
@@ -944,44 +947,44 @@ function AssistanceTab({ month }: { month: string }) {
         </table>
       </Card>
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("travel.recipient")}</th>
-              <th className="px-4 py-3">{t("travel.paymentDate")}</th>
-              <th className="px-4 py-3">{t("travel.method")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.amount")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.amountEur")}</th>
-              <th className="px-4 py-3">{t("travel.assistanceReason")}</th>
-              <th className="px-4 py-3 text-right">{t("travel.actions")}</th>
+              <th>{t("travel.recipient")}</th>
+              <th>{t("travel.paymentDate")}</th>
+              <th>{t("settlement.account")}</th>
+              <th className="text-right">{t("travel.amount")}</th>
+              <th className="text-right">{t("travel.amountEur")}</th>
+              <th>{t("travel.assistanceReason")}</th>
+              <th className="text-right">{t("travel.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={7} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : payments.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={7} className="py-14 text-center text-sm text-zinc-500">
                   {t("travel.noAssistance")}
                 </td>
               </tr>
             ) : (
               payments.map((payment) => (
                 <tr key={payment.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{payment.recipient_name ?? "—"}</td>
-                  <td className="px-4 py-3">{formatDate(payment.payment_date)}</td>
-                  <td className="px-4 py-3">{payment.method ? t(`method.${payment.method}`) : "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className="font-medium">{payment.recipient_name ?? "—"}</td>
+                  <td>{formatDate(payment.payment_date)}</td>
+                  <td>{payment.account?.name ?? "—"}</td>
+                  <td className="text-right tabular-nums">
                     {formatMoney(payment.amount, payment.currency)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(payment.amount_eur)}</td>
-                  <td className="px-4 py-3 text-xs text-zinc-500">{payment.reason ?? "—"}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right tabular-nums">{formatMoney(payment.amount_eur)}</td>
+                  <td className="text-xs text-zinc-500">{payment.reason ?? "—"}</td>
+                  <td className="text-right">
                     {/* Viewing is always available; writing follows the permission. */}
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setViewing(payment)}>
@@ -1057,7 +1060,7 @@ function AssistanceDetails({
     [t("travel.recipient"), payment.recipient_name ?? "—"],
     [t("travel.paymentDate"), formatDate(payment.payment_date)],
     [t("travel.entitlementYear"), String(payment.entitlement_year)],
-    [t("travel.method"), payment.method ? t(`method.${payment.method}`) : "—"],
+    [t("settlement.account"), payment.account?.name ?? "—"],
     [t("travel.amount"), formatMoney(payment.amount, payment.currency)],
     [t("travel.amountEur"), formatMoney(payment.amount_eur)],
     [
@@ -1123,7 +1126,7 @@ function AssistanceModal({
   const [currency, setCurrency] = useState(payment?.currency ?? "EUR");
   const [amount, setAmount] = useState(payment ? String(payment.amount) : "");
   const [rate, setRate] = useState(payment?.exchange_rate == null ? "" : String(payment.exchange_rate));
-  const [method, setMethod] = useState(payment?.method ?? "cash");
+  const [accountId, setAccountId] = useState<number | null>(payment?.account_id ?? null);
   const [reason, setReason] = useState(payment?.reason ?? "");
   const [notes, setNotes] = useState(payment?.notes ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -1136,14 +1139,15 @@ function AssistanceModal({
    */
   const editing = Boolean(payment);
   const [bankMode, setBankMode] = useState<BankRecordMode>(
-    editing ? "keep" : canBook(payment?.method ?? "cash") ? "book" : "none",
+    editing ? "keep" : "none",
   );
   const [movementId, setMovementId] = useState<number | null>(payment?.bank_transaction_id ?? null);
 
-  function changeMethod(next: string) {
-    setMethod(next);
+  function changeAccount(next: number | null) {
+    setAccountId(next);
 
-    // `other` names no account, so there is nothing to book into.
+    // A settlement naming no account moved no money through one, so
+    // there is nothing to book into.
     if (!canBook(next) && bankMode === "book") setBankMode("none");
     if (canBook(next) && bankMode === "none" && !editing) setBankMode("book");
   }
@@ -1163,7 +1167,7 @@ function AssistanceModal({
           currency,
           amount: Number(amount),
           exchange_rate: rate === "" ? null : Number(rate),
-          method,
+          account_id: accountId,
           reason: reason.trim() || null,
           notes: notes.trim() || null,
           ...bankRecordPayload(bankMode, movementId),
@@ -1247,23 +1251,14 @@ function AssistanceModal({
               disabled={currency === "EUR"}
             />
           </div>
-          <div>
-            <label className={labelClass}>{t("travel.method")}</label>
-            <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
-              {METHODS.map((value) => (
-                <option key={value} value={value}>
-                  {t(`method.${value}`)}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <AccountField value={accountId} onChange={changeAccount} />
           <div className="col-span-2">
             <BankRecordField
               mode={bankMode}
               onModeChange={setBankMode}
               movementId={movementId}
               onMovementChange={setMovementId}
-              method={method}
+              accountId={accountId}
               editing={editing}
             />
           </div>
@@ -1306,7 +1301,7 @@ function PaymentModal({
   const { t } = useI18n();
   const [amount, setAmount] = useState(String(remaining));
   const [paymentDate, setPaymentDate] = useState(todayISO());
-  const [method, setMethod] = useState<string>("cash");
+  const [accountId, setAccountId] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -1316,13 +1311,14 @@ function PaymentModal({
    * dashboard if a bank movement records the payment, so it defaults to
    * booking one.
    */
-  const [bankMode, setBankMode] = useState<BankRecordMode>(canBook("cash") ? "book" : "none");
+  const [bankMode, setBankMode] = useState<BankRecordMode>("none");
   const [movementId, setMovementId] = useState<number | null>(null);
 
-  function changeMethod(next: string) {
-    setMethod(next);
+  function changeAccount(next: number | null) {
+    setAccountId(next);
 
-    // `other` names no account, so there is nothing to book into.
+    // A settlement naming no account moved no money through one, so
+    // there is nothing to book into.
     if (!canBook(next) && bankMode === "book") setBankMode("none");
     if (canBook(next) && bankMode === "none") setBankMode("book");
   }
@@ -1337,7 +1333,7 @@ function PaymentModal({
         json: {
           amount: Number(amount),
           payment_date: paymentDate,
-          method,
+          account_id: accountId,
           notes: notes.trim() || null,
           ...bankRecordPayload(bankMode, movementId),
         },
@@ -1373,16 +1369,7 @@ function PaymentModal({
             <label className={labelClass}>{t("travel.paymentDate")}</label>
             <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required />
           </div>
-          <div>
-            <label className={labelClass}>{t("travel.method")}</label>
-            <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
-              {METHODS.map((value) => (
-                <option key={value} value={value}>
-                  {t(`method.${value}`)}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <AccountField value={accountId} onChange={changeAccount} />
           <div>
             <label className={labelClass}>{t("travel.notes")}</label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -1394,7 +1381,7 @@ function PaymentModal({
           onModeChange={setBankMode}
           movementId={movementId}
           onMovementChange={setMovementId}
-          method={method}
+          accountId={accountId}
           editing={false}
         />
 

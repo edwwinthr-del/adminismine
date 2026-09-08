@@ -1,16 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useI18n } from "@/lib/i18n/context";
-import { useEscapeLayer } from "@/lib/overlay-layers";
-import { useDebouncedValue } from "@/lib/use-debounced-value";
 
-/** Tallest the option list is allowed to be, and the least it will settle for. */
-const MAX_LIST_HEIGHT = 288;
-const MIN_LIST_HEIGHT = 120;
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { DROPDOWN_OPTION, DROPDOWN_PANEL, useDropdownAnchor } from "./use-dropdown-anchor";
 
 export interface LookupOption {
   value: number;
@@ -85,13 +82,19 @@ export function AsyncSelect({
   const [highlighted, setHighlighted] = useState(0);
   const [error, setError] = useState(false);
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+
   /** Guards against a slow early response overwriting a fast later one. */
   const requestId = useRef(0);
-  /** Where to draw the list, in viewport coordinates — see {@link place}. */
-  const [box, setBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setTerm("");
+  }, []);
+
+  // Placement, outside-click and Escape are the same problem this control and
+  // the plain Select both have, and are solved once in the hook.
+  const { containerRef, listRef, box } = useDropdownAnchor(open, close);
 
   const debouncedTerm = useDebouncedValue(term);
 
@@ -185,99 +188,10 @@ export function AsyncSelect({
     void fetchOptions(debouncedTerm, value);
   }, [open, debouncedTerm, value, fetchOptions]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-
-      // The list lives in <body>, so "outside" has to mean outside both parts —
-      // otherwise clicking an option closes the field before the click lands on
-      // it, and nothing is ever selected.
-      if (containerRef.current?.contains(target) || listRef.current?.contains(target)) return;
-
-      setOpen(false);
-      setTerm("");
-    };
-
-    document.addEventListener("mousedown", onPointerDown);
-
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open]);
-
-  // Escape closes the list and stops there. It used to reach the dialog behind
-  // the field as well, so dismissing a dropdown threw away the form — see
-  // lib/overlay-layers.
-  useEscapeLayer(open, () => {
-    setOpen(false);
-    setTerm("");
-  });
-
-  /**
-   * Keep the list on its field, in viewport coordinates.
-   *
-   * The list is drawn into <body> rather than next to the input, because inside
-   * a modal the input sits in a scrolling box (`overflow-y-auto`) that clipped
-   * the list the moment the field was anywhere near the bottom — the options
-   * were there, cut in half. Drawn from the body it can also flip above the
-   * field when there is more room up than down, instead of being squeezed.
-   *
-   * The cost of leaving the field is that the list no longer moves with it, and
-   * the anchor moves for reasons that fire no event to listen for: the dialog
-   * holding it is dragged by its header, an error line appears above it, an
-   * async label resolves and rewraps a row. So it is measured every frame while
-   * open — one `getBoundingClientRect` on one element, for as long as a
-   * dropdown is on screen — and the state is only written when the numbers
-   * actually move, so a still field costs no renders.
-   */
-  useLayoutEffect(() => {
-    if (!open) return;
-
-    let frame = 0;
-
-    function place() {
-      const anchor = containerRef.current;
-
-      if (anchor) {
-        const rect = anchor.getBoundingClientRect();
-        const gap = 4;
-        const below = window.innerHeight - rect.bottom - gap;
-        const above = rect.top - gap;
-        const flip = below < Math.min(MAX_LIST_HEIGHT, above) && above > below;
-        const height = Math.min(MAX_LIST_HEIGHT, Math.max(flip ? above : below, MIN_LIST_HEIGHT));
-
-        // With room on neither side the floor above wins and the list would
-        // hang off the edge it was placed against — the very thing the portal
-        // was for. Pinning it inside the window instead lets it overlap the
-        // field, which is the lesser of the two.
-        const top = flip
-          ? Math.max(gap, rect.top - gap - height)
-          : Math.max(gap, Math.min(rect.bottom + gap, window.innerHeight - gap - height));
-
-        setBox((current) =>
-          current &&
-          current.top === top &&
-          current.left === rect.left &&
-          current.width === rect.width &&
-          current.height === height
-            ? current
-            : { top, left: rect.left, width: rect.width, height },
-        );
-      }
-
-      frame = requestAnimationFrame(place);
-    }
-
-    place();
-
-    return () => cancelAnimationFrame(frame);
-  }, [open]);
-
   function choose(option: LookupOption | null) {
     setSelected(option);
     onChange(option?.value ?? null, option);
-    setOpen(false);
-    setTerm("");
+    close();
   }
 
   function onKeyDown(event: React.KeyboardEvent) {
@@ -313,6 +227,9 @@ export function AsyncSelect({
 
   const label = selected?.label ?? "";
 
+  /** Screen readers follow the highlight through this, not through styling. */
+  const optionId = (index: number) => `${inputId}-option-${index}`;
+
   return (
     <div ref={containerRef} className={cn("relative", className)}>
       <input
@@ -322,6 +239,7 @@ export function AsyncSelect({
         role="combobox"
         aria-expanded={open}
         aria-controls={`${inputId}-listbox`}
+        aria-activedescendant={open && options.length > 0 ? optionId(highlighted) : undefined}
         aria-autocomplete="list"
         autoComplete="off"
         disabled={disabled}
@@ -339,20 +257,43 @@ export function AsyncSelect({
         // fired nothing and the list stayed shut.
         onMouseDown={() => setOpen(true)}
         onKeyDown={onKeyDown}
-        className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 pr-8 text-sm text-zinc-900 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+        className="control-surface focus-ink h-10 w-full rounded-[var(--vui-r-lg)] px-3 pr-10 text-sm text-zinc-900 transition-shadow placeholder:text-zinc-500 disabled:opacity-50 dark:text-zinc-100 dark:placeholder:text-zinc-400"
       />
 
       {/* The real value, so a plain form submit still validates. */}
       <input type="hidden" required={required} value={value ?? ""} readOnly />
+
+      {/*
+        A chevron when there is nothing to clear. Without it an empty field is
+        indistinguishable from a text input — the only thing that said "this
+        opens" used to be the clear button, which by definition is absent until
+        something is already chosen.
+      */}
+      {value === null && !disabled && (
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden
+          className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M19 9l-7 7-7-7" />
+        </svg>
+      )}
 
       {value !== null && !disabled && (
         <button
           type="button"
           aria-label={t("select.clear")}
           onClick={() => choose(null)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-400 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200"
+          className="absolute right-2.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-900/[0.06] hover:text-zinc-700 dark:hover:bg-white/10 dark:hover:text-zinc-200"
         >
-          ✕
+          <svg viewBox="0 0 24 24" aria-hidden className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
         </button>
       )}
 
@@ -362,17 +303,16 @@ export function AsyncSelect({
           id={`${inputId}-listbox`}
           role="listbox"
           style={{ top: box.top, left: box.left, width: box.width, maxHeight: box.height }}
-          className="fixed z-[60] overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          className={DROPDOWN_PANEL}
         >
           {emptyLabel && (
-            <li>
-              <button
-                type="button"
-                onClick={() => choose(null)}
-                className="w-full px-3 py-2 text-left text-sm text-zinc-500 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800"
-              >
-                {emptyLabel}
-              </button>
+            <li
+              role="option"
+              aria-selected={value === null}
+              onClick={() => choose(null)}
+              className="w-full cursor-pointer rounded-xl px-3 py-2 text-left text-sm text-zinc-500 transition-colors hover:bg-zinc-900/[0.06] dark:hover:bg-white/10"
+            >
+              {emptyLabel}
             </li>
           )}
 
@@ -386,27 +326,39 @@ export function AsyncSelect({
             <li className="px-3 py-2 text-sm text-zinc-500">{t("select.noMatches")}</li>
           )}
 
+          {/*
+            The row is the option rather than a button inside one: ARIA forbids
+            an interactive control inside `role="option"`, and it was the button
+            that got announced instead of the option. Keyboard handling is on the
+            input and reaches these through `aria-activedescendant`.
+          */}
           {options.map((option, index) => (
-            <li key={option.value} role="option" aria-selected={option.value === value}>
-              <button
-                type="button"
-                onMouseEnter={() => setHighlighted(index)}
-                onClick={() => choose(option)}
-                className={cn(
-                  "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors",
-                  index === highlighted ? "bg-zinc-100 dark:bg-zinc-800" : "",
-                  option.value === value ? "font-medium text-indigo-700 dark:text-indigo-300" : "text-zinc-800 dark:text-zinc-200",
-                )}
-              >
-                <span>{option.label}</span>
-                {option.hint && <span className="text-xs text-zinc-500">{option.hint}</span>}
-              </button>
+            <li
+              key={option.value}
+              id={optionId(index)}
+              role="option"
+              aria-selected={option.value === value}
+              onMouseEnter={() => setHighlighted(index)}
+              onClick={() => choose(option)}
+              className={cn(
+                DROPDOWN_OPTION,
+                "cursor-pointer",
+                // Hover and keyboard highlight are the same state, so they
+                // look the same rather than competing.
+                index === highlighted ? "bg-zinc-900/[0.06] dark:bg-white/10" : "",
+                option.value === value
+                  ? "font-medium text-zinc-900 dark:text-zinc-50"
+                  : "text-zinc-700 dark:text-zinc-300",
+              )}
+            >
+              <span>{option.label}</span>
+              {option.hint && <span className="text-xs text-zinc-500">{option.hint}</span>}
             </li>
           ))}
 
           {/* Says the list is cut short rather than implying it is complete. */}
           {hasMore && (
-            <li className="border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800">
+            <li className="mt-1 border-t border-zinc-900/8 px-3 pb-1 pt-2 text-xs text-zinc-500 dark:border-white/10">
               {t("select.refine")}
             </li>
           )}

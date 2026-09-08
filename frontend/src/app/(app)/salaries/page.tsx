@@ -11,6 +11,7 @@ import {
   canBook,
   type BankRecordMode,
 } from "@/components/bank-record-field";
+import { AccountField } from "@/components/account-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -64,8 +65,6 @@ interface GenerateResult {
   };
 }
 
-const METHODS = ["cash", "nlb", "lovcen", "other"] as const;
-
 function currentMonth(): string {
   return todayISO().slice(0, 7);
 }
@@ -117,7 +116,6 @@ export default function SalariesPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("salaries.title")}</h1>
         <div className="flex items-center gap-3">
           <Input className="w-[10rem]" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           <Button onClick={() => void openPreview()}>{t("salaries.generate")}</Button>
@@ -146,53 +144,53 @@ export default function SalariesPage() {
         </div>
       </Card>
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[940px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("salaries.worker")}</th>
-              <th className="px-4 py-3 text-right">{t("salaries.base")}</th>
-              <th className="px-4 py-3 text-right">{t("salaries.adjustments")}</th>
-              <th className="px-4 py-3 text-right">{t("salaries.deductions")}</th>
-              <th className="px-4 py-3 text-right">{t("salaries.netDue")}</th>
-              <th className="px-4 py-3 text-right">{t("salaries.paid")}</th>
-              <th className="px-4 py-3 text-right">{t("salaries.remaining")}</th>
-              <th className="px-4 py-3">{t("salaries.status")}</th>
-              <th className="px-4 py-3 text-right">{t("salaries.actions")}</th>
+              <th>{t("salaries.worker")}</th>
+              <th className="text-right">{t("salaries.base")}</th>
+              <th className="text-right">{t("salaries.adjustments")}</th>
+              <th className="text-right">{t("salaries.deductions")}</th>
+              <th className="text-right">{t("salaries.netDue")}</th>
+              <th className="text-right">{t("salaries.paid")}</th>
+              <th className="text-right">{t("salaries.remaining")}</th>
+              <th>{t("salaries.status")}</th>
+              <th className="text-right">{t("salaries.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("salaries.none")}
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{row.employee?.full_name ?? `#${row.employee_id}`}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.base_salary, row.currency)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.adjustments, row.currency)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.deductions, row.currency)}</td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">
+                  <td className="font-medium">{row.employee?.full_name ?? `#${row.employee_id}`}</td>
+                  <td className="text-right tabular-nums">{formatMoney(row.base_salary, row.currency)}</td>
+                  <td className="text-right tabular-nums">{formatMoney(row.adjustments, row.currency)}</td>
+                  <td className="text-right tabular-nums">{formatMoney(row.deductions, row.currency)}</td>
+                  <td className="text-right font-medium tabular-nums">
                     {formatMoney(row.net_salary_due, row.currency)}
                   </td>
                   {/* Paid and remaining are the accounting currency, whatever the wage is agreed in. */}
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.paid_amount)}</td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">
+                  <td className="text-right tabular-nums">{formatMoney(row.paid_amount)}</td>
+                  <td className="text-right font-medium tabular-nums">
                     {formatMoney(row.remaining_amount)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={statusTone(row.status)}>{t(`status.${row.status}`)}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-2">
                       {row.status !== "paid" && (
                         <Button variant="secondary" className="h-8 px-3" onClick={() => setPaying(row)}>
@@ -327,7 +325,7 @@ function RecordPaymentModal({
   // states — the books hold the EUR twin of it.
   const [amount, setAmount] = useState(String(row.remaining_amount_original));
   const [paymentDate, setPaymentDate] = useState(todayISO());
-  const [method, setMethod] = useState<string>("cash");
+  const [accountId, setAccountId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -335,13 +333,14 @@ function RecordPaymentModal({
    * Wages only reach the balances, the cashflow and the dashboard if a bank
    * movement records them, so paying a worker defaults to booking one.
    */
-  const [bankMode, setBankMode] = useState<BankRecordMode>(canBook("cash") ? "book" : "none");
+  const [bankMode, setBankMode] = useState<BankRecordMode>("none");
   const [movementId, setMovementId] = useState<number | null>(null);
 
-  function changeMethod(next: string) {
-    setMethod(next);
+  function changeAccount(next: number | null) {
+    setAccountId(next);
 
-    // `other` names no account, so there is nothing to book into.
+    // A settlement naming no account moved no money through one, so
+    // there is nothing to book into.
     if (!canBook(next) && bankMode === "book") setBankMode("none");
     if (canBook(next) && bankMode === "none") setBankMode("book");
   }
@@ -356,7 +355,7 @@ function RecordPaymentModal({
         json: {
           amount: Number(amount),
           payment_date: paymentDate,
-          method,
+          account_id: accountId,
           ...bankRecordPayload(bankMode, movementId),
         },
       });
@@ -391,22 +390,13 @@ function RecordPaymentModal({
             <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required />
           </div>
         </div>
-        <div>
-          <label className={label}>{t("salaries.method")}</label>
-          <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
-            {METHODS.map((m) => (
-              <option key={m} value={m}>
-                {t(`method.${m}`)}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <AccountField value={accountId} onChange={changeAccount} />
         <BankRecordField
           mode={bankMode}
           onModeChange={setBankMode}
           movementId={movementId}
           onMovementChange={setMovementId}
-          method={method}
+          accountId={accountId}
           editing={false}
         />
         {error && <p className="text-sm text-red-600">{error}</p>}

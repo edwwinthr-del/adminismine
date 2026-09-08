@@ -43,7 +43,7 @@ export function Pagination({
      * totals row does — otherwise the count floats in the card's bottom padding
      * looking like a stray caption rather than part of the table.
      */
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-900/8 bg-zinc-900/[0.02] px-5 py-3.5 dark:border-white/10 dark:bg-white/[0.03]">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-900/8 bg-zinc-900/[0.02] px-[var(--vui-pad-card)] py-3.5 dark:border-white/10 dark:bg-white/[0.03]">
       <p className="text-xs uppercase tracking-[0.08em] text-zinc-500">
         {t("pagination.showing", { from: from ?? 0, to: to ?? 0, total })}
       </p>

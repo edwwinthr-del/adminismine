@@ -154,7 +154,6 @@ export default function ImportsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("imports.title")}</h1>
         <p className="text-sm text-zinc-500">{t("imports.subtitle")}</p>
       </div>
 
@@ -228,38 +227,38 @@ export default function ImportsPage() {
         )}
       </Card>
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("imports.file")}</th>
-              <th className="px-4 py-3">{t("imports.entityColumn")}</th>
-              <th className="px-4 py-3">{t("imports.uploaded")}</th>
-              <th className="px-4 py-3 text-right">{t("imports.rows")}</th>
-              <th className="px-4 py-3">{t("imports.status")}</th>
-              <th className="px-4 py-3 text-right">{t("imports.actions")}</th>
+              <th>{t("imports.file")}</th>
+              <th>{t("imports.entityColumn")}</th>
+              <th>{t("imports.uploaded")}</th>
+              <th className="text-right">{t("imports.rows")}</th>
+              <th>{t("imports.status")}</th>
+              <th className="text-right">{t("imports.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {batches.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={6} className="py-14 text-center text-sm text-zinc-500">
                   {t("imports.none")}
                 </td>
               </tr>
             ) : (
               batches.map((batch) => (
                 <tr key={batch.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{batch.original_name}</td>
-                  <td className="px-4 py-3 text-zinc-500">{entityLabel(batch.entity)}</td>
-                  <td className="px-4 py-3">{formatDate(batch.created_at)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{batch.totals?.rows ?? 0}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium">{batch.original_name}</td>
+                  <td className="text-zinc-500">{entityLabel(batch.entity)}</td>
+                  <td>{formatDate(batch.created_at)}</td>
+                  <td className="text-right tabular-nums">{batch.totals?.rows ?? 0}</td>
+                  <td>
                     <Badge tone={batch.status === "imported" ? "green" : batch.status === "failed" ? "red" : "gray"}>
                       {t(`importStatus.${batch.status}`)}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <Button
                       variant="secondary"
                       className="h-8 px-3"
@@ -450,28 +449,28 @@ function BatchPreview({ batchId }: { batchId: number }) {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("imports.source")}</th>
-              <th className="px-4 py-3">{t("imports.target")}</th>
-              <th className="px-4 py-3">{t("imports.mapped")}</th>
-              <th className="px-4 py-3">{t("imports.issues")}</th>
-              <th className="px-4 py-3 text-right">{t("imports.import")}</th>
+              <th>{t("imports.source")}</th>
+              <th>{t("imports.target")}</th>
+              <th>{t("imports.mapped")}</th>
+              <th>{t("imports.issues")}</th>
+              <th className="text-right">{t("imports.import")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("imports.noRows")}
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.id} className="align-top text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3">
+                  <td>
                     {/* Sheet name and row number are kept so a row can always be
                         traced back to the workbook. */}
                     <span className="flex flex-col">
@@ -481,8 +480,8 @@ function BatchPreview({ batchId }: { batchId: number }) {
                       </span>
                     </span>
                   </td>
-                  <td className="px-4 py-3">{t(`importTarget.${row.target}`)}</td>
-                  <td className="px-4 py-3">
+                  <td>{t(`importTarget.${row.target}`)}</td>
+                  <td>
                     <dl className="space-y-0.5 text-xs">
                       {Object.entries(row.mapped)
                         .filter(([, value]) => value !== null && value !== "" && value !== false)
@@ -495,7 +494,7 @@ function BatchPreview({ batchId }: { batchId: number }) {
                         ))}
                     </dl>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-wrap gap-1">
                       {row.issues.length === 0 ? (
                         <span className="text-xs text-zinc-400">—</span>
@@ -509,7 +508,7 @@ function BatchPreview({ batchId }: { batchId: number }) {
                     </span>
                     {row.error && <p className="mt-1 text-xs text-red-600">{row.error}</p>}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     {row.status === "pending" ? (
                       <Checkbox
                         checked={row.action === "create"}

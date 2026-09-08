@@ -12,9 +12,15 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  /**
+   * A wider dialog, for the few that hold a table rather than a form. The
+   * statement is five columns of dates and money and cannot lose its last
+   * one to a form-width box.
+   */
+  wide?: boolean;
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps) {
+export function Modal({ open, onClose, title, children, wide = false }: ModalProps) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
 
@@ -126,7 +132,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
             style={{
               transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
             }}
-            className="surface-strong relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-[1.75rem]"
+            className={`vui-menu vui-edge relative z-10 flex max-h-[90vh] w-full ${wide ? "max-w-3xl" : "max-w-lg"} flex-col overflow-hidden rounded-[var(--vui-r-xl)]`}
         >
           {/* Drag handle / header */}
           <div

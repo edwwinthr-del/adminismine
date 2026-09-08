@@ -14,13 +14,27 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * scarce. Everything else is a quiet frosted control.
  */
 const variants: Record<Variant, string> = {
-  primary:
-    "bg-brand-yellow text-ink shadow-[0_1px_2px_rgb(13_12_11/0.08),0_8px_20px_-10px_rgb(213_205_20/0.9)] hover:brightness-[1.06] active:brightness-95",
-  secondary: "control-surface text-zinc-800 hover:bg-white/80 dark:text-zinc-100 dark:hover:bg-white/10",
+  primary: "bg-brand-yellow text-ink shadow-[var(--vui-shadow-button)]",
+  secondary:
+    "control-surface text-zinc-800 shadow-[var(--vui-shadow-button)] hover:bg-white/80 dark:text-zinc-100 dark:hover:bg-white/10",
   ghost: "text-zinc-600 hover:bg-white/60 dark:text-zinc-300 dark:hover:bg-white/10",
-  danger: "bg-red-500 text-white shadow-[0_8px_20px_-10px_rgb(239_68_68/0.9)] hover:bg-red-600",
+  danger: "bg-red-500 text-white shadow-[var(--vui-shadow-button)] hover:bg-red-600",
 };
 
+/**
+ * Vision UI's button, in this app's colours.
+ *
+ * The template's own metrics: a 12px radius rather than a pill, 12/24 padding
+ * on a 40px minimum, and the label at 12px **bold** — small and heavy rather
+ * than medium and roomy, which is what makes its buttons read as controls
+ * instead of as tags.
+ *
+ * The interaction is the part worth having. Vision UI grows every button
+ * `scale(1.02)` on hover over `all 150ms ease-in`, so the whole control lifts
+ * toward the pointer instead of just changing colour. Kept, with a matching
+ * settle on press, and disabled under `prefers-reduced-motion` by the global
+ * rule in globals.css.
+ */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   { className, variant = "primary", ...props },
   ref,
@@ -29,7 +43,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       className={cn(
-        "focus-ink inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium transition-all duration-150 disabled:pointer-events-none disabled:opacity-45",
+        "focus-ink inline-flex min-h-10 items-center justify-center gap-2 px-6 py-3 text-xs font-bold",
+        "rounded-[var(--vui-r-button)] transition-all duration-150 ease-in",
+        "hover:scale-[1.02] active:scale-[0.99]",
+        "disabled:pointer-events-none disabled:opacity-45",
         variants[variant],
         className,
       )}

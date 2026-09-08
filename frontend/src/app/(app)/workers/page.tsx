@@ -136,7 +136,6 @@ export default function WorkersPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("workers.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("workers.new")}</Button>
       </div>
 
@@ -193,63 +192,63 @@ export default function WorkersPage() {
         </div>
       </Card>
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[980px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("workers.name")}</th>
-              <th className="px-4 py-3">{t("workers.jobRole")}</th>
-              <th className="px-4 py-3">{t("workers.country")}</th>
-              <th className="px-4 py-3">{t("workers.passport")}</th>
-              <th className="px-4 py-3 text-right">{t("workers.baseSalary")}</th>
-              <th className="px-4 py-3">{t("workers.bankStatus")}</th>
-              <th className="px-4 py-3">{t("workers.documents")}</th>
-              <th className="px-4 py-3">{t("workers.status")}</th>
-              <th className="px-4 py-3 text-right">{t("workers.actions")}</th>
+              <th>{t("workers.name")}</th>
+              <th>{t("workers.jobRole")}</th>
+              <th>{t("workers.country")}</th>
+              <th>{t("workers.passport")}</th>
+              <th className="text-right">{t("workers.baseSalary")}</th>
+              <th>{t("workers.bankStatus")}</th>
+              <th>{t("workers.documents")}</th>
+              <th>{t("workers.status")}</th>
+              <th className="text-right">{t("workers.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : employees.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("workers.none")}
                 </td>
               </tr>
             ) : (
               employees.map((employee) => (
                 <tr key={employee.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">
+                  <td className="font-medium">
                     <span className="flex items-center gap-2">
                       {employee.full_name}
                       {employee.deleted_at && <Badge tone="gray">{t("workers.removed")}</Badge>}
                     </span>
                   </td>
-                  <td className="px-4 py-3">{employee.job_role ?? "—"}</td>
-                  <td className="px-4 py-3">{employee.origin_country ?? "—"}</td>
-                  <td className="px-4 py-3">{employee.passport_number ?? "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td>{employee.job_role ?? "—"}</td>
+                  <td>{employee.origin_country ?? "—"}</td>
+                  <td>{employee.passport_number ?? "—"}</td>
+                  <td className="text-right tabular-nums">
                     {employee.base_salary === null ? "—" : formatMoney(employee.base_salary, employee.salary_currency)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={bankTone(employee.bank_account_status)}>
                       {t(`bankStatus.${employee.bank_account_status}`)}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <DocumentCell employee={employee} />
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={employee.status === "active" ? "green" : "gray"}>
                       {t(`workerStatus.${employee.status}`)}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setEditing(employee)}>
                         {t("workers.edit")}

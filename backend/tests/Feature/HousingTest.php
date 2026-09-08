@@ -131,18 +131,18 @@ class HousingTest extends TestCase
         $rent->recalculate();
 
         $this->postJson("/api/housing/rent/{$rent->id}/payments", [
-            'amount' => 200, 'payment_date' => '2026-07-05', 'method' => 'cash',
+            'amount' => 200, 'payment_date' => '2026-07-05', 'account_id' => $this->cashAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'partial')
             ->assertJsonPath('data.remaining_amount', 300);
 
         $this->postJson("/api/housing/rent/{$rent->id}/payments", [
-            'amount' => 400, 'payment_date' => '2026-07-06', 'method' => 'nlb',
+            'amount' => 400, 'payment_date' => '2026-07-06', 'account_id' => $this->nlbAccount()->id,
         ])->assertStatus(422);
 
         $this->postJson("/api/housing/rent/{$rent->id}/payments", [
-            'amount' => 300, 'payment_date' => '2026-07-06', 'method' => 'nlb',
+            'amount' => 300, 'payment_date' => '2026-07-06', 'account_id' => $this->nlbAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'paid')
@@ -229,7 +229,7 @@ class HousingTest extends TestCase
         $bill->recalculate();
 
         $this->postJson("/api/housing/bills/{$bill->id}/payments", [
-            'amount' => 120, 'payment_date' => '2026-07-20', 'method' => 'lovcen',
+            'amount' => 120, 'payment_date' => '2026-07-20', 'account_id' => $this->lovcenAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'paid')
@@ -348,7 +348,7 @@ class HousingTest extends TestCase
             'house_id' => $house->id, 'month' => '2026-07-01', 'rent_amount_due' => 500,
         ]);
         $rent->payments()->create([
-            'amount' => 200, 'currency' => 'EUR', 'payment_date' => '2026-07-03', 'method' => 'cash',
+            'amount' => 200, 'currency' => 'EUR', 'payment_date' => '2026-07-03', 'account_id' => $this->cashAccount()->id,
         ]);
         $rent->recalculate();
 

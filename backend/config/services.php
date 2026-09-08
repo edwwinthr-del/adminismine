@@ -45,6 +45,6 @@ return [
     // The assistant's model. Credentials come from openai-php's own config
     // (OPENAI_API_KEY); this is only the choice of model.
     'openai' => [
-        'model' => env('OPENAI_MODEL', 'llama-3.3-70b-versatile'),
+        'model' => env('OPENAI_MODEL', 'qwen/qwen3.8-27b'),
     ],
 ];

@@ -24,7 +24,7 @@ class SocialAssistancePaymentFactory extends Factory
             'currency' => 'EUR',
             'amount' => $amount,
             'amount_eur' => $amount,
-            'method' => 'cash',
+            'account_id' => BankAccountFactory::default()->id,
         ];
     }
 }

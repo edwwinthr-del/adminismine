@@ -94,7 +94,7 @@ class MoneyCurrencyTest extends TestCase
             'amount' => 100000,
             'currency' => 'TRY',
             'payment_date' => '2026-07-20',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -108,11 +108,11 @@ class MoneyCurrencyTest extends TestCase
         $movement = BankTransaction::sole();
         $this->assertSame('TRY', $movement->currency);
         $this->assertSame(self::RATE, (float) $movement->exchange_rate);
-        $this->assertSame(-100000.0, (float) $movement->nlb_amount);
-        $this->assertSame(-2597.4, (float) $movement->nlb_amount_eur);
+        $this->assertSame(-100000.0, $this->amountOn($movement, $this->nlbAccount()));
+        $this->assertSame(-2597.4, $this->amountEurOn($movement, $this->nlbAccount()));
 
         // What this whole change exists for.
-        $this->assertSame(-2597.4, BankTransaction::accountBalances()['nlb']);
+        $this->assertSame(-2597.4, $this->balanceOfAccount($this->nlbAccount()));
         $this->assertSame(-2597.4, BankTransaction::accountBalances()['total']);
 
         $expenses = $this->getJson('/api/dashboard?month=2026-07')
@@ -174,16 +174,18 @@ class MoneyCurrencyTest extends TestCase
     {
         $this->rate();
 
+        $cash = $this->cashAccount();
+
         BankTransaction::create([
             'date' => '2026-07-10', 'category' => 'income', 'currency' => 'EUR',
-            'cash_amount' => 1000, 'nlb_amount' => 0, 'lovcen_amount' => 0,
-        ]);
+        ])->setLines([['account_id' => $cash->id, 'amount' => 1000]]);
+
         BankTransaction::create([
             'date' => '2026-07-11', 'category' => 'income', 'currency' => 'TRY',
-            'cash_amount' => 38500, 'nlb_amount' => 0, 'lovcen_amount' => 0,
-        ]);
+        ])->setLines([['account_id' => $cash->id, 'amount' => 38500]]);
 
         // 1,000 EUR + (38,500 TRY = 1,000 EUR).
-        $this->assertSame(2000.0, BankTransaction::accountBalances()['cash']);
+        $balances = collect(BankTransaction::accountBalances()['accounts'])->keyBy('id');
+        $this->assertSame(2000.0, $balances[$cash->id]['balance']);
     }
 }

@@ -7,6 +7,7 @@ use App\Models\FlightTicket;
 use App\Models\SocialAssistancePayment;
 use App\Models\TravelExpense;
 use App\Support\MonthPeriod;
+use App\Support\Vocabulary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -59,7 +60,11 @@ class TravelSummaryController extends Controller
                         'amount_eur' => round((float) $tickets->where('direction', $direction)->sum('amount_eur'), 2),
                     ]],
                 ),
-                'by_expense_type' => collect(TravelExpense::TYPES)
+                // Inactive values included: a type retired last month still
+                // has this month's rows behind it, and leaving it out would
+                // quietly drop their money from the breakdown. The zero-count
+                // filter below removes it once nothing holds it any more.
+                'by_expense_type' => collect(Vocabulary::values('travel_expense_type', includeInactive: true))
                     ->mapWithKeys(fn (string $type): array => [$type => [
                         'count' => $expenses->where('expense_type', $type)->count(),
                         'amount_eur' => round((float) $expenses->where('expense_type', $type)->sum('amount_eur'), 2),

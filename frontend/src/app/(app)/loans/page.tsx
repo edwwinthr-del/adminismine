@@ -14,6 +14,7 @@ import {
   canBook,
   type BankRecordMode,
 } from "@/components/bank-record-field";
+import { AccountField } from "@/components/account-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,7 +29,8 @@ interface Repayment {
   amount: number;
   currency: string;
   payment_date: string | null;
-  method: string;
+  account_id: number | null;
+  account: { id: number; name: string } | null;
   reference: string | null;
   notes: string | null;
 }
@@ -70,7 +72,6 @@ interface LoanListResponse {
 }
 
 const DIRECTIONS = ["received", "given"] as const;
-const METHODS = ["cash", "nlb", "lovcen", "other"] as const;
 const CURRENCIES = ["EUR", "TRY"] as const;
 
 const labelClass = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
@@ -124,7 +125,6 @@ export default function LoansPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("loans.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("loans.new")}</Button>
       </div>
 
@@ -159,37 +159,37 @@ export default function LoansPage() {
 
       {(error ?? listError) && <p className="text-sm text-red-600">{error ?? listError}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1040px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("loans.counterparty")}</th>
-              <th className="px-4 py-3">{t("loans.loanDate")}</th>
-              <th className="px-4 py-3">{t("loans.dueDate")}</th>
-              <th className="px-4 py-3 text-right">{t("loans.originalAmount")}</th>
-              <th className="px-4 py-3 text-right">{t("loans.repaid")}</th>
-              <th className="px-4 py-3 text-right">{t("loans.remaining")}</th>
-              <th className="px-4 py-3">{t("loans.status")}</th>
-              <th className="px-4 py-3 text-right">{t("loans.actions")}</th>
+              <th>{t("loans.counterparty")}</th>
+              <th>{t("loans.loanDate")}</th>
+              <th>{t("loans.dueDate")}</th>
+              <th className="text-right">{t("loans.originalAmount")}</th>
+              <th className="text-right">{t("loans.repaid")}</th>
+              <th className="text-right">{t("loans.remaining")}</th>
+              <th>{t("loans.status")}</th>
+              <th className="text-right">{t("loans.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : loans.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("loans.none")}
                 </td>
               </tr>
             ) : (
               loans.map((loan) => (
                 <tr key={loan.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col">
                       <span className="font-medium">{loan.counterparty}</span>
                       <span className="text-xs text-zinc-500">
@@ -199,8 +199,8 @@ export default function LoansPage() {
                       </span>
                     </span>
                   </td>
-                  <td className="px-4 py-3">{formatDate(loan.loan_date)}</td>
-                  <td className="px-4 py-3">
+                  <td>{formatDate(loan.loan_date)}</td>
+                  <td>
                     <span className="flex flex-col">
                       <span>{formatDate(loan.due_date)}</span>
                       {loan.is_overdue && (
@@ -208,7 +208,7 @@ export default function LoansPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className="text-right tabular-nums">
                     <span className="flex flex-col">
                       <span>{formatMoney(loan.original_amount, loan.currency)}</span>
                       {loan.currency !== "EUR" && (
@@ -216,12 +216,12 @@ export default function LoansPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(loan.repaid_amount)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(loan.remaining_amount)}</td>
-                  <td className="px-4 py-3">
+                  <td className="text-right tabular-nums">{formatMoney(loan.repaid_amount)}</td>
+                  <td className="text-right tabular-nums">{formatMoney(loan.remaining_amount)}</td>
+                  <td>
                     <Badge tone={statusTone(loan.status)}>{t(`loanStatus.${loan.status}`)}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex flex-wrap justify-end gap-2">
                       {loan.remaining_amount > 0 && (
                         <Button variant="secondary" className="h-8 px-3" onClick={() => setRepaying(loan)}>
@@ -478,7 +478,7 @@ function RepaymentModal({
   const { t } = useI18n();
   const [amount, setAmount] = useState(String(loan.remaining_amount));
   const [paymentDate, setPaymentDate] = useState(todayISO());
-  const [method, setMethod] = useState<string>("cash");
+  const [accountId, setAccountId] = useState<number | null>(null);
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -489,13 +489,14 @@ function RepaymentModal({
    * bank movement records it, so it defaults to booking one — money out for a
    * loan the company took, money in for one it gave.
    */
-  const [bankMode, setBankMode] = useState<BankRecordMode>(canBook("cash") ? "book" : "none");
+  const [bankMode, setBankMode] = useState<BankRecordMode>("none");
   const [movementId, setMovementId] = useState<number | null>(null);
 
-  function changeMethod(next: string) {
-    setMethod(next);
+  function changeAccount(next: number | null) {
+    setAccountId(next);
 
-    // `other` names no account, so there is nothing to book into.
+    // A settlement naming no account moved no money through one, so
+    // there is nothing to book into.
     if (!canBook(next) && bankMode === "book") setBankMode("none");
     if (canBook(next) && bankMode === "none") setBankMode("book");
   }
@@ -510,7 +511,7 @@ function RepaymentModal({
         json: {
           amount: Number(amount),
           payment_date: paymentDate,
-          method,
+          account_id: accountId,
           reference: reference.trim() || null,
           notes: notes.trim() || null,
           ...bankRecordPayload(bankMode, movementId),
@@ -547,16 +548,7 @@ function RepaymentModal({
             <label className={labelClass}>{t("loans.repaymentDate")}</label>
             <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required />
           </div>
-          <div>
-            <label className={labelClass}>{t("loans.method")}</label>
-            <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
-              {METHODS.map((value) => (
-                <option key={value} value={value}>
-                  {t(`method.${value}`)}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <AccountField value={accountId} onChange={changeAccount} />
           <div>
             <label className={labelClass}>{t("loans.reference")}</label>
             <Input value={reference} onChange={(e) => setReference(e.target.value)} />
@@ -567,7 +559,7 @@ function RepaymentModal({
               onModeChange={setBankMode}
               movementId={movementId}
               onMovementChange={setMovementId}
-              method={method}
+              accountId={accountId}
               editing={false}
             />
           </div>
@@ -608,21 +600,21 @@ function HistoryModal({ loan, onClose }: { loan: Loan; onClose: () => void }) {
           <p className="text-sm text-zinc-500">{t("loans.noRepayments")}</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+            <thead>
               <tr>
-                <th className="py-2">{t("loans.repaymentDate")}</th>
-                <th className="py-2">{t("loans.method")}</th>
-                <th className="py-2">{t("loans.reference")}</th>
-                <th className="py-2 text-right">{t("loans.amount")}</th>
+                <th>{t("loans.repaymentDate")}</th>
+                <th>{t("settlement.account")}</th>
+                <th>{t("loans.reference")}</th>
+                <th className="text-right">{t("loans.amount")}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+            <tbody>
               {repayments.map((repayment) => (
                 <tr key={repayment.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="py-2">{formatDate(repayment.payment_date)}</td>
-                  <td className="py-2">{t(`method.${repayment.method}`)}</td>
-                  <td className="py-2 text-xs text-zinc-500">{repayment.reference ?? "—"}</td>
-                  <td className="py-2 text-right tabular-nums">{formatMoney(repayment.amount)}</td>
+                  <td>{formatDate(repayment.payment_date)}</td>
+                  <td>{repayment.account?.name ?? "—"}</td>
+                  <td className="text-xs text-zinc-500">{repayment.reference ?? "—"}</td>
+                  <td className="text-right tabular-nums">{formatMoney(repayment.amount)}</td>
                 </tr>
               ))}
             </tbody>

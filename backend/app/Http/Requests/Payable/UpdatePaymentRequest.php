@@ -6,6 +6,7 @@ use App\Http\Requests\Concerns\ValidatesBankRecord;
 use App\Support\Currencies;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Correcting a settlement line. Shared by payables and receivables: a payment
@@ -31,7 +32,7 @@ class UpdatePaymentRequest extends FormRequest
             'currency' => Currencies::rules(),
             'exchange_rate' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
             'payment_date' => ['sometimes', 'date'],
-            'method' => ['sometimes', 'string', 'in:cash,nlb,lovcen,other'],
+            'account_id' => ['sometimes', 'nullable', 'integer', Rule::exists('bankovni_racuni', 'id')->where('is_active', true)],
             'reference' => ['sometimes', 'nullable', 'string', 'max:255'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
             ...$this->bankRecordRules(),

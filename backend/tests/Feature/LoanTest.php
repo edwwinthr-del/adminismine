@@ -80,7 +80,7 @@ class LoanTest extends TestCase
         $this->postJson("/api/loans/{$loan->id}/repayments", [
             'amount' => 400,
             'payment_date' => '2026-07-10',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'reference' => 'VRACENO 1',
         ])
             ->assertCreated()
@@ -91,7 +91,7 @@ class LoanTest extends TestCase
         $this->postJson("/api/loans/{$loan->id}/repayments", [
             'amount' => 600,
             'payment_date' => '2026-08-10',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'repaid')
@@ -112,7 +112,7 @@ class LoanTest extends TestCase
         $this->postJson("/api/loans/{$loan->id}/repayments", [
             'amount' => 600,
             'payment_date' => '2026-07-10',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('amount');
@@ -131,7 +131,7 @@ class LoanTest extends TestCase
         $this->postJson("/api/loans/{$loan->id}/repayments", [
             'amount' => 400,
             'payment_date' => '2026-07-10',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])->assertCreated();
 
         $this->putJson("/api/loans/{$loan->id}", ['original_amount' => 800])
@@ -210,7 +210,7 @@ class LoanTest extends TestCase
         $this->postJson("/api/loans/{$loan->id}/repayments", [
             'amount' => 100,
             'payment_date' => '2026-07-10',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])->assertCreated();
 
         $this->deleteJson("/api/loans/{$loan->id}")->assertOk();

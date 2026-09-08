@@ -18,11 +18,14 @@ import { useI18n } from "@/lib/i18n/context";
  */
 export type BankRecordMode = "book" | "match" | "none" | "keep";
 
-/** Methods that name an account a movement can be booked against; `other` names none. */
-export const BOOKABLE_METHODS = ["cash", "nlb", "lovcen"];
-
-export function canBook(method: string): boolean {
-  return BOOKABLE_METHODS.includes(method);
+/**
+ * Whether this settlement names an account a movement can be booked against.
+ *
+ * Naming none is what `other` used to mean — money settled, but not through an
+ * account the app tracks — and there is nothing to book from that.
+ */
+export function canBook(accountId: number | null): boolean {
+  return accountId !== null;
 }
 
 /**
@@ -61,20 +64,20 @@ export function BankRecordField({
   onModeChange,
   movementId,
   onMovementChange,
-  method,
+  accountId,
   editing,
 }: {
   mode: BankRecordMode;
   onModeChange: (mode: BankRecordMode) => void;
   movementId: number | null;
   onMovementChange: (id: number | null) => void;
-  /** The payment method — `other` books nothing, since it names no account. */
-  method: string;
+  /** The account the settlement names — none books nothing. */
+  accountId: number | null;
   /** Editing an existing payment: booking a new movement no longer applies. */
   editing: boolean;
 }) {
   const { t } = useI18n();
-  const bookable = canBook(method);
+  const bookable = canBook(accountId);
 
   const label = "mb-1.5 block px-4 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500";
 

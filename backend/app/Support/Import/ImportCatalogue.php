@@ -2,11 +2,13 @@
 
 namespace App\Support\Import;
 
+use App\Models\BankAccount;
 use App\Models\BankTransaction;
 use App\Models\Employee;
 use App\Models\FlightTicket;
 use App\Models\Loan;
 use App\Models\TravelExpense;
+use App\Support\Vocabulary;
 
 /**
  * What can be imported, and in what shape.
@@ -71,14 +73,21 @@ final class ImportCatalogue
                 target: 'bank_transaction',
                 permission: 'bank_transactions.manage',
                 description: 'One row per movement. Amounts are signed: + money in, − money out. '
-                    .'A transfer between two accounts is one row with both sides filled in.',
+                    .'A transfer is one row: the account the money left in the first pair, '
+                    .'the account it arrived in in the second.',
                 columns: [
                     new ImportColumn('date', 'Date', type: 'date', required: true, example: '2026-03-06'),
                     new ImportColumn('description_1', 'Description', example: 'Supplier payment'),
                     new ImportColumn('description_2', 'Second description'),
-                    new ImportColumn('cash_amount', 'Cash', type: 'decimal', example: '-500.00'),
-                    new ImportColumn('nlb_amount', 'NLB', type: 'decimal', example: '0'),
-                    new ImportColumn('lovcen_amount', 'Lovćen', type: 'decimal', example: '0'),
+                    // The accounts are rows, so the template offers the ones
+                    // this company actually has rather than three fixed columns.
+                    new ImportColumn('account', 'Account', type: 'enum', required: true,
+                        values: BankAccount::names(), example: BankAccount::names()[0] ?? 'Cash'),
+                    new ImportColumn('amount', 'Amount', type: 'decimal', required: true, example: '-500.00'),
+                    new ImportColumn('account_2', 'Second account', type: 'enum', values: BankAccount::names(),
+                        help: 'Only for a transfer: the account the money arrived in.'),
+                    new ImportColumn('amount_2', 'Second amount', type: 'decimal', example: '0',
+                        help: 'Only for a transfer: what arrived in the second account.'),
                     new ImportColumn('category', 'Category', type: 'enum', values: BankTransaction::CATEGORIES,
                         example: 'expense'),
                     new ImportColumn('currency', 'Currency', type: 'enum', values: ['EUR', 'TRY', 'USD'], example: 'EUR'),
@@ -219,7 +228,8 @@ final class ImportCatalogue
                     new ImportColumn('person_name', 'Person', required: true, example: 'Ahmet Yılmaz'),
                     new ImportColumn('expense_date', 'Date', type: 'date', required: true, example: '2026-03-06'),
                     new ImportColumn('period_month', 'Month', type: 'date', example: '2026-03-01'),
-                    new ImportColumn('expense_type', 'Type', type: 'enum', values: TravelExpense::TYPES, example: 'car'),
+                    new ImportColumn('expense_type', 'Type', type: 'enum', values: Vocabulary::values('travel_expense_type'),
+                        example: Vocabulary::values('travel_expense_type')[0] ?? 'other'),
                     new ImportColumn('currency', 'Currency', type: 'enum', values: ['EUR', 'TRY', 'USD'], example: 'EUR'),
                     new ImportColumn('amount', 'Amount', type: 'decimal', required: true, example: '120.00'),
                     new ImportColumn('cost_status', 'Charged to worker', type: 'enum',

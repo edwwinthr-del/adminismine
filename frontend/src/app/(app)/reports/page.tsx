@@ -116,6 +116,11 @@ export default function ReportsPage() {
       query.set("format", format);
       // The title travels with the request so the file is in the user's language.
       query.set("title", t(`report.${report.key}`));
+      // So do the column headings, for the same reason and one more: the
+      // dictionary here already carries whatever this company renamed its terms
+      // to, and the exporter has no dictionary at all. Without this an exported
+      // sheet reads `worker` / `netSalary` whatever language you are in.
+      data?.columns.forEach((column) => query.append("columns[]", t(`reportColumn.${column.label}`)));
 
       await downloadToDisk(
         `/reports/${report.key}/export?${query.toString()}`,
@@ -147,7 +152,6 @@ export default function ReportsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("reports.title")}</h1>
         <p className="text-sm text-zinc-500">{t("reports.subtitle")}</p>
       </div>
 
@@ -284,7 +288,7 @@ export default function ReportsPage() {
       )}
 
       {data && (
-        <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+        <Card className="vui-table scroll-quiet overflow-x-auto p-0">
           {/* The result gets its own header naming what was run, so an exported
               sheet and the screen it came from are recognisably the same thing. */}
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-4 pt-5">
@@ -296,26 +300,22 @@ export default function ReportsPage() {
             </span>
           </div>
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+            <thead>
               <tr>
                 {data.columns.map((column) => (
                   <th
                     key={column.key}
-                    className={
-                      column.type === "money" || column.type === "number"
-                        ? "px-4 py-3 text-right"
-                        : "px-4 py-3"
-                    }
+                    className={column.type === "money" || column.type === "number" ? "text-right" : undefined}
                   >
                     {t(`reportColumn.${column.label}`)}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+            <tbody>
               {data.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={data.columns.length} className="px-4 py-14 text-center text-sm text-zinc-500">
+                  <td colSpan={data.columns.length} className="py-14 text-center text-sm text-zinc-500">
                     {t("reports.noRows")}
                   </td>
                 </tr>
@@ -325,11 +325,7 @@ export default function ReportsPage() {
                     {data.columns.map((column) => (
                       <td
                         key={column.key}
-                        className={
-                          column.type === "money" || column.type === "number"
-                            ? "px-4 py-3 text-right tabular-nums"
-                            : "px-4 py-3"
-                        }
+                        className={column.type === "money" || column.type === "number" ? "text-right tabular-nums" : undefined}
                       >
                         {renderCell(row[column.key], column.type)}
                       </td>
@@ -347,11 +343,7 @@ export default function ReportsPage() {
                   {data.columns.map((column, index) => (
                     <td
                       key={column.key}
-                      className={
-                        column.type === "money" || column.type === "number"
-                          ? "px-4 py-3.5 text-right tabular-nums"
-                          : "px-4 py-3.5"
-                      }
+                      className={column.type === "money" || column.type === "number" ? "text-right tabular-nums" : undefined}
                     >
                       {column.key in data.totals
                         ? formatMoney(data.totals[column.key])

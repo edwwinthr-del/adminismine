@@ -223,7 +223,6 @@ export default function AttendancePage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("attendance.title")}</h1>
         <div className="flex flex-wrap items-center gap-3">
           {/* An explicit width, not `max-w-`: this group is content-sized, so a
               full-width control would claim the whole line and push the date
@@ -279,36 +278,36 @@ export default function AttendancePage() {
       {message && <p className="text-sm text-green-700 dark:text-green-400">{message}</p>}
       {(error ?? rosterError) && <p className="text-sm text-red-600">{error ?? rosterError}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1040px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-3 py-3">{t("attendance.worker")}</th>
-              <th className="px-3 py-3">{t("attendance.status")}</th>
-              <th className="px-3 py-3">{t("attendance.hours")}</th>
-              <th className="px-3 py-3">{t("attendance.overtime")}</th>
-              <th className="px-3 py-3">{t("attendance.overtimeReason")}</th>
-              <th className="px-3 py-3">{t("attendance.note")}</th>
-              <th className="px-3 py-3 text-right">{t("attendance.earned")}</th>
-              <th className="px-3 py-3">{t("attendance.approval")}</th>
+              <th>{t("attendance.worker")}</th>
+              <th>{t("attendance.status")}</th>
+              <th>{t("attendance.hours")}</th>
+              <th>{t("attendance.overtime")}</th>
+              <th>{t("attendance.overtimeReason")}</th>
+              <th>{t("attendance.note")}</th>
+              <th className="text-right">{t("attendance.earned")}</th>
+              <th>{t("attendance.approval")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : !worksiteId ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("attendance.pickWorksite")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("attendance.emptyRoster")}
                 </td>
               </tr>
@@ -319,7 +318,7 @@ export default function AttendancePage() {
 
                 return (
                   <tr key={row.employee_id} className="text-zinc-800 dark:text-zinc-200">
-                    <td className="px-3 py-2 font-medium">
+                    <td className="font-medium">
                       {row.full_name}
                       {row.daily_rate !== null && (
                         <span className="ml-2 text-xs text-zinc-500 tabular-nums">
@@ -327,7 +326,7 @@ export default function AttendancePage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2">
+                    <td>
                       <Select
                         className="h-8 min-w-[8.5rem]"
                         value={draft.status}
@@ -341,7 +340,7 @@ export default function AttendancePage() {
                         ))}
                       </Select>
                     </td>
-                    <td className="px-3 py-2">
+                    <td>
                       <Input
                         className="h-8 w-20"
                         type="number"
@@ -354,7 +353,7 @@ export default function AttendancePage() {
                         onChange={(e) => setDraft(row.employee_id, { regular_hours: e.target.value })}
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td>
                       <Input
                         className="h-8 w-20"
                         type="number"
@@ -367,7 +366,7 @@ export default function AttendancePage() {
                         onChange={(e) => setDraft(row.employee_id, { overtime_hours: e.target.value })}
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td>
                       <Input
                         className="h-8"
                         disabled={locked}
@@ -375,7 +374,7 @@ export default function AttendancePage() {
                         onChange={(e) => setDraft(row.employee_id, { overtime_reason: e.target.value })}
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td>
                       <Input
                         className="h-8"
                         disabled={locked}
@@ -383,7 +382,7 @@ export default function AttendancePage() {
                         onChange={(e) => setDraft(row.employee_id, { note: e.target.value })}
                       />
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                    <td className="text-right tabular-nums">
                       {row.record ? (
                         <span title={t("attendance.earnedBreakdown", {
                           regular: row.record.regular_amount,
@@ -396,7 +395,7 @@ export default function AttendancePage() {
                         "—"
                       )}
                     </td>
-                    <td className="px-3 py-2">
+                    <td>
                       {row.record ? (
                         <span className="flex flex-col gap-1">
                           <Badge tone={approvalTone(row.record.approval_status)}>
@@ -424,10 +423,10 @@ export default function AttendancePage() {
           {rows.length > 0 && (
             <tfoot className="border-t border-zinc-200 dark:border-zinc-800">
               <tr className="text-zinc-800 dark:text-zinc-200">
-                <td className="px-3 py-3 font-medium" colSpan={6}>
+                <td className="font-medium" colSpan={6}>
                   {t("attendance.dayTotal")}
                 </td>
-                <td className="px-3 py-3 text-right font-semibold tabular-nums">{formatMoney(dayTotal)}</td>
+                <td className="text-right font-semibold tabular-nums">{formatMoney(dayTotal)}</td>
                 <td />
               </tr>
             </tfoot>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\BankTransactionLine;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -14,14 +15,23 @@ class BankTransactionResource extends JsonResource
             'date' => optional($this->date)->toDateString(),
             'description_1' => $this->description_1,
             'description_2' => $this->description_2,
-            'cash_amount' => (float) $this->cash_amount,
-            'nlb_amount' => (float) $this->nlb_amount,
-            'lovcen_amount' => (float) $this->lovcen_amount,
+            // One entry per account this movement touched — two of them is what
+            // a transfer looks like.
+            'lines' => $this->whenLoaded('lines', fn () => $this->lines
+                ->map(fn (BankTransactionLine $line): array => [
+                    'id' => $line->id,
+                    'account_id' => $line->account_id,
+                    'account' => $line->relationLoaded('account') && $line->account ? [
+                        'id' => $line->account->id,
+                        'name' => $line->account->name,
+                        'kind' => $line->account->kind,
+                    ] : null,
+                    'amount' => (float) $line->amount,
+                    'amount_eur' => (float) $line->amount_eur,
+                ])
+                ->values()),
             'net_amount' => $this->net_amount,
-            // Every balance and dashboard figure is summed from these.
-            'cash_amount_eur' => (float) $this->cash_amount_eur,
-            'nlb_amount_eur' => (float) $this->nlb_amount_eur,
-            'lovcen_amount_eur' => (float) $this->lovcen_amount_eur,
+            // Every balance and dashboard figure is summed from this.
             'net_amount_eur' => $this->net_amount_eur,
             'exchange_rate' => $this->exchange_rate === null ? null : (float) $this->exchange_rate,
             // Present only on the ledger list, which asks for it explicitly

@@ -14,6 +14,18 @@ class RolesAndPermissionsSeeder extends Seeder
         'users.manage',
         'roles.manage',
         'company.settings.manage',
+        /*
+         * The configuration surfaces added with the industry profiles. They were
+         * folded into company.settings.manage at first, which quietly turned
+         * "edit the company name and timezone" into "switch off Housing for
+         * everyone, rename every screen and reshape the install" — one
+         * permission covering four unrelated powers is exactly what rule 6 is
+         * against.
+         */
+        'company.modules.manage',
+        'company.terminology.manage',
+        'company.vocabularies.manage',
+        'company.profile.manage',
         'exchange_rates.manage',
         'payables.view',
         'payables.create',

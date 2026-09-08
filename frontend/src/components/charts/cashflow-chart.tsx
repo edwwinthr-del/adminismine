@@ -109,15 +109,25 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
           --chart-muted: #8a8579;
           --chart-surface: #f8f7f5;
         }
-        @media (prefers-color-scheme: dark) {
-          .cashflow-chart {
-            --series-income: #3987e5;
-            --series-expenses: #d95926;
-            --chart-grid: #33302a;
-            --chart-axis: #403c35;
-            --chart-muted: #8a8579;
-            --chart-surface: #24221d;
-          }
+        /*
+         * Keyed on the theme the app resolved, not on the operating system.
+         *
+         * This was a prefers-color-scheme block, which was right while the app
+         * had no say in its own theme. Once light and dark became a choice it
+         * would have meant a dark chart — dark grid, dark axis, dark plot
+         * surface — sitting on a light dashboard for anyone whose machine is
+         * set to dark and who picked light. The validated values are unchanged;
+         * only what turns them on is.
+         *
+         * (No backticks in here: this whole block is a JS template literal.)
+         */
+        [data-theme="dark"] .cashflow-chart {
+          --series-income: #3987e5;
+          --series-expenses: #d95926;
+          --chart-grid: #33302a;
+          --chart-axis: #403c35;
+          --chart-muted: #8a8579;
+          --chart-surface: #24221d;
         }
       `}</style>
 
@@ -142,7 +152,9 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
         </ul>
         <button
           onClick={() => setShowTable((prev) => !prev)}
-          className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+          // indigo is ink in this palette, so indigo-400 is a *dark* grey — on
+          // the dark card it measured 2.95:1. Two steps up reads as a link there.
+          className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-300"
         >
           {showTable ? t("dashboard.showChart") : t("dashboard.showTable")}
         </button>
@@ -315,28 +327,28 @@ function CashflowTable({
   const { t } = useI18n();
 
   return (
-    <table className="w-full text-sm">
-      <thead className="border-b border-zinc-200 text-left text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800">
+    <table className="vui-table vui-table-flush w-full text-sm">
+      <thead>
         <tr>
-          <th className="py-2">{t("dashboard.month")}</th>
-          <th className="py-2 text-right">{t("dashboard.income")}</th>
-          <th className="py-2 text-right">{t("dashboard.expenses")}</th>
-          <th className="py-2 text-right">{t("dashboard.net")}</th>
+          <th>{t("dashboard.month")}</th>
+          <th className="text-right">{t("dashboard.income")}</th>
+          <th className="text-right">{t("dashboard.expenses")}</th>
+          <th className="text-right">{t("dashboard.net")}</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+      <tbody>
         {points.map((point) => (
           <tr key={point.month} className="text-zinc-800 dark:text-zinc-200">
-            <td className="py-2">{monthLabel(point.month)}</td>
+            <td>{monthLabel(point.month)}</td>
             {/* A numeric readout, so every figure is signed and toned as it is
                 everywhere else in the app. */}
-            <td className={`py-2 text-right tabular-nums ${amountTone(point.income)}`}>
+            <td className={`text-right tabular-nums ${amountTone(point.income)}`}>
               {formatSignedMoney(point.income)}
             </td>
-            <td className={`py-2 text-right tabular-nums ${amountTone(expenseAmount(point.expenses))}`}>
+            <td className={`text-right tabular-nums ${amountTone(expenseAmount(point.expenses))}`}>
               {formatSignedMoney(expenseAmount(point.expenses))}
             </td>
-            <td className={`py-2 text-right tabular-nums ${amountTone(point.net)}`}>
+            <td className={`text-right tabular-nums ${amountTone(point.net)}`}>
               {formatSignedMoney(point.net)}
             </td>
           </tr>

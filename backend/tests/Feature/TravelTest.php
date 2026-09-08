@@ -160,7 +160,7 @@ class TravelTest extends TestCase
         $this->postJson("/api/travel/tickets/{$ticket->id}/payments", [
             'amount' => 120,
             'payment_date' => '2026-07-12',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'partial')
@@ -170,7 +170,7 @@ class TravelTest extends TestCase
         $this->postJson("/api/travel/tickets/{$ticket->id}/payments", [
             'amount' => 80,
             'payment_date' => '2026-07-20',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'paid')
@@ -191,7 +191,7 @@ class TravelTest extends TestCase
         $this->postJson("/api/travel/tickets/{$ticket->id}/payments", [
             'amount' => 250,
             'payment_date' => '2026-07-12',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('amount');
@@ -438,7 +438,7 @@ class TravelTest extends TestCase
         $this->postJson("/api/travel/tickets/{$ticket->id}/payments", [
             'amount' => 50,
             'payment_date' => '2026-07-12',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])->assertCreated();
 
         $this->deleteJson("/api/travel/tickets/{$ticket->id}")->assertOk();
@@ -489,7 +489,7 @@ class TravelTest extends TestCase
         $this->postJson("/api/travel/expenses/{$expense->id}/payments", [
             'amount' => 500,
             'payment_date' => '2026-07-10',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])->assertCreated();
 
         $this->assertSame('paid', $expense->fresh()->status);
@@ -499,7 +499,7 @@ class TravelTest extends TestCase
         $this->putJson("/api/travel/expenses/{$expense->id}/payments/{$payment->id}", [
             'amount' => 300,
             'payment_date' => '2026-07-10',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])->assertOk();
 
         $expense->refresh();
@@ -511,7 +511,7 @@ class TravelTest extends TestCase
         $this->putJson("/api/travel/expenses/{$expense->id}/payments/{$payment->id}", [
             'amount' => 900,
             'payment_date' => '2026-07-10',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])->assertStatus(422)->assertJsonValidationErrors('amount');
 
         // Removing the last line reopens the expense.
@@ -540,7 +540,7 @@ class TravelTest extends TestCase
         $other->recalculate();
 
         $this->postJson("/api/travel/expenses/{$mine->id}/payments", [
-            'amount' => 100, 'payment_date' => '2026-07-10', 'method' => 'cash',
+            'amount' => 100, 'payment_date' => '2026-07-10', 'account_id' => $this->cashAccount()->id,
         ])->assertCreated();
 
         $payment = $mine->fresh()->payments()->sole();

@@ -124,7 +124,7 @@ class ReceivableController extends Controller
         activity()->performedOn($receivable)->causedBy($request->user())
             ->withProperties([
                 'amount' => $data['amount'],
-                'method' => $data['method'],
+                'account_id' => $data['account_id'] ?? null,
                 'bank_transaction_id' => $payment->fresh()->bank_transaction_id,
                 'booked_bank_transaction' => $booking,
             ])
@@ -140,7 +140,7 @@ class ReceivableController extends Controller
         ReceivableInvoice $receivable,
         Payment $payment,
     ): ReceivableInvoiceResource {
-        $before = $payment->only(['amount', 'payment_date', 'method']);
+        $before = $payment->only(['amount', 'payment_date', 'account_id']);
 
         $this->settlements->updatePayment(
             $receivable,
@@ -166,7 +166,7 @@ class ReceivableController extends Controller
         ReceivableInvoice $receivable,
         Payment $payment,
     ): ReceivableInvoiceResource {
-        $removed = $payment->only(['amount', 'payment_date', 'method', 'bank_transaction_id']);
+        $removed = $payment->only(['amount', 'payment_date', 'account_id', 'bank_transaction_id']);
 
         $this->settlements->deletePayment($receivable, $payment, $request->boolean('delete_bank_transaction'));
 

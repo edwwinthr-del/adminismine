@@ -78,7 +78,7 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 400,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -87,9 +87,9 @@ class PaymentBankMovementTest extends TestCase
         // Money arriving against a receivable is income, and positive: the sign
         // is the invoice's direction, never something the caller states.
         $this->assertSame('income', $movement->category);
-        $this->assertSame(400.0, (float) $movement->nlb_amount);
-        $this->assertSame(0.0, (float) $movement->cash_amount);
-        $this->assertSame(0.0, (float) $movement->lovcen_amount);
+        $this->assertSame(400.0, $this->amountOn($movement, $this->nlbAccount()));
+        $this->assertSame(0.0, $this->amountOn($movement, $this->cashAccount()));
+        $this->assertSame(0.0, $this->amountOn($movement, $this->lovcenAccount()));
         $this->assertSame('2026-07-05', $movement->date->toDateString());
         $this->assertSame($client->id, $movement->client_id);
         $this->assertSame(PaymentBankMovement::SOURCE, $movement->source);
@@ -113,14 +113,14 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/payables/{$invoice->id}/payments", [
             'amount' => 250,
             'payment_date' => '2026-07-06',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
         $movement = BankTransaction::sole();
 
         $this->assertSame('expense', $movement->category);
-        $this->assertSame(-250.0, (float) $movement->cash_amount);
+        $this->assertSame(-250.0, $this->amountOn($movement, $this->cashAccount()));
         $this->assertSame($supplier->id, $movement->supplier_id);
         $this->assertSame(PaymentBankMovement::SOURCE, $movement->source);
     }
@@ -133,20 +133,22 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 1000,
             'payment_date' => now()->toDateString(),
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
         // The whole point: the figures the dashboard reads are aggregates over
         // bank_transactions, so this is what "the receipt is visible" means.
-        $this->assertSame(1000.0, BankTransaction::accountBalances()['nlb']);
+        $this->assertSame(1000.0, $this->balanceOfAccount($this->nlbAccount()));
 
-        $this->getJson('/api/dashboard')
+        $response = $this->getJson('/api/dashboard')
             ->assertOk()
-            ->assertJsonPath('data.balances.nlb', 1000)
             ->assertJsonPath('data.balances.total', 1000)
             ->assertJsonPath('data.cashflow.month.income', 1000)
             ->assertJsonPath('data.receivables.outstanding', 0);
+
+        $balances = collect($response->json('data.balances.accounts'))->keyBy('id');
+        $this->assertEquals(1000.0, $balances[$this->nlbAccount()->id]['balance']);
     }
 
     public function test_booking_is_refused_when_no_account_is_named(): void
@@ -158,7 +160,7 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 100,
             'payment_date' => '2026-07-05',
-            'method' => 'other',
+            'account_id' => null,
             'book_bank_transaction' => true,
         ])
             ->assertStatus(422)
@@ -178,7 +180,7 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 100,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'bank_transaction_id' => $existing->id,
             'book_bank_transaction' => true,
         ])
@@ -196,7 +198,7 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 400,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -209,12 +211,12 @@ class PaymentBankMovementTest extends TestCase
 
         $movement = BankTransaction::sole();
 
-        $this->assertSame(650.0, (float) $movement->nlb_amount);
+        $this->assertSame(650.0, $this->amountOn($movement, $this->nlbAccount()));
         $this->assertSame('2026-07-09', $movement->date->toDateString());
         // Still one row: a correction edits the line that was wrong, it never
         // books a compensating opposite entry.
         $this->assertSame(1, BankTransaction::count());
-        $this->assertSame(650.0, BankTransaction::accountBalances()['nlb']);
+        $this->assertSame(650.0, $this->balanceOfAccount($this->nlbAccount()));
     }
 
     public function test_moving_a_payment_to_another_account_empties_the_one_it_left(): void
@@ -225,21 +227,21 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 300,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
         $payment = Payment::sole();
 
         $this->putJson("/api/receivables/{$invoice->id}/payments/{$payment->id}", [
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])->assertOk();
 
         $movement = BankTransaction::sole();
 
-        $this->assertSame(300.0, (float) $movement->cash_amount);
-        $this->assertSame(0.0, (float) $movement->nlb_amount);
-        $this->assertSame(0.0, BankTransaction::accountBalances()['nlb']);
+        $this->assertSame(300.0, $this->amountOn($movement, $this->cashAccount()));
+        $this->assertSame(0.0, $this->amountOn($movement, $this->nlbAccount()));
+        $this->assertSame(0.0, $this->balanceOfAccount($this->nlbAccount()));
     }
 
     public function test_switching_a_payment_to_other_withdraws_the_movement_it_booked(): void
@@ -250,7 +252,7 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 300,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -259,7 +261,7 @@ class PaymentBankMovementTest extends TestCase
         // The payment stops claiming money moved through an account, so the row
         // that said it did cannot stay behind.
         $this->putJson("/api/receivables/{$invoice->id}/payments/{$payment->id}", [
-            'method' => 'other',
+            'account_id' => null,
         ])->assertOk();
 
         $this->assertSame(0, BankTransaction::count());
@@ -276,7 +278,7 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 1000,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -293,16 +295,15 @@ class PaymentBankMovementTest extends TestCase
     {
         $this->actingAsAdmin();
         $invoice = $this->receivable(1000);
-        $statementRow = BankTransaction::factory()->create([
+        $statementRow = BankTransaction::factory()->onAccount($this->nlbAccount(), 1000)->create([
             'category' => 'income',
-            'nlb_amount' => 1000,
             'source' => null,
         ]);
 
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 1000,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'bank_transaction_id' => $statementRow->id,
         ])->assertCreated();
 
@@ -313,23 +314,22 @@ class PaymentBankMovementTest extends TestCase
         // The money did arrive whatever happened to the invoice it was pointed
         // at; erasing it would put the app out of step with the bank.
         $this->assertModelExists($statementRow);
-        $this->assertSame(1000.0, BankTransaction::accountBalances()['nlb']);
+        $this->assertSame(1000.0, $this->balanceOfAccount($this->nlbAccount()));
     }
 
     public function test_a_hand_entered_movement_is_not_rewritten_to_follow_the_invoice(): void
     {
         $this->actingAsAdmin();
         $invoice = $this->receivable(1000);
-        $statementRow = BankTransaction::factory()->create([
+        $statementRow = BankTransaction::factory()->onAccount($this->nlbAccount(), 1000)->create([
             'category' => 'income',
-            'nlb_amount' => 1000,
             'source' => null,
         ]);
 
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 1000,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'bank_transaction_id' => $statementRow->id,
         ])->assertCreated();
 
@@ -340,7 +340,7 @@ class PaymentBankMovementTest extends TestCase
         ])->assertOk();
 
         // The payment was corrected; the bank statement was not.
-        $this->assertSame(1000.0, (float) $statementRow->fresh()->nlb_amount);
+        $this->assertSame(1000.0, $this->amountOn($statementRow->fresh(), $this->nlbAccount()));
         $this->assertSame(400.0, (float) $invoice->fresh()->received_amount);
     }
 
@@ -348,27 +348,26 @@ class PaymentBankMovementTest extends TestCase
     {
         $this->actingAsAdmin();
         $invoice = $this->receivable(1000);
-        $statementRow = BankTransaction::factory()->create([
+        $statementRow = BankTransaction::factory()->onAccount($this->nlbAccount(), 400)->create([
             'category' => 'income',
-            'nlb_amount' => 400,
             'source' => null,
         ]);
 
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 600,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 400,
             'payment_date' => '2026-07-06',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'bank_transaction_id' => $statementRow->id,
         ])->assertCreated();
 
-        $this->assertSame(1000.0, BankTransaction::accountBalances()['nlb']);
+        $this->assertSame(1000.0, $this->balanceOfAccount($this->nlbAccount()));
 
         $this->deleteJson("/api/receivables/{$invoice->id}")->assertOk();
 
@@ -376,7 +375,7 @@ class PaymentBankMovementTest extends TestCase
         // own row stayed, and the balance is exactly the statement's 400.
         $this->assertModelExists($statementRow);
         $this->assertSame(1, BankTransaction::count());
-        $this->assertSame(400.0, BankTransaction::accountBalances()['nlb']);
+        $this->assertSame(400.0, $this->balanceOfAccount($this->nlbAccount()));
     }
 
     public function test_deleting_a_payable_takes_its_booked_movements(): void
@@ -387,16 +386,16 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/payables/{$invoice->id}/payments", [
             'amount' => 500,
             'payment_date' => '2026-07-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
-        $this->assertSame(-500.0, BankTransaction::accountBalances()['cash']);
+        $this->assertSame(-500.0, $this->balanceOfAccount($this->cashAccount()));
 
         $this->deleteJson("/api/payables/{$invoice->id}", self::CONFIRM)->assertOk();
 
         $this->assertSame(0, BankTransaction::count());
-        $this->assertSame(0.0, BankTransaction::accountBalances()['cash']);
+        $this->assertSame(0.0, $this->balanceOfAccount($this->cashAccount()));
     }
 
     public function test_not_booking_stays_the_default_and_touches_no_ledger(): void
@@ -407,7 +406,7 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => 1000,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
         ])->assertCreated();
 
         // Unchanged behaviour for every caller that does not ask: the operator
@@ -423,7 +422,7 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
             'amount' => $amount,
             'payment_date' => '2026-07-05',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -448,7 +447,7 @@ class PaymentBankMovementTest extends TestCase
         $this->postJson("/api/receivables/{$second->id}/payments", [
             'amount' => 200,
             'payment_date' => '2026-07-06',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'bank_transaction_id' => $movement->id,
         ])->assertStatus(422)->assertJsonValidationErrors('bank_transaction_id');
 
@@ -457,9 +456,9 @@ class PaymentBankMovementTest extends TestCase
             'target' => 'receivable', 'invoice_id' => $second->id, 'amount' => 200,
         ])->assertStatus(422);
 
-        $this->assertSame(1000.0, (float) $movement->fresh()->nlb_amount);
+        $this->assertSame(1000.0, $this->amountOn($movement->fresh(), $this->nlbAccount()));
         $this->assertSame('unpaid', $second->fresh()->status);
-        $this->assertSame(1000.0, BankTransaction::accountBalances()['nlb']);
+        $this->assertSame(1000.0, $this->balanceOfAccount($this->nlbAccount()));
     }
 
     /** Deleting the invoice that booked a movement still takes its own movement with it. */
@@ -481,9 +480,8 @@ class PaymentBankMovementTest extends TestCase
         $receivable = $this->receivable(1000);
         $payable = $this->payable(1000);
 
-        $outgoing = BankTransaction::factory()->create([
-            'category' => 'expense', 'nlb_amount' => 800, 'cash_amount' => 0, 'lovcen_amount' => 0,
-        ]);
+        $outgoing = BankTransaction::factory()->onAccount($this->nlbAccount(), 800)->create([
+            'category' => 'expense']);
 
         $this->postJson("/api/bank-transactions/{$outgoing->id}/match", [
             'target' => 'receivable', 'invoice_id' => $receivable->id, 'amount' => 800,
@@ -504,9 +502,8 @@ class PaymentBankMovementTest extends TestCase
     public function test_a_movement_cannot_settle_more_than_its_own_value(): void
     {
         $this->actingAsAdmin();
-        $movement = BankTransaction::factory()->create([
-            'category' => 'expense', 'nlb_amount' => 100, 'cash_amount' => 0, 'lovcen_amount' => 0,
-        ]);
+        $movement = BankTransaction::factory()->onAccount($this->nlbAccount(), 100)->create([
+            'category' => 'expense']);
 
         $first = $this->payable(1000);
         $second = $this->payable(1000);
@@ -534,7 +531,7 @@ class PaymentBankMovementTest extends TestCase
         $invoice = $this->receivable(1000);
 
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
-            'amount' => 1000, 'payment_date' => '2026-07-05', 'method' => 'nlb',
+            'amount' => 1000, 'payment_date' => '2026-07-05', 'account_id' => $this->nlbAccount()->id,
         ])->assertCreated();
 
         $payment = Payment::sole();
@@ -546,7 +543,7 @@ class PaymentBankMovementTest extends TestCase
 
         $movement = BankTransaction::sole();
         $this->assertSame(PaymentBankMovement::SOURCE, $movement->source);
-        $this->assertSame(1000.0, (float) $movement->nlb_amount);
+        $this->assertSame(1000.0, $this->amountOn($movement, $this->nlbAccount()));
         $this->assertSame($movement->id, $payment->fresh()->bank_transaction_id);
 
         // Asking twice is refused rather than booking the money again.

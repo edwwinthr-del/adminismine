@@ -120,7 +120,6 @@ export default function MachinesPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("machines.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("machines.new")}</Button>
       </div>
 
@@ -175,42 +174,42 @@ export default function MachinesPage() {
 
       {(error ?? listError) && <p className="text-sm text-red-600">{error ?? listError}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1020px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("machines.machine")}</th>
-              <th className="px-4 py-3">{t("machines.serial")}</th>
-              <th className="px-4 py-3">{t("machines.purchase")}</th>
-              <th className="px-4 py-3">{t("machines.purchasedFrom")}</th>
-              <th className="px-4 py-3">{t("machines.location")}</th>
-              <th className="px-4 py-3">{t("machines.status")}</th>
-              <th className="px-4 py-3 text-right">{t("machines.files")}</th>
-              <th className="px-4 py-3 text-right">{t("machines.actions")}</th>
+              <th>{t("machines.machine")}</th>
+              <th>{t("machines.serial")}</th>
+              <th>{t("machines.purchase")}</th>
+              <th>{t("machines.purchasedFrom")}</th>
+              <th>{t("machines.location")}</th>
+              <th>{t("machines.status")}</th>
+              <th className="text-right">{t("machines.files")}</th>
+              <th className="text-right">{t("machines.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : machines.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("machines.none")}
                 </td>
               </tr>
             ) : (
               machines.map((machine) => (
                 <tr key={machine.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="font-medium">{machine.display_name}</span>
                     <span className="ml-2 text-xs text-zinc-500">{machine.machine_type}</span>
                   </td>
-                  <td className="px-4 py-3">{machine.serial_number ?? "â€”"}</td>
-                  <td className="px-4 py-3">
+                  <td>{machine.serial_number ?? "â€”"}</td>
+                  <td>
                     <span className="flex flex-col">
                       <span className="tabular-nums">
                         {machine.purchase_amount === null
@@ -223,7 +222,7 @@ export default function MachinesPage() {
                       </span>
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col">
                       {machine.purchased_from ?? "â€”"}
                       {(machine.payable_invoice_id || machine.bank_transaction_id) && (
@@ -234,7 +233,7 @@ export default function MachinesPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col">
                       {machine.worksite?.name ?? "â€”"}
                       {machine.current_location && (
@@ -242,11 +241,11 @@ export default function MachinesPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={statusTone(machine.status)}>{t(`machineStatus.${machine.status}`)}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{machine.attachment_count ?? 0}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right tabular-nums">{machine.attachment_count ?? 0}</td>
+                  <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setManagingFiles(machine)}>
                         {t("machines.files")}

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\UtilityBill;
 use App\Models\WorkerNeed;
 use App\Support\MonthPeriod;
+use App\Support\Vocabulary;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -29,7 +30,7 @@ class SuggestionValidator
         return match ($target) {
             'utility_bill' => [
                 'house_id' => ['required', 'integer', 'exists:kuce,id'],
-                'bill_type' => ['required', Rule::in(UtilityBill::TYPES)],
+                'bill_type' => ['required', Rule::in(Vocabulary::values('utility_bill_type'))],
                 'billing_period' => ['required', 'date'],
                 'amount' => ['required', 'numeric', 'min:0'],
                 'currency' => ['sometimes', 'string', 'size:3'],
@@ -49,16 +50,16 @@ class SuggestionValidator
             'bank_transaction' => [
                 'date' => ['required', 'date'],
                 'description_1' => ['required', 'string', 'max:255'],
-                'cash_amount' => ['sometimes', 'numeric'],
-                'nlb_amount' => ['sometimes', 'numeric'],
-                'lovcen_amount' => ['sometimes', 'numeric'],
+                'lines' => ['required', 'array', 'min:1'],
+                'lines.*.account_id' => ['required', 'integer', 'exists:bankovni_racuni,id'],
+                'lines.*.amount' => ['required', 'numeric'],
                 'category' => ['nullable', 'string', 'max:50'],
                 'notes' => ['nullable', 'string', 'max:2000'],
             ],
             'worker_need' => [
                 'employee_id' => ['required', 'integer', 'exists:radnici,id'],
                 'date' => ['required', 'date'],
-                'need_type' => ['required', Rule::in(WorkerNeed::TYPES)],
+                'need_type' => ['required', Rule::in(Vocabulary::values('worker_need_type'))],
                 'description' => ['required', 'string', 'max:1000'],
                 'priority' => ['sometimes', Rule::in(WorkerNeed::PRIORITIES)],
             ],
@@ -66,7 +67,7 @@ class SuggestionValidator
                 'employee_id' => ['nullable', 'integer', 'exists:radnici,id'],
                 'person_name' => ['nullable', 'required_without:employee_id', 'string', 'max:255'],
                 'expense_date' => ['required', 'date'],
-                'expense_type' => ['required', Rule::in(TravelExpense::TYPES)],
+                'expense_type' => ['required', Rule::in(Vocabulary::values('travel_expense_type'))],
                 'currency' => ['sometimes', 'string', 'size:3'],
                 'amount' => ['required', 'numeric', 'min:0'],
                 'notes' => ['nullable', 'string', 'max:2000'],
@@ -161,17 +162,18 @@ class SuggestionValidator
 
     private function bankTransaction(array $fields): Model
     {
-        return BankTransaction::create([
+        $movement = BankTransaction::create([
             'date' => $fields['date'],
             'description_1' => $fields['description_1'],
-            'cash_amount' => $fields['cash_amount'] ?? 0,
-            'nlb_amount' => $fields['nlb_amount'] ?? 0,
-            'lovcen_amount' => $fields['lovcen_amount'] ?? 0,
             'category' => $fields['category'] ?? null,
             'currency' => 'EUR',
             'source' => 'assistant',
             'notes' => $fields['notes'] ?? null,
         ]);
+
+        $movement->setLines($fields['lines'] ?? []);
+
+        return $movement;
     }
 
     private function travelExpense(array $fields): Model

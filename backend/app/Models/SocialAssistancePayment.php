@@ -30,8 +30,6 @@ class SocialAssistancePayment extends Model implements BooksBankMovement, Settle
 
     protected $table = 'isplate_socijalne_pomoci';
 
-    public const METHODS = ['cash', 'nlb', 'lovcen', 'other'];
-
     /** @var list<string> */
     protected array $searchable = ['person_name'];
 
@@ -48,7 +46,7 @@ class SocialAssistancePayment extends Model implements BooksBankMovement, Settle
         'exchange_rate',
         'exchange_rate_date',
         'amount_eur',
-        'method',
+        'account_id',
         'bank_transaction_id',
         'reason',
         'source',
@@ -79,6 +77,12 @@ class SocialAssistancePayment extends Model implements BooksBankMovement, Settle
     public function bankTransaction(): BelongsTo
     {
         return $this->belongsTo(BankTransaction::class, 'bank_transaction_id');
+    }
+
+    /** The account the payout moved through, or none. */
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(BankAccount::class, 'account_id');
     }
 
     protected function recipientName(): Attribute
@@ -132,9 +136,9 @@ class SocialAssistancePayment extends Model implements BooksBankMovement, Settle
         return optional($this->exchange_rate_date)->toDateString();
     }
 
-    public function lineMethod(): ?string
+    public function lineAccountId(): ?int
     {
-        return $this->method;
+        return $this->account_id === null ? null : (int) $this->account_id;
     }
 
     /** Why it was paid, in the operator's own words — never a composed sentence. */

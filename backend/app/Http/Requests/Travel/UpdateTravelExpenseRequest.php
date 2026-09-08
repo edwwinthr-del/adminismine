@@ -5,6 +5,7 @@ namespace App\Http\Requests\Travel;
 use App\Models\TravelExpense;
 use App\Support\Currencies;
 use App\Support\MonthPeriod;
+use App\Support\Vocabulary;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -29,7 +30,7 @@ class UpdateTravelExpenseRequest extends FormRequest
             'person_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'expense_date' => ['sometimes', 'date'],
             'period_month' => ['sometimes', 'date'],
-            'expense_type' => ['sometimes', Rule::in(TravelExpense::TYPES)],
+            'expense_type' => ['sometimes', Rule::in(Vocabulary::values('travel_expense_type'))],
             'flight_ticket_id' => ['sometimes', 'nullable', 'integer', 'exists:avionske_karte,id'],
             'currency' => Currencies::rules(),
             'amount' => ['sometimes', 'numeric', 'min:0'],

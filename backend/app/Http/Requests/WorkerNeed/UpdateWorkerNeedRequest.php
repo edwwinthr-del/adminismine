@@ -3,6 +3,7 @@
 namespace App\Http\Requests\WorkerNeed;
 
 use App\Models\WorkerNeed;
+use App\Support\Vocabulary;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,7 +19,7 @@ class UpdateWorkerNeedRequest extends FormRequest
     {
         return [
             'worksite_id' => ['nullable', 'integer', 'exists:gradilista,id'],
-            'need_type' => ['sometimes', Rule::in(WorkerNeed::TYPES)],
+            'need_type' => ['sometimes', Rule::in(Vocabulary::values('worker_need_type'))],
             'description' => ['sometimes', 'string', 'max:2000'],
             'priority' => ['sometimes', Rule::in(WorkerNeed::PRIORITIES)],
             'status' => ['sometimes', Rule::in(WorkerNeed::STATUSES)],

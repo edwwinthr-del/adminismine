@@ -25,9 +25,20 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  */
 class ReportExporter
 {
-    /** @param array<string, mixed> $filters */
-    public function excel(Report $report, array $rows, array $filters, User $user, string $title): string
-    {
+    /**
+     * @param  array<string, mixed>  $filters
+     * @param  list<string>  $headings  column headings in the user's own language,
+     *                                  supplied by the frontend; falls back to the
+     *                                  report's own label key where absent
+     */
+    public function excel(
+        Report $report,
+        array $rows,
+        array $filters,
+        User $user,
+        string $title,
+        array $headings = [],
+    ): string {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle(mb_substr($title, 0, 31));
@@ -50,7 +61,7 @@ class ReportExporter
         $headerRow = 6;
         foreach ($columns as $index => $column) {
             $cell = $this->columnLetter($index + 1).$headerRow;
-            $sheet->setCellValue($cell, $column['label']);
+            $sheet->setCellValue($cell, $this->heading($column, $headings, $index));
         }
 
         $sheet->getStyle("A{$headerRow}:{$lastColumn}{$headerRow}")->applyFromArray([
@@ -103,15 +114,24 @@ class ReportExporter
         return $path;
     }
 
-    /** @param array<string, mixed> $filters */
-    public function pdf(Report $report, array $rows, array $filters, User $user, string $title): string
-    {
+    /**
+     * @param  array<string, mixed>  $filters
+     * @param  list<string>  $headings
+     */
+    public function pdf(
+        Report $report,
+        array $rows,
+        array $filters,
+        User $user,
+        string $title,
+        array $headings = [],
+    ): string {
         $options = new Options;
         $options->set('isRemoteEnabled', false);
         $options->set('defaultFont', 'DejaVu Sans');
 
         $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($this->html($report, $rows, $filters, $user, $title), 'UTF-8');
+        $dompdf->loadHtml($this->html($report, $rows, $filters, $user, $title, $headings), 'UTF-8');
         $dompdf->setPaper('a4', count($report->columns()) > 6 ? 'landscape' : 'portrait');
         $dompdf->render();
 
@@ -121,16 +141,26 @@ class ReportExporter
         return $path;
     }
 
-    /** @param array<string, mixed> $filters */
-    private function html(Report $report, array $rows, array $filters, User $user, string $title): string
-    {
+    /**
+     * @param  array<string, mixed>  $filters
+     * @param  list<string>  $headings
+     */
+    private function html(
+        Report $report,
+        array $rows,
+        array $filters,
+        User $user,
+        string $title,
+        array $headings = [],
+    ): string {
         $company = CompanySettings::current();
         $columns = $report->columns();
         $totals = $report->totals($rows);
 
         $head = implode('', array_map(
-            fn (array $column): string => '<th class="'.($this->isNumeric($column) ? 'num' : '').'">'
-                .e($column['label']).'</th>',
+            fn (int $index, array $column): string => '<th class="'.($this->isNumeric($column) ? 'num' : '').'">'
+                .e($this->heading($column, $headings, $index)).'</th>',
+            array_keys($columns),
             $columns,
         ));
 
@@ -212,6 +242,20 @@ class ReportExporter
             'month' => substr((string) $value, 0, 7),
             default => (string) $value,
         };
+    }
+
+    /**
+     * The heading for one column: what the screen showed, or the report's own
+     * label key where the caller supplied nothing.
+     *
+     * @param  array<string, mixed>  $column
+     * @param  list<string>  $headings
+     */
+    private function heading(array $column, array $headings, int $index): string
+    {
+        $supplied = trim((string) ($headings[$index] ?? ''));
+
+        return $supplied !== '' ? $supplied : (string) $column['label'];
     }
 
     /** @param array<string, mixed> $filters */

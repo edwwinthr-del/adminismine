@@ -23,9 +23,20 @@ export function Card({
    * order in the stylesheet, not the order they were written in. One or the
    * other, decided here.
    */
+  /*
+   * Vision UI's card: a 20px radius, 22px of padding, and the gradient-plus-blur
+   * surface carried by `.vui-surface` — plus the lit hairline its GradientBorder
+   * draws, reproduced as `.vui-edge`. `raised` keeps its meaning and simply
+   * deepens the shadow, since the template has one card treatment rather than
+   * two.
+   */
   return (
     <div
-      className={cn(raised ? "surface-strong" : "surface", "rounded-[1.75rem] p-5", className)}
+      className={cn(
+        "vui-surface vui-edge rounded-[var(--vui-r-xl)] p-[22px]",
+        raised && "shadow-[var(--vui-shadow-lg)]",
+        className,
+      )}
       {...props}
     />
   );
@@ -54,13 +65,13 @@ export function FeatureCard({
      * same move (maximum contrast against the page) read the other way round.
      */
     ink: "bg-ink text-zinc-50 border border-white/10 dark:bg-zinc-100 dark:text-ink dark:border-black/10",
-    plain: "surface-strong",
+    plain: "vui-surface",
   } as const;
 
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[1.75rem] p-5 shadow-[0_2px_4px_rgb(13_12_11/0.05),0_24px_56px_-24px_rgb(13_12_11/0.32)]",
+        "relative overflow-hidden rounded-[var(--vui-r-xl)] p-[22px] shadow-[var(--vui-shadow-lg)]",
         tones[tone],
         className,
       )}

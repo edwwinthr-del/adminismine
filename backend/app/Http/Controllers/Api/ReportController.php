@@ -59,7 +59,16 @@ class ReportController extends Controller
     /** The spec's requirement: the user picks PDF or Excel at export time. */
     public function export(Request $request, string $key, ReportExporter $exporter): BinaryFileResponse
     {
-        $request->validate(['format' => ['required', 'in:xlsx,pdf'], 'title' => ['nullable', 'string', 'max:120']]);
+        $request->validate([
+            'format' => ['required', 'in:xlsx,pdf'],
+            'title' => ['nullable', 'string', 'max:120'],
+            // Column headings travel with the request for the same reason the
+            // title does: the frontend holds the dictionary, including whatever
+            // this company renamed its terms to, and an export whose headers
+            // read `worker` / `netSalary` is not in anybody's language.
+            'columns' => ['nullable', 'array'],
+            'columns.*' => ['nullable', 'string', 'max:120'],
+        ]);
 
         $report = $this->resolve($request, $key);
         $filters = $this->filters($request, $report->filters());
@@ -68,10 +77,11 @@ class ReportController extends Controller
         // The title comes from the frontend so the export is in the user's own
         // language — nothing here stores or guesses translated text.
         $title = $request->input('title', $report->key());
+        $headings = array_values((array) $request->input('columns', []));
 
         $path = $request->input('format') === 'pdf'
-            ? $exporter->pdf($report, $rows, $filters, $request->user(), $title)
-            : $exporter->excel($report, $rows, $filters, $request->user(), $title);
+            ? $exporter->pdf($report, $rows, $filters, $request->user(), $title, $headings)
+            : $exporter->excel($report, $rows, $filters, $request->user(), $title, $headings);
 
         activity()->causedBy($request->user())
             ->withProperties(['report' => $report->key(), 'format' => $request->input('format'), 'rows' => count($rows)])

@@ -109,7 +109,6 @@ export default function AssistantPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("assistant.title")}</h1>
           <p className="text-sm text-zinc-500">{t("assistant.subtitle")}</p>
         </div>
         {messages.length > 0 && (
@@ -211,28 +210,24 @@ function ReportBlock({ report }: { report: ReportPayload }) {
   const { t } = useI18n();
 
   return (
-    <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
-      <p className="px-4 pb-2 pt-4 text-xs font-medium text-zinc-500">
+    <Card className="vui-table scroll-quiet overflow-x-auto p-0">
+      <p className="px-[var(--vui-pad-card)] pb-2 pt-[var(--vui-pad-card)] text-xs font-medium text-zinc-500">
         {t(`report.${report.key}`)} · {t("assistant.rowCount", { count: report.row_count })}
       </p>
       <table className="w-full min-w-[560px] text-xs">
-        <thead className="border-b border-zinc-900/8 text-left uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+        <thead>
           <tr>
             {report.columns.map((column) => (
               <th
                 key={column.key}
-                className={
-                  column.type === "money" || column.type === "number"
-                    ? "px-3 py-2 text-right"
-                    : "px-3 py-2"
-                }
+                className={column.type === "money" || column.type === "number" ? "text-right" : undefined}
               >
                 {t(`reportColumn.${column.label}`)}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+        <tbody>
           {report.rows.map((row, index) => (
             <tr key={index} className="text-zinc-700 dark:text-zinc-300">
               {report.columns.map((column) => {
@@ -242,7 +237,7 @@ function ReportBlock({ report }: { report: ReportPayload }) {
                 return (
                   <td
                     key={column.key}
-                    className={numeric ? "px-3 py-2 text-right tabular-nums" : "px-3 py-2"}
+                    className={numeric ? "text-right tabular-nums" : undefined}
                   >
                     {value === null || value === undefined || value === ""
                       ? "—"

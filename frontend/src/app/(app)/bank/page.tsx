@@ -17,16 +17,23 @@ import { Pagination, type PageMeta } from "@/components/ui/pagination";
 import { PasswordConfirmModal } from "@/components/ui/password-confirm-modal";
 import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+/** One account's share of a movement. Two of them is a transfer. */
+interface MovementLine {
+  id: number;
+  account_id: number;
+  account: { id: number; name: string; kind: string } | null;
+  amount: number;
+  amount_eur: number;
+}
+
 interface BankTransaction {
   id: number;
   date: string | null;
   description_1: string | null;
   description_2: string | null;
-  cash_amount: number;
-  nlb_amount: number;
-  lovcen_amount: number;
+  lines: MovementLine[];
   net_amount: number;
-  /** Balance of all three accounts as of this row, in ledger order. */
+  /** Balance of every account as of this row, in ledger order. */
   running_balance?: number;
   category: string | null;
   is_uncategorized: boolean;
@@ -35,11 +42,22 @@ interface BankTransaction {
   notes: string | null;
 }
 
+interface AccountBalance {
+  id: number;
+  name: string;
+  kind: string;
+  balance: number;
+}
+
 interface Balances {
-  cash: number;
-  nlb: number;
-  lovcen: number;
+  accounts: AccountBalance[];
   total: number;
+}
+
+/** A line being typed. The account is unset until one is picked. */
+interface LineDraft {
+  accountId: number | null;
+  amount: string;
 }
 
 const CATEGORIES = ["income", "expense", "transfer", "loan", "payroll", "housing", "travel", "other"] as const;
@@ -87,24 +105,34 @@ export default function BankPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("bank.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("bank.new")}</Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {(["cash", "nlb", "lovcen", "total"] as const).map((k) => (
-          <Card key={k}>
-            <p className="text-sm text-zinc-500">{k === "total" ? t("bank.total") : t(`bank.${k}`)}</p>
+{/*
+        One card per account the company holds, however many that is, and the
+        total last. These were three fixed cards named after two Montenegrin
+        banks.
+      */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {(balances?.accounts ?? []).map((account) => (
+          <Card key={account.id}>
+            <p className="text-sm text-zinc-500">{account.name}</p>
             {/*
               A balance is a signed figure: money out has already been subtracted
               from it, so it is shown and coloured by the same rule as any other
               amount (lib/format).
             */}
-            <p className={`mt-1 text-xl font-semibold ${amountTone(balances?.[k] ?? 0)}`}>
-              {formatMoney(balances?.[k] ?? 0)}
+            <p className={`mt-1 text-xl font-semibold ${amountTone(account.balance)}`}>
+              {formatMoney(account.balance)}
             </p>
           </Card>
         ))}
+        <Card>
+          <p className="text-sm text-zinc-500">{t("bank.total")}</p>
+          <p className={`mt-1 text-xl font-semibold ${amountTone(balances?.total ?? 0)}`}>
+            {formatMoney(balances?.total ?? 0)}
+          </p>
+        </Card>
       </div>
 
       <Card className="p-4">
@@ -130,47 +158,63 @@ export default function BankPage() {
         </div>
       </Card>
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1080px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("bank.date")}</th>
-              <th className="px-4 py-3">{t("bank.description1")}</th>
-              <th className="px-4 py-3 text-right">{t("bank.cash")}</th>
-              <th className="px-4 py-3 text-right">{t("bank.nlb")}</th>
-              <th className="px-4 py-3 text-right">{t("bank.lovcen")}</th>
-              <th className="px-4 py-3 text-right">{t("bank.net")}</th>
-              <th className="px-4 py-3 text-right">{t("bank.runningBalance")}</th>
-              <th className="px-4 py-3">{t("bank.category")}</th>
-              <th className="px-4 py-3 text-right">{t("common.actions")}</th>
+              <th>{t("bank.date")}</th>
+              <th>{t("bank.description1")}</th>
+              <th>{t("bank.accounts")}</th>
+              <th className="text-right">{t("bank.net")}</th>
+              <th className="text-right">{t("bank.runningBalance")}</th>
+              <th>{t("bank.category")}</th>
+              <th className="text-right">{t("common.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={7} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={7} className="py-14 text-center text-sm text-zinc-500">
                   {t("bank.none")}
                 </td>
               </tr>
             ) : (
               rows.map((r) => (
                 <tr key={r.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 whitespace-nowrap">{formatDate(r.date)}</td>
-                  <td className="px-4 py-3">
+                  <td className="whitespace-nowrap">{formatDate(r.date)}</td>
+                  <td>
                     <div className="flex items-center gap-2">
                       <span>{r.description_1 ?? "—"}</span>
                       {r.possible_duplicate && <Badge tone="amber">{t("bank.duplicate")}</Badge>}
                     </div>
                   </td>
-                  <Amount value={r.cash_amount} currency={r.currency} />
-                  <Amount value={r.nlb_amount} currency={r.currency} />
-                  <Amount value={r.lovcen_amount} currency={r.currency} />
+                  {/*
+                    One entry per account the movement touched, rather than a
+                    column per account: the table stays the same width whether
+                    the company banks in one place or six.
+                  */}
+                  <td>
+                    <div className="flex flex-col gap-0.5">
+                      {r.lines.length === 0 ? (
+                        <span className="text-zinc-400">—</span>
+                      ) : (
+                        r.lines.map((line) => (
+                          <span key={line.id} className="flex items-baseline gap-2 whitespace-nowrap">
+                            <span className="text-zinc-500">{line.account?.name ?? "—"}</span>
+                            <span className={`tabular-nums ${amountTone(line.amount)}`}>
+                              {formatSignedMoney(line.amount, r.currency)}
+                            </span>
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </td>
                   <Amount value={r.net_amount} currency={r.currency} emphasis alwaysShow />
                   {/*
                     Not signed: this is where the account stands, not a movement.
@@ -178,13 +222,13 @@ export default function BankPage() {
                     thing about a balance that needs to be noticed.
                   */}
                   <td
-                    className={`px-4 py-3 text-right tabular-nums ${
+                    className={`text-right tabular-nums ${
                       (r.running_balance ?? 0) < 0 ? "text-red-600 dark:text-red-400" : "text-zinc-500"
                     }`}
                   >
                     {r.running_balance === undefined ? "—" : formatMoney(r.running_balance, r.currency)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     {r.category ? (
                       <Badge tone={r.category === "income" ? "green" : r.category === "expense" ? "red" : "indigo"}>
                         {t(`category.${r.category}`)}
@@ -193,7 +237,7 @@ export default function BankPage() {
                       <Badge tone="amber">{t("bank.uncategorized")}</Badge>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <MatchButton transaction={r} />
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setEditing(r)}>
@@ -253,7 +297,7 @@ function Amount({
 }) {
   return (
     <td
-      className={`px-4 py-3 text-right tabular-nums ${emphasis ? "font-medium" : ""} ${amountTone(value)}`}
+      className={`text-right tabular-nums ${emphasis ? "font-medium" : ""} ${amountTone(value)}`}
     >
       {value || alwaysShow ? formatSignedMoney(value, currency) : "—"}
     </td>
@@ -274,19 +318,25 @@ function TransactionModal({
   const [date, setDate] = useState(transaction?.date ?? todayISO());
   const [desc1, setDesc1] = useState(transaction?.description_1 ?? "");
   const [desc2, setDesc2] = useState(transaction?.description_2 ?? "");
-  // Amounts open exactly as stored, signs and all. For income and expense the
+  // Lines open exactly as stored, signs and all. For income and expense the
   // server settles the sign anyway, but for a transfer the sign *is* the
   // movement — showing a magnitude there would turn "-500 out of cash" into
   // "+500 into cash" the moment the row was saved again.
-  const [cash, setCash] = useState(amountField(transaction?.cash_amount));
-  const [nlb, setNlb] = useState(amountField(transaction?.nlb_amount));
-  const [lovcen, setLovcen] = useState(amountField(transaction?.lovcen_amount));
+  const [lines, setLines] = useState<LineDraft[]>(
+    transaction?.lines?.length
+      ? transaction.lines.map((line) => ({ accountId: line.account_id, amount: String(line.amount) }))
+      : [{ accountId: null, amount: "" }],
+  );
   const [category, setCategory] = useState(transaction?.category ?? "expense");
   const [notes, setNotes] = useState(transaction?.notes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const direction = DIRECTIONAL[category];
+
+  function updateLine(index: number, patch: Partial<LineDraft>) {
+    setLines(lines.map((line, i) => (i === index ? { ...line, ...patch } : line)));
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -297,9 +347,11 @@ function TransactionModal({
       date,
       description_1: desc1 || null,
       description_2: desc2 || null,
-      cash_amount: cash ? Number(cash) : 0,
-      nlb_amount: nlb ? Number(nlb) : 0,
-      lovcen_amount: lovcen ? Number(lovcen) : 0,
+      // An unfinished row is not a line: the operator adding a second account
+      // and changing their mind should not make the movement invalid.
+      lines: lines
+        .filter((line) => line.accountId !== null && line.amount.trim() !== "")
+        .map((line) => ({ account_id: line.accountId, amount: Number(line.amount) })),
       category,
       notes: notes || null,
     };
@@ -346,19 +398,54 @@ function TransactionModal({
           <label className={label}>{t("bank.description2")}</label>
           <Input value={desc2} onChange={(e) => setDesc2(e.target.value)} />
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className={label}>{t("bank.cash")}</label>
-            <Input type="number" step="0.01" value={cash} onChange={(e) => setCash(e.target.value)} placeholder="0" />
+        <div>
+          <label className={label}>{t("bank.accounts")}</label>
+          <div className="space-y-2">
+            {lines.map((line, index) => (
+              <div key={index} className="flex items-start gap-2">
+                <div className="flex-1">
+                  <AsyncSelect
+                    resource="bank-accounts"
+                    value={line.accountId}
+                    onChange={(value) => updateLine(index, { accountId: value })}
+                    // An old movement may name an account that has since been
+                    // closed; the form still has to be able to show it.
+                    params={{ include_closed: editing }}
+                    placeholder={t("bank.selectAccount")}
+                  />
+                </div>
+                <Input
+                  className="w-40"
+                  type="number"
+                  step="0.01"
+                  value={line.amount}
+                  onChange={(e) => updateLine(index, { amount: e.target.value })}
+                  placeholder="0"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-10 px-3 text-red-600"
+                  disabled={lines.length === 1}
+                  onClick={() => setLines(lines.filter((_, i) => i !== index))}
+                >
+                  {t("common.remove")}
+                </Button>
+              </div>
+            ))}
           </div>
-          <div>
-            <label className={label}>{t("bank.nlb")}</label>
-            <Input type="number" step="0.01" value={nlb} onChange={(e) => setNlb(e.target.value)} placeholder="0" />
-          </div>
-          <div>
-            <label className={label}>{t("bank.lovcen")}</label>
-            <Input type="number" step="0.01" value={lovcen} onChange={(e) => setLovcen(e.target.value)} placeholder="0" />
-          </div>
+          {/*
+            A second line is what makes a movement a transfer: out of one
+            account and into another, in one row.
+          */}
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-2 h-8 px-3"
+            onClick={() => setLines([...lines, { accountId: null, amount: "" }])}
+          >
+            {t("bank.addAccount")}
+          </Button>
         </div>
         {/*
           Says which way the money will go before it is saved. For income and
@@ -391,13 +478,6 @@ function TransactionModal({
       </form>
     </Modal>
   );
-}
-
-/** An amount as a form value: blank for an untouched account, as stored otherwise. */
-function amountField(value: number | undefined): string {
-  if (value === undefined || value === 0) return "";
-
-  return String(value);
 }
 
 function MatchButton({ transaction }: { transaction: BankTransaction }) {

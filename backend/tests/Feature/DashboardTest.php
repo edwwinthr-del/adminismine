@@ -52,42 +52,84 @@ class DashboardTest extends TestCase
         // Categories are explicit because they now fix the sign: `income` and
         // `expense` state a direction, `other` leaves the signs as entered
         // (BankTransaction::DIRECTIONS).
-        BankTransaction::factory()->create(['category' => 'income', 'cash_amount' => 1000, 'nlb_amount' => 0, 'lovcen_amount' => 0]);
-        BankTransaction::factory()->create(['category' => 'other', 'cash_amount' => -250, 'nlb_amount' => 5000, 'lovcen_amount' => 0]);
-        BankTransaction::factory()->create(['category' => 'income', 'cash_amount' => 0, 'nlb_amount' => 0, 'lovcen_amount' => 750]);
+        $cash = $this->cashAccount();
+        $nlb = $this->nlbAccount();
+        $lovcen = $this->lovcenAccount();
 
-        $this->getJson('/api/dashboard')
-            ->assertOk()
-            ->assertJsonPath('data.balances.cash', 750)
-            ->assertJsonPath('data.balances.nlb', 5000)
-            ->assertJsonPath('data.balances.lovcen', 750)
-            ->assertJsonPath('data.balances.total', 6500);
+        BankTransaction::factory()->onAccount($cash, 1000)->create(['category' => 'income']);
+        BankTransaction::factory()->withLines([
+            ['account_id' => $cash->id, 'amount' => -250],
+            ['account_id' => $nlb->id, 'amount' => 5000],
+        ])->create(['category' => 'other']);
+        BankTransaction::factory()->onAccount($lovcen, 750)->create(['category' => 'income']);
+
+        $response = $this->getJson('/api/dashboard')->assertOk();
+        $balances = collect($response->json('data.balances.accounts'))->keyBy('id');
+
+        $this->assertEquals(750.0, $balances[$cash->id]['balance']);
+        $this->assertEquals(5000.0, $balances[$nlb->id]['balance']);
+        $this->assertEquals(750.0, $balances[$lovcen->id]['balance']);
+        $response->assertJsonPath('data.balances.total', 6500);
+    }
+
+    public function test_each_account_carries_its_balance_month_by_month(): void
+    {
+        $this->actingAsAdmin();
+        $cash = $this->cashAccount();
+
+        BankTransaction::factory()->onAccount($cash, 1000)->create([
+            'date' => '2026-05-10',
+            'category' => 'income',
+        ]);
+        BankTransaction::factory()->onAccount($cash, -400)->create([
+            'date' => '2026-07-04',
+            'category' => 'expense',
+        ]);
+
+        $response = $this->getJson('/api/dashboard?month=2026-08')->assertOk();
+        $account = collect($response->json('data.balances.accounts'))->firstWhere('id', $cash->id);
+
+        // March through August. The balance carries forward through the months
+        // nothing happened in — which is the whole difference between a balance
+        // history and six monthly totals.
+        $this->assertEquals([0, 0, 1000, 1000, 600, 600], $account['trend']);
+        $this->assertEquals([0, 0, 1000, 1000, 600, 600], $response->json('data.balances.trend'));
+    }
+
+    public function test_the_series_opens_from_everything_before_the_window(): void
+    {
+        $this->actingAsAdmin();
+        $cash = $this->cashAccount();
+
+        // Well before the six months the dashboard shows: it is not a point on
+        // the line, it is where the line starts.
+        BankTransaction::factory()->onAccount($cash, 2500)->create([
+            'date' => '2025-11-02',
+            'category' => 'income',
+        ]);
+
+        $response = $this->getJson('/api/dashboard?month=2026-08')->assertOk();
+        $account = collect($response->json('data.balances.accounts'))->firstWhere('id', $cash->id);
+
+        $this->assertEquals([2500, 2500, 2500, 2500, 2500, 2500], $account['trend']);
+        $this->assertEquals(2500, $account['balance']);
     }
 
     public function test_monthly_income_and_expenses_split_by_sign(): void
     {
         $this->actingAsAdmin();
 
-        BankTransaction::factory()->create([
+        BankTransaction::factory()->onAccount($this->cashAccount(), 2000)->create([
             'date' => '2026-07-05',
-            'cash_amount' => 2000,
-            'nlb_amount' => 0,
-            'lovcen_amount' => 0,
             'category' => 'income',
         ]);
-        BankTransaction::factory()->create([
+        BankTransaction::factory()->onAccount($this->cashAccount(), -800)->create([
             'date' => '2026-07-10',
-            'cash_amount' => -800,
-            'nlb_amount' => 0,
-            'lovcen_amount' => 0,
             'category' => 'expense',
         ]);
         // Another month must not leak in.
-        BankTransaction::factory()->create([
+        BankTransaction::factory()->onAccount($this->cashAccount(), 9999)->create([
             'date' => '2026-06-10',
-            'cash_amount' => 9999,
-            'nlb_amount' => 0,
-            'lovcen_amount' => 0,
         ]);
 
         $this->getJson('/api/dashboard?month=2026-07')
@@ -102,11 +144,8 @@ class DashboardTest extends TestCase
         $this->actingAsAdmin();
 
         // Cash moved to the bank: real movements, but not income or expense.
-        BankTransaction::factory()->create([
+        BankTransaction::factory()->transfer($this->cashAccount(), $this->nlbAccount(), 1000)->create([
             'date' => '2026-07-05',
-            'cash_amount' => -1000,
-            'nlb_amount' => 1000,
-            'lovcen_amount' => 0,
             'category' => 'transfer',
         ]);
 
@@ -122,11 +161,8 @@ class DashboardTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        BankTransaction::factory()->create([
+        BankTransaction::factory()->onAccount($this->cashAccount(), 500)->create([
             'date' => '2026-05-10',
-            'cash_amount' => 500,
-            'nlb_amount' => 0,
-            'lovcen_amount' => 0,
             // Pinned: the factory picks a random category, and a 'transfer' is
             // deliberately excluded from income — leaving it random makes this flaky.
             'category' => 'income',
@@ -263,12 +299,9 @@ class DashboardTest extends TestCase
         // because it now decides the sign (BankTransaction::DIRECTIONS), and two
         // rows only count as the same movement if their amounts match.
         foreach (range(1, 2) as $ignored) {
-            BankTransaction::factory()->create([
+            BankTransaction::factory()->onAccount($this->cashAccount(), 300)->create([
                 'date' => '2026-07-05',
                 'category' => 'expense',
-                'cash_amount' => 300,
-                'nlb_amount' => 0,
-                'lovcen_amount' => 0,
             ]);
         }
 
@@ -291,11 +324,8 @@ class DashboardTest extends TestCase
         ]);
         $invoice->recalculate();
 
-        $transaction = BankTransaction::factory()->create([
+        $transaction = BankTransaction::factory()->onAccount($this->cashAccount(), -500)->create([
             'date' => '2026-07-05',
-            'cash_amount' => -500,
-            'nlb_amount' => 0,
-            'lovcen_amount' => 0,
         ]);
 
         $this->getJson('/api/dashboard')->assertJsonPath('data.alerts.unmatched_payments', 1);
@@ -304,7 +334,7 @@ class DashboardTest extends TestCase
             'amount' => 500,
             'currency' => 'EUR',
             'payment_date' => '2026-07-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'bank_transaction_id' => $transaction->id,
         ]);
 
@@ -331,7 +361,7 @@ class DashboardTest extends TestCase
     {
         $this->actingWithPermission('payables.view');
 
-        BankTransaction::factory()->create(['cash_amount' => 1000]);
+        BankTransaction::factory()->onAccount($this->cashAccount(), 1000)->create([]);
         $supplier = Supplier::factory()->create();
         $invoice = PayableInvoice::factory()->create([
             'supplier_id' => $supplier->id,

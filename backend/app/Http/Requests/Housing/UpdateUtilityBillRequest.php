@@ -4,6 +4,7 @@ namespace App\Http\Requests\Housing;
 
 use App\Models\UtilityBill;
 use App\Support\Currencies;
+use App\Support\Vocabulary;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +18,7 @@ class UpdateUtilityBillRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'bill_type' => ['sometimes', Rule::in(UtilityBill::TYPES)],
+            'bill_type' => ['sometimes', Rule::in(Vocabulary::values('utility_bill_type'))],
             'amount' => ['sometimes', 'numeric', 'min:0'],
             'currency' => Currencies::rules(),
             'due_date' => ['nullable', 'date'],

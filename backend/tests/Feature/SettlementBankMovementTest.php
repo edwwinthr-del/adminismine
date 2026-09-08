@@ -80,7 +80,7 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/housing/rent/{$rent->id}/payments", [
             'amount' => 400,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -89,7 +89,7 @@ class SettlementBankMovementTest extends TestCase
         $this->assertSame('housing', $movement->category);
         $this->assertSame('Kuca Niksic 1', $movement->description_1);
         // Money out: the sign is the record's, not the operator's to state.
-        $this->assertSame(-400.0, round((float) $movement->cash_amount, 2));
+        $this->assertSame(-400.0, $this->amountOn($movement, $this->cashAccount()));
 
         $dashboard = $this->dashboard();
         $this->assertSame(-400.0, $dashboard['balance']);
@@ -115,7 +115,7 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/salary-payments/{$salary->id}/payments", [
             'amount' => 900,
             'payment_date' => self::MONTH.'-07',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -123,7 +123,7 @@ class SettlementBankMovementTest extends TestCase
 
         $this->assertSame('payroll', $movement->category);
         $this->assertSame('Ali Yilmaz', $movement->description_1);
-        $this->assertSame(-900.0, round((float) $movement->nlb_amount, 2));
+        $this->assertSame(-900.0, $this->amountOn($movement, $this->nlbAccount()));
         $this->assertSame(-900.0, $this->dashboard()['balance']);
     }
 
@@ -141,14 +141,14 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/housing/bills/{$bill->id}/payments", [
             'amount' => 120,
             'payment_date' => self::MONTH.'-06',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
         $movement = BankTransaction::query()->sole();
 
         $this->assertSame('housing', $movement->category);
-        $this->assertSame(-120.0, round((float) $movement->cash_amount, 2));
+        $this->assertSame(-120.0, $this->amountOn($movement, $this->cashAccount()));
         $this->assertSame(-120.0, $this->dashboard()['balance']);
     }
 
@@ -182,14 +182,14 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/travel/tickets/{$ticket->id}/payments", [
             'amount' => 200,
             'payment_date' => self::MONTH.'-08',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
         $this->postJson("/api/travel/expenses/{$expense->id}/payments", [
             'amount' => 60,
             'payment_date' => self::MONTH.'-08',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -224,7 +224,7 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/loans/{$borrowed->id}/repayments", [
             'amount' => 100,
             'payment_date' => self::MONTH.'-09',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -232,7 +232,7 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/loans/{$lent->id}/repayments", [
             'amount' => 50,
             'payment_date' => self::MONTH.'-09',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -240,8 +240,8 @@ class SettlementBankMovementTest extends TestCase
 
         $this->assertSame('loan', $movements[0]->category);
         $this->assertSame('NORTH-EX', $movements[0]->description_1);
-        $this->assertSame(-100.0, round((float) $movements[0]->cash_amount, 2));
-        $this->assertSame(50.0, round((float) $movements[1]->cash_amount, 2));
+        $this->assertSame(-100.0, $this->amountOn($movements[0], $this->cashAccount()));
+        $this->assertSame(50.0, $this->amountOn($movements[1], $this->cashAccount()));
         $this->assertSame(-50.0, $this->dashboard()['balance']);
     }
 
@@ -254,7 +254,7 @@ class SettlementBankMovementTest extends TestCase
             'payment_date' => self::MONTH.'-09',
             'amount' => 150,
             'currency' => 'EUR',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -263,7 +263,7 @@ class SettlementBankMovementTest extends TestCase
 
         $this->assertSame('travel', $movement->category);
         $this->assertSame('Emre Kaya', $movement->description_1);
-        $this->assertSame(-150.0, round((float) $movement->cash_amount, 2));
+        $this->assertSame(-150.0, $this->amountOn($movement, $this->cashAccount()));
         $this->assertSame($movement->id, $payout->bank_transaction_id);
         $this->assertSame(-150.0, $this->dashboard()['balance']);
 
@@ -279,21 +279,21 @@ class SettlementBankMovementTest extends TestCase
         $payment = $this->postJson("/api/housing/rent/{$rent->id}/payments", [
             'amount' => 400,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated()->json('data.payments.0.id');
 
         $this->putJson("/api/housing/rent/{$rent->id}/payments/{$payment}", [
             'amount' => 250,
             'payment_date' => self::MONTH.'-06',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
         ])->assertOk();
 
         $movement = BankTransaction::query()->sole();
 
         // The account it left is emptied, not left holding the old amount.
-        $this->assertSame(0.0, round((float) $movement->cash_amount, 2));
-        $this->assertSame(-250.0, round((float) $movement->nlb_amount, 2));
+        $this->assertSame(0.0, $this->amountOn($movement, $this->cashAccount()));
+        $this->assertSame(-250.0, $this->amountOn($movement, $this->nlbAccount()));
         $this->assertSame(self::MONTH.'-06', $movement->date->toDateString());
         $this->assertSame(-250.0, $this->dashboard()['balance']);
         $this->assertSame('partial', $rent->fresh()->status);
@@ -306,7 +306,7 @@ class SettlementBankMovementTest extends TestCase
         $payment = $this->postJson("/api/housing/rent/{$rent->id}/payments", [
             'amount' => 400,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated()->json('data.payments.0.id');
 
@@ -324,7 +324,7 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/housing/rent/{$rent->id}/payments", [
             'amount' => 400,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -340,26 +340,23 @@ class SettlementBankMovementTest extends TestCase
 
         // Typed off a bank statement: the money left the account whatever later
         // happens to the obligation pointed at it.
-        $statement = BankTransaction::factory()->create([
+        $statement = BankTransaction::factory()->onAccount($this->cashAccount(), -400)->create([
             'date' => self::MONTH.'-05',
             'category' => 'housing',
-            'cash_amount' => -400,
-            'nlb_amount' => 0,
-            'lovcen_amount' => 0,
             'source' => 'manual',
         ]);
 
         $payment = $this->postJson("/api/housing/rent/{$rent->id}/payments", [
             'amount' => 400,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'bank_transaction_id' => $statement->id,
         ])->assertCreated()->json('data.payments.0.id');
 
         $this->deleteJson("/api/housing/rent/{$rent->id}/payments/{$payment}")->assertOk();
 
         $this->assertSame(1, BankTransaction::count());
-        $this->assertSame(-400.0, round((float) $statement->fresh()->cash_amount, 2));
+        $this->assertSame(-400.0, $this->amountOn($statement->fresh(), $this->cashAccount()));
         // Only the balance the statement itself accounts for.
         $this->assertSame(-400.0, $this->dashboard()['balance']);
     }
@@ -373,7 +370,7 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/housing/rent/{$rent->id}/payments", [
             'amount' => 100,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'other',
+            'account_id' => null,
             'book_bank_transaction' => true,
         ])->assertStatus(422)->assertJsonValidationErrors('book_bank_transaction');
 
@@ -382,7 +379,7 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/housing/rent/{$rent->id}/payments", [
             'amount' => 100,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
             'bank_transaction_id' => $statement->id,
         ])->assertStatus(422)->assertJsonValidationErrors('book_bank_transaction');
@@ -398,7 +395,7 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/housing/rent/{$rent->id}/payments", [
             'amount' => 400,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
@@ -407,7 +404,7 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/housing/rent/{$other->id}/payments", [
             'amount' => 300,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'bank_transaction_id' => $generated->id,
         ])->assertStatus(422)->assertJsonValidationErrors('bank_transaction_id');
     }
@@ -440,14 +437,14 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/housing/rent/{$rent->id}/payments", [
             'amount' => 3500,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
             'book_bank_transaction' => true,
         ])->assertCreated();
 
         $movement = BankTransaction::query()->sole();
 
         $this->assertSame('TRY', $movement->currency);
-        $this->assertSame(-3500.0, round((float) $movement->cash_amount, 2));
+        $this->assertSame(-3500.0, $this->amountOn($movement, $this->cashAccount()));
         $this->assertSame(-100.0, round((float) $movement->net_amount_eur, 2));
         $this->assertSame('paid', $rent->fresh()->status);
         $this->assertSame(-100.0, $this->dashboard()['balance']);
@@ -462,7 +459,7 @@ class SettlementBankMovementTest extends TestCase
         $this->postJson("/api/housing/rent/{$rent->id}/payments", [
             'amount' => 400,
             'payment_date' => self::MONTH.'-05',
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ])->assertCreated();
 
         $this->assertSame(0, BankTransaction::count());

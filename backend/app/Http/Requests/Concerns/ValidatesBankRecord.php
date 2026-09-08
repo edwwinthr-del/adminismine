@@ -14,7 +14,8 @@ use Illuminate\Contracts\Validation\Validator;
  * `book_bank_transaction` writes the movement this settlement records;
  * `bank_transaction_id` points at one already typed off a statement. They are
  * mutually exclusive — asking for both would book the same money twice — and
- * booking needs a method that names an account, since `other` names none.
+ * booking needs a settlement that names an account, since a settlement
+ * naming none moved no money through one.
  *
  * Shared by every module that takes settlements (invoices, rent, bills,
  * salaries, tickets, travel expenses, loans, social assistance), so a request
@@ -69,13 +70,13 @@ trait ValidatesBankRecord
             );
         }
 
-        // `other` names no account, so there is no column to book the amount
-        // into — the caller has to say which one the money moved through before
-        // a movement can be written.
-        if (! PaymentBankMovement::supports($this->methodForBooking())) {
+        // A settlement that names no account did not move money through one,
+        // so there is nothing to book — the caller has to say which account the
+        // money moved through before a movement can be written.
+        if (! PaymentBankMovement::supports($this->accountForBooking())) {
             $validator->errors()->add(
                 'book_bank_transaction',
-                'Choose cash, NLB or Lovćen to record a bank movement for this payment.',
+                'Choose an account to record a bank movement for this payment.',
             );
         }
 
@@ -100,14 +101,14 @@ trait ValidatesBankRecord
     }
 
     /**
-     * The method the settlement will have once this request is applied, which on
-     * a correction may not be in the payload at all.
+     * The account the settlement will name once this request is applied, which
+     * on a correction may not be in the payload at all.
      */
-    private function methodForBooking(): ?string
+    private function accountForBooking(): ?int
     {
-        return $this->filled('method')
-            ? (string) $this->input('method')
-            : $this->existingLine()?->lineMethod();
+        return $this->filled('account_id')
+            ? (int) $this->input('account_id')
+            : $this->existingLine()?->lineAccountId();
     }
 
     /**

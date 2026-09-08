@@ -3,19 +3,23 @@
 namespace App\Services;
 
 use App\Models\WorkingDaySetting;
+use App\Support\CompanyConfig;
 use App\Support\MonthPeriod;
 use Illuminate\Support\Carbon;
 
 /**
  * Working days per month, the divisor behind daily earned pay.
  *
- * Derived dynamically for a 6-day work week (every day except Sunday) unless an
- * authorized user stored an override for that month.
+ * Derived from the company's working-day rule — a six-day week (every day but
+ * Sunday) unless configured otherwise — unless an authorized user stored an
+ * override for that month.
  */
 class WorkingDaysService
 {
     /** @var array<string, int> */
     private array $cache = [];
+
+    public function __construct(private readonly CompanyConfig $config) {}
 
     public function forMonth(string $month): int
     {
@@ -42,19 +46,36 @@ class WorkingDaysService
             ->first();
     }
 
-    /** Days in the month that are not Sundays. */
+    /**
+     * Days in the month that count as working days under the company's rule.
+     *
+     * A five-day company counting Saturdays as working days gets a divisor that
+     * is simply wrong — every daily rate too low, every day of earned pay too
+     * small — which is why this is a setting and not the `isSunday()` check it
+     * used to be.
+     */
     public function derivedForMonth(string $month): int
     {
         $start = Carbon::parse(MonthPeriod::normalize($month));
+        $rule = $this->config->workingDayRule();
         $days = 0;
 
         for ($day = $start->copy(); $day->month === $start->month; $day->addDay()) {
-            if (! $day->isSunday()) {
+            if ($this->counts($day, $rule)) {
                 $days++;
             }
         }
 
         return $days;
+    }
+
+    private function counts(Carbon $day, string $rule): bool
+    {
+        return match ($rule) {
+            'mon_fri' => ! $day->isWeekend(),
+            'calendar' => true,
+            default => ! $day->isSunday(),
+        };
     }
 
     public function forget(): void

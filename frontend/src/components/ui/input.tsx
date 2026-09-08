@@ -29,7 +29,8 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
     <input
       ref={ref}
       className={cn(
-        "control-surface focus-ink h-10 rounded-full px-4 text-sm text-zinc-900 transition-shadow placeholder:text-zinc-400 dark:text-zinc-100",
+        // Vision UI's field: a 15px radius rather than a pill, 8/12 padding.
+        "control-surface focus-ink h-10 rounded-[var(--vui-r-lg)] px-3 text-sm text-zinc-900 transition-shadow placeholder:text-zinc-500 dark:text-zinc-100 dark:placeholder:text-zinc-400",
         hasExplicitWidth(className) ? undefined : "w-full",
         className,
       )}

@@ -5,6 +5,7 @@ namespace App\Http\Requests\Housing;
 use App\Models\UtilityBill;
 use App\Support\Currencies;
 use App\Support\MonthPeriod;
+use App\Support\Vocabulary;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -26,7 +27,7 @@ class StoreUtilityBillRequest extends FormRequest
     {
         return [
             'house_id' => ['required', 'integer', 'exists:kuce,id'],
-            'bill_type' => ['required', Rule::in(UtilityBill::TYPES)],
+            'bill_type' => ['required', Rule::in(Vocabulary::values('utility_bill_type'))],
             'billing_period' => ['required', 'date'],
             'amount' => ['required', 'numeric', 'min:0'],
             'currency' => Currencies::rules(),

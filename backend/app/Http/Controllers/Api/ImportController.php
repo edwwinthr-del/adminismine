@@ -12,6 +12,7 @@ use App\Models\ImportRow;
 use App\Services\Import\ImportCommitter;
 use App\Services\Import\TemplateGenerator;
 use App\Services\Import\WorkbookImporter;
+use App\Support\CompanyConfig;
 use App\Support\Import\ImportCatalogue;
 use App\Support\Import\ImportEntity;
 use Illuminate\Http\JsonResponse;
@@ -50,7 +51,8 @@ class ImportController extends Controller
             fn (ImportEntity $entity): array => $entity->toArray(),
             array_filter(
                 ImportCatalogue::all(),
-                fn (ImportEntity $entity): bool => (bool) $user?->can($entity->permission),
+                fn (ImportEntity $entity): bool => (bool) $user?->can($entity->permission)
+                    && app(CompanyConfig::class)->permissionEnabled($entity->permission),
             ),
         ));
 
@@ -69,6 +71,7 @@ class ImportController extends Controller
 
         $entity = ImportCatalogue::find($request->string('entity')->toString());
 
+        abort_unless(app(CompanyConfig::class)->permissionEnabled($entity->permission), 404);
         abort_unless($request->user()?->can($entity->permission), 403);
 
         return response()
@@ -87,6 +90,7 @@ class ImportController extends Controller
         // Choosing an entity is choosing to write to that module: the entity's
         // own permission is checked on top of `imports.manage`.
         if ($entity !== null) {
+            abort_unless(app(CompanyConfig::class)->permissionEnabled($entity->permission), 404);
             abort_unless($request->user()?->can($entity->permission), 403);
         }
 

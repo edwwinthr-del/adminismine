@@ -52,7 +52,7 @@ class ReceivableTest extends TestCase
         $invoice->recalculate();
 
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
-            'amount' => 400, 'payment_date' => '2026-07-05', 'method' => 'nlb',
+            'amount' => 400, 'payment_date' => '2026-07-05', 'account_id' => $this->nlbAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.received_amount', 400)
@@ -67,7 +67,7 @@ class ReceivableTest extends TestCase
             ->assertJsonPath('data.remaining_amount', 500);
 
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
-            'amount' => 500, 'payment_date' => '2026-07-10', 'method' => 'cash',
+            'amount' => 500, 'payment_date' => '2026-07-10', 'account_id' => $this->cashAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'paid')
@@ -96,7 +96,7 @@ class ReceivableTest extends TestCase
             'invoice_date' => '2026-07-01',
             'invoice_number' => 'U-1',
         ]);
-        $invoice->payments()->create(['amount' => 300, 'currency' => 'EUR', 'payment_date' => '2026-07-05', 'method' => 'nlb']);
+        $invoice->payments()->create(['amount' => 300, 'currency' => 'EUR', 'payment_date' => '2026-07-05', 'account_id' => $this->nlbAccount()->id]);
         $invoice->deductions()->create(['amount' => 200, 'deduction_date' => '2026-07-06', 'reason' => 'offset']);
         $invoice->recalculate();
 
@@ -131,7 +131,7 @@ class ReceivableTest extends TestCase
         $invoice->recalculate();
 
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
-            'amount' => 1000, 'payment_date' => '2026-07-05', 'method' => 'nlb',
+            'amount' => 1000, 'payment_date' => '2026-07-05', 'account_id' => $this->nlbAccount()->id,
         ])->assertCreated()->assertJsonPath('data.status', 'paid');
 
         $this->putJson("/api/receivables/{$invoice->id}", ['invoice_number' => 'CORRECTED-9'])
@@ -147,7 +147,7 @@ class ReceivableTest extends TestCase
         $invoice->recalculate();
 
         $this->postJson("/api/receivables/{$invoice->id}/payments", [
-            'amount' => 600, 'payment_date' => '2026-07-05', 'method' => 'nlb',
+            'amount' => 600, 'payment_date' => '2026-07-05', 'account_id' => $this->nlbAccount()->id,
         ])->assertCreated();
         $this->postJson("/api/receivables/{$invoice->id}/deductions", [
             'amount' => 200, 'deduction_date' => '2026-07-06', 'reason' => 'offset',
@@ -169,7 +169,7 @@ class ReceivableTest extends TestCase
         $invoice->recalculate();
 
         $paymentId = $this->postJson("/api/receivables/{$invoice->id}/payments", [
-            'amount' => 1000, 'payment_date' => '2026-07-05', 'method' => 'nlb',
+            'amount' => 1000, 'payment_date' => '2026-07-05', 'account_id' => $this->nlbAccount()->id,
         ])->json('data.payments.0.id');
 
         $this->putJson("/api/receivables/{$invoice->id}/payments/{$paymentId}", ['amount' => 400])

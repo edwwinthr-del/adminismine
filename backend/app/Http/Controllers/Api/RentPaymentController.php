@@ -125,7 +125,7 @@ class RentPaymentController extends Controller
         activity()->performedOn($rentPayment)->causedBy($request->user())
             ->withProperties([
                 'amount' => $data['amount'],
-                'method' => $data['method'],
+                'account_id' => $data['account_id'] ?? null,
                 'bank_transaction_id' => $payment->bank_transaction_id,
             ])
             ->log('rent_payment.payment_recorded');
@@ -147,7 +147,7 @@ class RentPaymentController extends Controller
         RentPayment $rentPayment,
         Payment $payment,
     ): JsonResponse {
-        $before = $payment->only(['amount', 'payment_date', 'method']);
+        $before = $payment->only(['amount', 'payment_date', 'account_id']);
 
         $this->correctSettlement($rentPayment, $payment, $request->paymentData(), $request->booksMovement());
 
@@ -163,7 +163,7 @@ class RentPaymentController extends Controller
     /** Remove a payment; the obligation's figures follow from the lines that are left. */
     public function deletePayment(Request $request, RentPayment $rentPayment, Payment $payment): JsonResponse
     {
-        $removed = $payment->only(['amount', 'payment_date', 'method']);
+        $removed = $payment->only(['amount', 'payment_date', 'account_id']);
 
         $movement = $this->removeSettlement($rentPayment, $payment);
 

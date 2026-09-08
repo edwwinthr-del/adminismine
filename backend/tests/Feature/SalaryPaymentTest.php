@@ -109,7 +109,7 @@ class SalaryPaymentTest extends TestCase
         $obligation->recalculate();
 
         $this->postJson("/api/salary-payments/{$obligation->id}/payments", [
-            'amount' => 400, 'payment_date' => '2026-08-05', 'method' => 'cash',
+            'amount' => 400, 'payment_date' => '2026-08-05', 'account_id' => $this->cashAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'partial')
@@ -117,7 +117,7 @@ class SalaryPaymentTest extends TestCase
             ->assertJsonPath('data.remaining_amount', 600);
 
         $this->postJson("/api/salary-payments/{$obligation->id}/payments", [
-            'amount' => 600, 'payment_date' => '2026-08-10', 'method' => 'nlb',
+            'amount' => 600, 'payment_date' => '2026-08-10', 'account_id' => $this->nlbAccount()->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'paid')
@@ -131,7 +131,7 @@ class SalaryPaymentTest extends TestCase
         $obligation->recalculate();
 
         $this->postJson("/api/salary-payments/{$obligation->id}/payments", [
-            'amount' => 700, 'payment_date' => '2026-08-05', 'method' => 'cash',
+            'amount' => 700, 'payment_date' => '2026-08-05', 'account_id' => $this->cashAccount()->id,
         ])->assertStatus(422);
 
         $this->assertSame('unpaid', $obligation->fresh()->status);
@@ -161,7 +161,7 @@ class SalaryPaymentTest extends TestCase
         $july = SalaryPayment::factory()->create(['salary_month' => '2026-07-01', 'base_salary' => 1000]);
         $july->recalculate();
         $august = SalaryPayment::factory()->create(['salary_month' => '2026-08-01', 'base_salary' => 800]);
-        $august->payments()->create(['amount' => 800, 'currency' => 'EUR', 'payment_date' => '2026-08-31', 'method' => 'cash']);
+        $august->payments()->create(['amount' => 800, 'currency' => 'EUR', 'payment_date' => '2026-08-31', 'account_id' => $this->cashAccount()->id]);
         $august->recalculate();
 
         $ids = collect($this->getJson('/api/salary-payments?month=2026-07')->assertOk()->json('data'))->pluck('id')->all();
@@ -180,7 +180,7 @@ class SalaryPaymentTest extends TestCase
         $this->actingAsAdmin();
 
         $first = SalaryPayment::factory()->create(['salary_month' => '2026-07-01', 'base_salary' => 1000]);
-        $first->payments()->create(['amount' => 250, 'currency' => 'EUR', 'payment_date' => '2026-07-20', 'method' => 'cash']);
+        $first->payments()->create(['amount' => 250, 'currency' => 'EUR', 'payment_date' => '2026-07-20', 'account_id' => $this->cashAccount()->id]);
         $first->recalculate();
 
         $second = SalaryPayment::factory()->create(['salary_month' => '2026-07-01', 'base_salary' => 500]);

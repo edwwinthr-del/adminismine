@@ -4,13 +4,14 @@ namespace App\Services;
 
 use App\Contracts\BooksBankMovement;
 use App\Contracts\SettlementLine;
+use App\Models\BankAccount;
 use App\Models\BankTransaction;
 
 /**
  * The bank or cash movement behind a settlement.
  *
- * Why this exists: every money figure on the dashboard — the three account
- * balances, the income/expense split, the cashflow trend, the recent list — is
+ * Why this exists: every money figure on the dashboard — the account balances,
+ * the income/expense split, the cashflow trend, the recent list — is
  * summed from `bank_transactions` and from nothing else. Recording a settlement
  * against its own module wrote a `payments` row and stopped there, so telling
  * the app that 95,000 EUR had arrived in NLB moved the invoice to `paid` and
@@ -55,23 +56,18 @@ class PaymentBankMovement
     public const GENERATED_SOURCES = [self::SOURCE, 'invoice_payment'];
 
     /**
-     * Payment methods that name an account column. `other` names none — it is
-     * how a settlement that did not move money through these three accounts (an
-     * offset, a correction, cash outside the till) is recorded, so there is
-     * nothing to book and {@see supports()} says so.
+     * Whether this settlement names an account a movement can be booked against.
      *
-     * @var array<string, string>
+     * Null names none — it is how a settlement that did not move money through a
+     * tracked account (an offset, a correction, cash outside the till) is
+     * recorded, so there is nothing to book. An inactive account books nothing
+     * either: closing an account is a statement that money no longer moves
+     * through it.
      */
-    public const ACCOUNT_COLUMNS = [
-        'cash' => 'cash_amount',
-        'nlb' => 'nlb_amount',
-        'lovcen' => 'lovcen_amount',
-    ];
-
-    /** Whether a payment method corresponds to an account a movement can be booked against. */
-    public static function supports(?string $method): bool
+    public static function supports(?int $accountId): bool
     {
-        return $method !== null && array_key_exists($method, self::ACCOUNT_COLUMNS);
+        return $accountId !== null
+            && BankAccount::query()->whereKey($accountId)->active()->exists();
     }
 
     /** Whether this movement was written from a settlement (and so may be rewritten with it). */
@@ -118,8 +114,9 @@ class PaymentBankMovement
             'source' => self::SOURCE,
             ...$record->movementParty(),
             ...$this->describe($record, $line),
-            ...$this->amounts($record, $line),
         ]);
+
+        $movement->setLines($this->lines($record, $line));
 
         $line->linkMovement($movement->id);
 
@@ -156,10 +153,10 @@ class PaymentBankMovement
             return;
         }
 
-        // A settlement switched to `other` no longer claims to have moved money
-        // through an account, so the movement it wrote is withdrawn rather than
-        // left behind at its old amount.
-        if (! self::supports($line->lineMethod())) {
+        // A settlement that no longer names an account has stopped claiming to
+        // have moved money through one, so the movement it wrote is withdrawn
+        // rather than left behind at its old amount.
+        if (! self::supports($line->lineAccountId())) {
             $line->linkMovement(null);
             $movement->delete();
 
@@ -173,10 +170,12 @@ class PaymentBankMovement
             'exchange_rate' => $line->lineExchangeRate(),
             'exchange_rate_date' => $line->lineExchangeRateDate(),
             ...$this->describe($record, $line),
-            // Every column is rewritten, not just the one in use: moving a
-            // settlement from NLB to cash has to empty the column it left.
-            ...$this->amounts($record, $line),
         ]);
+
+        // The whole line set is replaced, not just the amount: moving a
+        // settlement from one account to another has to leave the account it
+        // left with no share of this movement at all.
+        $movement->setLines($this->lines($record, $line));
     }
 
     /**
@@ -238,22 +237,27 @@ class PaymentBankMovement
     }
 
     /**
-     * The line's amount in its account's column, every other column zeroed, with
-     * the record's direction as its sign.
+     * The movement's single line: the settlement's amount on the account it
+     * names, with the record's direction as its sign.
      *
      * The sign is applied here rather than left to the category, because only
      * `income` and `expense` normalise themselves: a `payroll` or `housing` row
      * keeps whatever sign it is given, and an unsigned one would be added to the
      * balance instead of taken off it.
      *
-     * @return array<string, float>
+     * A settlement always books one line — it moved money through one account.
+     * Two lines is a transfer, and a transfer is not something a settlement can
+     * be.
+     *
+     * @return list<array{account_id: int, amount: float}>
      */
-    private function amounts(BooksBankMovement $record, SettlementLine $line): array
+    private function lines(BooksBankMovement $record, SettlementLine $line): array
     {
-        $columns = array_fill_keys(BankTransaction::AMOUNT_COLUMNS, 0.0);
         $sign = $record->movementDirection() < 0 ? -1 : 1;
-        $columns[self::ACCOUNT_COLUMNS[$line->lineMethod()]] = $sign * abs($line->lineAmount());
 
-        return $columns;
+        return [[
+            'account_id' => (int) $line->lineAccountId(),
+            'amount' => $sign * abs($line->lineAmount()),
+        ]];
     }
 }

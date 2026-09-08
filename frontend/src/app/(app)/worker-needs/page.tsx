@@ -7,6 +7,7 @@ import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, todayISO } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useVocabularies, useVocabularyLabel } from "@/lib/vocabulary";
 import { AsyncSelect } from "@/components/ui/async-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,6 @@ interface WorkerNeed {
   created_at: string | null;
 }
 
-const TYPES = ["equipment", "document", "salary_advance", "travel", "housing", "medical", "other"] as const;
 const PRIORITIES = ["low", "normal", "urgent"] as const;
 const STATUSES = ["open", "in_review", "resolved", "rejected"] as const;
 
@@ -61,6 +61,8 @@ function statusTone(status: string): "gray" | "amber" | "green" | "red" {
 
 export default function WorkerNeedsPage() {
   const { t } = useI18n();
+  const vocabularies = useVocabularies();
+  const vocabularyLabel = useVocabularyLabel();
 
   /*
    * Completed needs are not deleted and not mixed into the working list: they
@@ -123,7 +125,6 @@ export default function WorkerNeedsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("needs.title")}</h1>
           {archive && <p className="text-sm text-zinc-500">{t("needs.archiveSubtitle")}</p>}
         </div>
         <Button onClick={() => setCreating(true)}>{t("needs.new")}</Button>
@@ -172,9 +173,9 @@ export default function WorkerNeedsPage() {
           </Select>
           <Select className="max-w-[12rem]" value={needType} onChange={(e) => setNeedType(e.target.value)}>
             <option value="">{t("needs.allTypes")}</option>
-            {TYPES.map((value) => (
+            {vocabularies.values("worker_need_type").map((value) => (
               <option key={value} value={value}>
-                {t(`needType.${value}`)}
+                {vocabularyLabel("worker_need_type", "needType", value)}
               </option>
             ))}
           </Select>
@@ -200,18 +201,18 @@ export default function WorkerNeedsPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1000px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("needs.date")}</th>
-              <th className="px-4 py-3">{t("needs.worker")}</th>
-              <th className="px-4 py-3">{t("needs.worksite")}</th>
-              <th className="px-4 py-3">{t("needs.type")}</th>
-              <th className="px-4 py-3">{t("needs.description")}</th>
-              <th className="px-4 py-3">{t("needs.priority")}</th>
-              <th className="px-4 py-3">{archive ? t("needs.resolvedAt") : t("needs.status")}</th>
-              <th className="px-4 py-3 text-right">{t("needs.actions")}</th>
+              <th>{t("needs.date")}</th>
+              <th>{t("needs.worker")}</th>
+              <th>{t("needs.worksite")}</th>
+              <th>{t("needs.type")}</th>
+              <th>{t("needs.description")}</th>
+              <th>{t("needs.priority")}</th>
+              <th>{archive ? t("needs.resolvedAt") : t("needs.status")}</th>
+              <th className="text-right">{t("needs.actions")}</th>
             </tr>
           </thead>
           <tbody
@@ -223,30 +224,30 @@ export default function WorkerNeedsPage() {
           >
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : needs.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {archive ? t("needs.noArchive") : t("needs.none")}
                 </td>
               </tr>
             ) : (
               needs.map((need) => (
                 <tr key={need.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3">{formatDate(need.date)}</td>
-                  <td className="px-4 py-3 font-medium">{need.employee?.full_name ?? `#${need.employee_id}`}</td>
-                  <td className="px-4 py-3">{need.worksite?.name ?? "—"}</td>
-                  <td className="px-4 py-3">{t(`needType.${need.need_type}`)}</td>
-                  <td className="max-w-[22rem] px-4 py-3">
+                  <td>{formatDate(need.date)}</td>
+                  <td className="font-medium">{need.employee?.full_name ?? `#${need.employee_id}`}</td>
+                  <td>{need.worksite?.name ?? "—"}</td>
+                  <td>{vocabularyLabel("worker_need_type", "needType", need.need_type)}</td>
+                  <td className="max-w-[22rem]">
                     <span className="line-clamp-2">{need.description}</span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={priorityTone(need.priority)}>{t(`needPriority.${need.priority}`)}</Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col gap-1">
                       <Badge tone={statusTone(need.status)}>{t(`needStatus.${need.status}`)}</Badge>
                       {archive ? (
@@ -258,7 +259,7 @@ export default function WorkerNeedsPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setViewing(need)}>
                         {t("needs.view")}
@@ -332,11 +333,12 @@ function NeedDetails({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const vocabularyLabel = useVocabularyLabel();
 
   const rows: Array<[string, string]> = [
     [t("needs.worker"), need.employee?.full_name ?? `#${need.employee_id}`],
     [t("needs.worksite"), need.worksite?.name ?? "—"],
-    [t("needs.type"), t(`needType.${need.need_type}`)],
+    [t("needs.type"), vocabularyLabel("worker_need_type", "needType", need.need_type)],
     [t("needs.priority"), t(`needPriority.${need.priority}`)],
     [t("needs.status"), t(`needStatus.${need.status}`)],
     [t("needs.date"), formatDate(need.date)],
@@ -381,6 +383,8 @@ function NeedDetails({
 
 function NeedModal({ need, onClose }: { need?: WorkerNeed; onClose: () => void }) {
   const { t } = useI18n();
+  const vocabularies = useVocabularies();
+  const vocabularyLabel = useVocabularyLabel();
 
   const [employeeId, setEmployeeId] = useState<number | null>(need?.employee_id ?? null);
   const [worksiteId, setWorksiteId] = useState<number | null>(need?.worksite_id ?? null);
@@ -488,9 +492,9 @@ function NeedModal({ need, onClose }: { need?: WorkerNeed; onClose: () => void }
           <div>
             <label className={label}>{t("needs.type")}</label>
             <Select value={needType} onChange={(e) => setNeedType(e.target.value)}>
-              {TYPES.map((value) => (
+              {vocabularies.values("worker_need_type").map((value) => (
                 <option key={value} value={value}>
-                  {t(`needType.${value}`)}
+                  {vocabularyLabel("worker_need_type", "needType", value)}
                 </option>
               ))}
             </Select>

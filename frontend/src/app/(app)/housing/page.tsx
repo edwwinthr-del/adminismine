@@ -6,6 +6,7 @@ import { useResource } from "@/lib/data/use-resource";
 import { useEmployeeOptions, type EmployeeOption } from "@/lib/data/use-options";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, formatMoney, todayISO } from "@/lib/format";
+import { useVocabularies, useVocabularyLabel } from "@/lib/vocabulary";
 import { AttachmentsModal } from "@/components/attachments-modal";
 import {
   BankRecordField,
@@ -13,6 +14,7 @@ import {
   canBook,
   type BankRecordMode,
 } from "@/components/bank-record-field";
+import { AccountField } from "@/components/account-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -157,8 +159,6 @@ interface Summary {
   };
 }
 
-const BILL_TYPES = ["electricity", "water", "internet", "heating", "garbage", "maintenance", "other"] as const;
-const METHODS = ["cash", "nlb", "lovcen", "other"] as const;
 const TABS = ["houses", "rent", "bills", "deductions"] as const;
 
 type Tab = (typeof TABS)[number];
@@ -186,7 +186,6 @@ export default function HousingPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("housing.title")}</h1>
         <Input className="w-[10rem]" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
       </div>
 
@@ -280,29 +279,29 @@ function HousesTab({ summary }: { summary: Summary | null }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[980px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("housing.house")}</th>
-              <th className="px-4 py-3">{t("housing.landlord")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.rent")}</th>
-              <th className="px-4 py-3">{t("housing.occupantsColumn")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.monthCost")}</th>
-              <th className="px-4 py-3">{t("housing.status")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.actions")}</th>
+              <th>{t("housing.house")}</th>
+              <th>{t("housing.landlord")}</th>
+              <th className="text-right">{t("housing.rent")}</th>
+              <th>{t("housing.occupantsColumn")}</th>
+              <th className="text-right">{t("housing.monthCost")}</th>
+              <th>{t("housing.status")}</th>
+              <th className="text-right">{t("housing.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={7} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : houses.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={7} className="py-14 text-center text-sm text-zinc-500">
                   {t("housing.noHouses")}
                 </td>
               </tr>
@@ -312,19 +311,19 @@ function HousesTab({ summary }: { summary: Summary | null }) {
 
                 return (
                   <tr key={house.id} className="text-zinc-800 dark:text-zinc-200">
-                    <td className="px-4 py-3">
+                    <td>
                       <span className="flex flex-col">
                         <span className="font-medium">{house.name}</span>
                         {house.address && <span className="text-xs text-zinc-500">{house.address}</span>}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <span className="flex flex-col text-xs text-zinc-600 dark:text-zinc-300">
                         <span>{house.landlord_name ?? "—"}</span>
                         {house.landlord_phone && <span className="text-zinc-500">{house.landlord_phone}</span>}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                    <td className="text-right tabular-nums">
                       <span className="flex flex-col">
                         <span>
                           {house.monthly_rent === null ? "—" : formatMoney(house.monthly_rent, house.currency)}
@@ -336,7 +335,7 @@ function HousesTab({ summary }: { summary: Summary | null }) {
                         )}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       {house.occupants && house.occupants.length > 0 ? (
                         <span className="flex flex-wrap gap-1">
                           {house.occupants.map((occupant) => (
@@ -350,15 +349,15 @@ function HousesTab({ summary }: { summary: Summary | null }) {
                         <span className="text-xs text-zinc-500">{t("housing.empty")}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                    <td className="text-right tabular-nums">
                       {cost ? formatMoney(cost.monthly_cost, cost.currency) : "—"}
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <Badge tone={house.is_active ? "green" : "gray"}>
                         {house.is_active ? t("housing.active") : t("housing.inactive")}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="text-right">
                       <div className="flex flex-wrap justify-end gap-2">
                         <Button variant="secondary" className="h-8 px-3" onClick={() => setManaging(house)}>
                           {t("housing.manageOccupants")}
@@ -761,54 +760,54 @@ function RentTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("housing.house")}</th>
-              <th className="px-4 py-3">{t("housing.dueDate")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.due")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.paid")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.remaining")}</th>
-              <th className="px-4 py-3">{t("housing.status")}</th>
-              <th className="px-4 py-3">{t("housing.costBearer")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.actions")}</th>
+              <th>{t("housing.house")}</th>
+              <th>{t("housing.dueDate")}</th>
+              <th className="text-right">{t("housing.due")}</th>
+              <th className="text-right">{t("housing.paid")}</th>
+              <th className="text-right">{t("housing.remaining")}</th>
+              <th>{t("housing.status")}</th>
+              <th>{t("housing.costBearer")}</th>
+              <th className="text-right">{t("housing.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("housing.noRent")}
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{row.house?.name ?? `#${row.house_id}`}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium">{row.house?.name ?? `#${row.house_id}`}</td>
+                  <td>
                     <span className="flex items-center gap-2">
                       {formatDate(row.due_date)}
                       {row.is_overdue && <Badge tone="red">{t("housing.overdue")}</Badge>}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className="text-right tabular-nums">
                     {formatMoney(row.rent_amount_due, row.currency)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.paid_amount)}</td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">
+                  <td className="text-right tabular-nums">{formatMoney(row.paid_amount)}</td>
+                  <td className="text-right font-medium tabular-nums">
                     {formatMoney(row.remaining_amount)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={statusTone(row.status)}>{t(`status.${row.status}`)}</Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col">
                       <Badge tone={row.cost_bearer === "company" ? "gray" : "amber"}>
                         {t(`costBearer.${row.cost_bearer}`)}
@@ -818,7 +817,7 @@ function RentTab({ month }: { month: string }) {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     {row.status !== "paid" && (
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setPaying(row)}>
                         {t("housing.recordPayment")}
@@ -894,6 +893,7 @@ function RentTab({ month }: { month: string }) {
 
 function BillsTab({ month }: { month: string }) {
   const { t } = useI18n();
+  const vocabularyLabel = useVocabularyLabel();
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState<UtilityBill | null>(null);
   const [splitting, setSplitting] = useState<UtilityBill | null>(null);
@@ -913,52 +913,52 @@ function BillsTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1000px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("housing.house")}</th>
-              <th className="px-4 py-3">{t("housing.billType")}</th>
-              <th className="px-4 py-3">{t("housing.dueDate")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.amount")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.remaining")}</th>
-              <th className="px-4 py-3">{t("housing.status")}</th>
-              <th className="px-4 py-3">{t("housing.costBearer")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.actions")}</th>
+              <th>{t("housing.house")}</th>
+              <th>{t("housing.billType")}</th>
+              <th>{t("housing.dueDate")}</th>
+              <th className="text-right">{t("housing.amount")}</th>
+              <th className="text-right">{t("housing.remaining")}</th>
+              <th>{t("housing.status")}</th>
+              <th>{t("housing.costBearer")}</th>
+              <th className="text-right">{t("housing.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("housing.noBills")}
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{row.house?.name ?? `#${row.house_id}`}</td>
-                  <td className="px-4 py-3">{t(`billType.${row.bill_type}`)}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium">{row.house?.name ?? `#${row.house_id}`}</td>
+                  <td>{vocabularyLabel("utility_bill_type", "billType", row.bill_type)}</td>
+                  <td>
                     <span className="flex items-center gap-2">
                       {formatDate(row.due_date)}
                       {row.is_overdue && <Badge tone="red">{t("housing.overdue")}</Badge>}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.amount, row.currency)}</td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">
+                  <td className="text-right tabular-nums">{formatMoney(row.amount, row.currency)}</td>
+                  <td className="text-right font-medium tabular-nums">
                     {formatMoney(row.remaining_amount)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={statusTone(row.status)}>{t(`status.${row.status}`)}</Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col">
                       <Badge tone={row.cost_bearer === "company" ? "gray" : "amber"}>
                         {t(`costBearer.${row.cost_bearer}`)}
@@ -968,7 +968,7 @@ function BillsTab({ month }: { month: string }) {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex flex-wrap justify-end gap-2">
                       {row.status !== "paid" && (
                         <Button variant="secondary" className="h-8 px-3" onClick={() => setPaying(row)}>
@@ -1001,7 +1001,7 @@ function BillsTab({ month }: { month: string }) {
       {paying && (
         <PaymentModal
           title={t("housing.recordPayment")}
-          subtitle={`${paying.house?.name ?? ""} · ${t(`billType.${paying.bill_type}`)}`}
+          subtitle={`${paying.house?.name ?? ""} · ${vocabularyLabel("utility_bill_type", "billType", paying.bill_type)}`}
           remaining={paying.remaining_amount_original}
           currency={paying.currency}
           path={`/housing/bills/${paying.id}/payments`}
@@ -1039,6 +1039,8 @@ function BillModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const vocabularyLabel = useVocabularyLabel();
+  const vocabularies = useVocabularies();
   const [houseId, setHouseId] = useState("");
   const [billType, setBillType] = useState<string>("electricity");
   const [period, setPeriod] = useState(month);
@@ -1093,9 +1095,9 @@ function BillModal({
           <div>
             <label className={label}>{t("housing.billType")}</label>
             <Select value={billType} onChange={(e) => setBillType(e.target.value)}>
-              {BILL_TYPES.map((value) => (
+              {vocabularies.values("utility_bill_type").map((value) => (
                 <option key={value} value={value}>
-                  {t(`billType.${value}`)}
+                  {vocabularyLabel("utility_bill_type", "billType", value)}
                 </option>
               ))}
             </Select>
@@ -1235,7 +1237,7 @@ function PaymentModal({
   const { t } = useI18n();
   const [amount, setAmount] = useState(String(remaining));
   const [paymentDate, setPaymentDate] = useState(todayISO());
-  const [method, setMethod] = useState<string>("cash");
+  const [accountId, setAccountId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -1245,13 +1247,14 @@ function PaymentModal({
    * alone. So a payment defaults to booking one, which is what the operator
    * means by choosing cash/NLB/Lovćen.
    */
-  const [bankMode, setBankMode] = useState<BankRecordMode>(canBook("cash") ? "book" : "none");
+  const [bankMode, setBankMode] = useState<BankRecordMode>("none");
   const [movementId, setMovementId] = useState<number | null>(null);
 
-  function changeMethod(next: string) {
-    setMethod(next);
+  function changeAccount(next: number | null) {
+    setAccountId(next);
 
-    // `other` names no account, so there is nothing to book into.
+    // A settlement naming no account moved no money through one, so
+    // there is nothing to book into.
     if (!canBook(next) && bankMode === "book") setBankMode("none");
     if (canBook(next) && bankMode === "none") setBankMode("book");
   }
@@ -1266,7 +1269,7 @@ function PaymentModal({
         json: {
           amount: Number(amount),
           payment_date: paymentDate,
-          method,
+          account_id: accountId,
           ...bankRecordPayload(bankMode, movementId),
         },
       });
@@ -1305,22 +1308,13 @@ function PaymentModal({
             <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required />
           </div>
         </div>
-        <div>
-          <label className={label}>{t("housing.method")}</label>
-          <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
-            {METHODS.map((value) => (
-              <option key={value} value={value}>
-                {t(`method.${value}`)}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <AccountField value={accountId} onChange={changeAccount} />
         <BankRecordField
           mode={bankMode}
           onModeChange={setBankMode}
           movementId={movementId}
           onMovementChange={setMovementId}
-          method={method}
+          accountId={accountId}
           editing={false}
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
@@ -1369,50 +1363,50 @@ function DeductionsTab({ month }: { month: string }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[920px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("housing.worker")}</th>
-              <th className="px-4 py-3">{t("housing.house")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.rentShare")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.utilityShare")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.deducted")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.remaining")}</th>
-              <th className="px-4 py-3">{t("housing.reason")}</th>
-              <th className="px-4 py-3 text-right">{t("housing.actions")}</th>
+              <th>{t("housing.worker")}</th>
+              <th>{t("housing.house")}</th>
+              <th className="text-right">{t("housing.rentShare")}</th>
+              <th className="text-right">{t("housing.utilityShare")}</th>
+              <th className="text-right">{t("housing.deducted")}</th>
+              <th className="text-right">{t("housing.remaining")}</th>
+              <th>{t("housing.reason")}</th>
+              <th className="text-right">{t("housing.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("housing.noDeductions")}
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{row.employee?.full_name ?? `#${row.employee_id}`}</td>
-                  <td className="px-4 py-3">{row.house?.name ?? `#${row.house_id}`}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.rent_share, row.currency)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className="font-medium">{row.employee?.full_name ?? `#${row.employee_id}`}</td>
+                  <td>{row.house?.name ?? `#${row.house_id}`}</td>
+                  <td className="text-right tabular-nums">{formatMoney(row.rent_share, row.currency)}</td>
+                  <td className="text-right tabular-nums">
                     {formatMoney(row.utility_share, row.currency)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className="text-right tabular-nums">
                     {formatMoney(row.amount_deducted, row.currency)}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">
+                  <td className="text-right font-medium tabular-nums">
                     {formatMoney(row.remaining_amount)}
                   </td>
-                  <td className="max-w-[16rem] px-4 py-3 text-xs text-zinc-600 dark:text-zinc-300">{row.reason}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="max-w-[16rem] text-xs text-zinc-600 dark:text-zinc-300">{row.reason}</td>
+                  <td className="text-right">
                     <Button variant="secondary" className="h-8 px-3" onClick={() => void remove(row)}>
                       {t("housing.remove")}
                     </Button>

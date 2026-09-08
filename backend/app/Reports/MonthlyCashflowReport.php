@@ -50,7 +50,7 @@ class MonthlyCashflowReport extends Report
         $movements = BankTransaction::query()
             ->whereBetween('date', [$start, $end])
             ->where(fn ($query) => $query->whereNull('category')->orWhere('category', '!=', 'transfer'))
-            ->get(['date', 'cash_amount', 'nlb_amount', 'lovcen_amount']);
+            ->get(['date', 'amount']);
 
         // Bucketed in PHP: date truncation differs between SQLite and Postgres.
         $byMonth = $movements->groupBy(

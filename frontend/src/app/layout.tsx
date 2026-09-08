@@ -54,6 +54,25 @@ export default function RootLayout({
       className={`${urbanist.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/*
+          Sets the theme before the first paint.
+
+          It has to be inline and it has to be in <head>: read from React
+          instead and the browser paints one frame of the default theme first,
+          which on a dark-mode machine is a white flash on every navigation —
+          the single most visible bug a theme toggle can ship with.
+
+          Kept deliberately tiny and dependency-free, because everything below
+          it in the document waits for it. `gm_theme` and the resolved
+          `data-theme` are the same contract as `lib/theme.tsx`.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem("gm_theme");var d=s==="dark"||(s!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.dataset.theme=d?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}})()`,
+          }}
+        />
+      </head>
       <body className="min-h-full" suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>

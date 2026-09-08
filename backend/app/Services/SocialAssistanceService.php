@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\SocialAssistancePayment;
+use App\Support\CompanyConfig;
 use Illuminate\Support\Collection;
 
 /**
@@ -16,12 +17,28 @@ use Illuminate\Support\Collection;
  */
 class SocialAssistanceService
 {
-    /** EUR per worker per year, matching the workbook's 1000 per worker. */
+    /**
+     * EUR per worker per year, matching the workbook's 1000 per worker.
+     *
+     * The company's own figure lives in `company_settings` and is read through
+     * {@see CompanyConfig::socialAssistanceAnnual()}. This stays as the fallback
+     * that value falls back to.
+     */
     public const DEFAULT_ANNUAL_ENTITLEMENT = 1000.0;
 
+    public function __construct(private readonly CompanyConfig $config) {}
+
+    /**
+     * The entitlement for a year.
+     *
+     * Takes the year because entitlements are an annual figure and a future
+     * change should not silently rewrite what last year was worth — but the app
+     * stores one current value, so today every year answers the same. A
+     * per-year history is a change to make when a company actually changes it.
+     */
     public function entitlementFor(int $year): float
     {
-        return self::DEFAULT_ANNUAL_ENTITLEMENT;
+        return $this->config->socialAssistanceAnnual();
     }
 
     /**

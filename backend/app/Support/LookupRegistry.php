@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\BankAccount;
 use App\Models\BankTransaction;
 use App\Models\Client;
 use App\Models\Employee;
@@ -228,18 +229,48 @@ final class LookupRegistry
             ],
 
             /*
+             * The accounts money moves through. Every settlement form names one,
+             * so this is the most-opened lookup in the app.
+             */
+            'bank-accounts' => [
+                'permission' => 'bank_transactions.manage',
+                'model' => BankAccount::class,
+                'filters' => fn (Builder $query, Request $request) => $query
+                    // Closed accounts are still named by old records, so a form
+                    // editing one has to be able to show it — but a fresh choice
+                    // offers only what is open.
+                    ->when(! $request->boolean('include_closed'), fn (Builder $q) => $q->active())
+                    ->when(
+                        in_array($request->input('kind'), BankAccount::KINDS, true),
+                        fn (Builder $q) => $q->where('kind', $request->input('kind')),
+                    ),
+                'order' => fn (Builder $query) => $query->ordered(),
+                'label' => fn (BankAccount $row): string => $row->name,
+                'hint' => fn (BankAccount $row): ?string => $row->iban,
+                'meta' => fn (BankAccount $row): array => [
+                    'kind' => $row->kind,
+                    'currency' => $row->currency,
+                    'is_active' => (bool) $row->is_active,
+                ],
+            ],
+
+            /*
              * Bank and cash movements are the same table; `account` picks the
-             * side, because a form that asks for "the cash payment" should not
-             * offer bank rows and vice versa.
+             * kind and `account_id` a single account, because a form that asks
+             * for "the cash payment" should not offer bank rows and vice versa.
              */
             'bank-transactions' => [
                 'permission' => 'bank_transactions.manage',
                 'model' => BankTransaction::class,
                 'filters' => fn (Builder $query, Request $request) => $query
-                    ->when($request->input('account') === 'cash', fn (Builder $q) => $q->where('cash_amount', '!=', 0))
-                    ->when($request->input('account') === 'bank', fn (Builder $q) => $q->where(
-                        fn (Builder $inner) => $inner->where('nlb_amount', '!=', 0)->orWhere('lovcen_amount', '!=', 0),
-                    ))
+                    ->when(
+                        in_array($request->input('account'), BankAccount::KINDS, true),
+                        fn (Builder $q) => $q->forAccountKind((string) $request->input('account')),
+                    )
+                    ->when(
+                        $request->filled('account_id'),
+                        fn (Builder $q) => $q->forAccount((int) $request->input('account_id')),
+                    )
                     ->when($request->boolean('unmatched'), fn (Builder $q) => $q->unmatched())
                     ->when(
                         $request->filled('date_from'),

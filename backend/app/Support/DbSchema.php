@@ -77,6 +77,9 @@ final class DbSchema
         'kursevi_valuta' => 'sifarnici',
         'dobavljaci' => 'sifarnici',
         'klijenti' => 'sifarnici',
+        'bankovni_racuni' => 'sifarnici',
+        'prevodi_pojmova' => 'sifarnici',
+        'recnici' => 'sifarnici',
 
         // finansije — money.
         'ulazne_fakture' => 'finansije',
@@ -84,6 +87,7 @@ final class DbSchema
         'odbici_izlaznih_faktura' => 'finansije',
         'placanja' => 'finansije',
         'bankovne_transakcije' => 'finansije',
+        'stavke_transakcija' => 'finansije',
         'pozajmice' => 'finansije',
 
         // kadrovi — people and payroll.

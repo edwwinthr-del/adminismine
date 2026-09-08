@@ -17,6 +17,7 @@ use App\Support\Currencies;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -30,7 +31,7 @@ class BankTransactionController extends Controller
         // statement: each row carries the balance *as of* itself, so an expense
         // visibly subtracts in sequence instead of being a number the reader has
         // to add up. See BankTransaction::scopeWithRunningBalance.
-        $query = BankTransaction::query()->withRunningBalance()->with(['supplier', 'client']);
+        $query = BankTransaction::query()->withRunningBalance()->with(['supplier', 'client', 'lines.account']);
 
         if ($request->filled('category')) {
             $query->where('category', $request->input('category'));
@@ -63,27 +64,52 @@ class BankTransactionController extends Controller
 
     public function store(StoreBankTransactionRequest $request): JsonResponse
     {
-        $transaction = BankTransaction::create($request->validated());
+        $data = $request->validated();
+
+        // The movement and its lines are one record of one event, so they are
+        // written together or not at all: a header with no lines has a net of
+        // zero and would sit in the ledger claiming no money moved.
+        $transaction = DB::transaction(function () use ($data): BankTransaction {
+            $transaction = BankTransaction::create(Arr::except($data, 'lines'));
+            $transaction->setLines($data['lines']);
+
+            return $transaction;
+        });
 
         activity()->performedOn($transaction)->causedBy($request->user())->log('bank_transaction.created');
 
-        return (new BankTransactionResource($transaction->load('supplier', 'client')))
+        return (new BankTransactionResource($transaction->load('supplier', 'client', 'lines.account')))
             ->response()
             ->setStatusCode(201);
     }
 
     public function show(BankTransaction $bankTransaction): BankTransactionResource
     {
-        return new BankTransactionResource($bankTransaction->load('supplier', 'client', 'payments'));
+        return new BankTransactionResource(
+            $bankTransaction->load('supplier', 'client', 'payments.account', 'lines.account'),
+        );
     }
 
     public function update(UpdateBankTransactionRequest $request, BankTransaction $bankTransaction): BankTransactionResource
     {
-        $bankTransaction->update($request->validated());
+        $data = $request->validated();
+
+        DB::transaction(function () use ($bankTransaction, $data): void {
+            $bankTransaction->update(Arr::except($data, 'lines'));
+
+            // Lines are replaced when they are sent, and re-derived either way:
+            // moving a movement's date, currency, rate or category changes what
+            // its existing lines are worth and which way they point.
+            array_key_exists('lines', $data)
+                ? $bankTransaction->setLines($data['lines'])
+                : $bankTransaction->refreshTotals();
+        });
 
         activity()->performedOn($bankTransaction)->causedBy($request->user())->log('bank_transaction.updated');
 
-        return new BankTransactionResource($bankTransaction->load('supplier', 'client'));
+        return new BankTransactionResource(
+            $bankTransaction->load('supplier', 'client', 'lines.account'),
+        );
     }
 
     /**
@@ -116,7 +142,7 @@ class BankTransactionController extends Controller
         ]);
     }
 
-    /** Current balance of each account (sum of signed movements). */
+    /** Current balance of every account (sum of signed movement lines), plus the total. */
     public function balances(): JsonResponse
     {
         return response()->json(['data' => BankTransaction::accountBalances()]);
@@ -190,14 +216,14 @@ class BankTransactionController extends Controller
             );
         }
 
-        $method = $this->deriveMethod($bankTransaction);
+        $accountId = $this->deriveAccount($bankTransaction, $expected);
 
-        DB::transaction(function () use ($invoice, $bankTransaction, $data, $method) {
+        DB::transaction(function () use ($invoice, $bankTransaction, $data, $accountId) {
             $invoice->payments()->create([
                 'amount' => $data['amount'],
                 'currency' => $bankTransaction->currency,
                 'payment_date' => $bankTransaction->date->toDateString(),
-                'method' => $method,
+                'account_id' => $accountId,
                 'bank_transaction_id' => $bankTransaction->id,
             ]);
             $invoice->recalculate();
@@ -208,7 +234,9 @@ class BankTransactionController extends Controller
             ->log('bank_transaction.matched');
 
         return response()->json([
-            'data' => new BankTransactionResource($bankTransaction->fresh()->load('supplier', 'client', 'payments')),
+            'data' => new BankTransactionResource(
+                $bankTransaction->fresh()->load('supplier', 'client', 'payments.account', 'lines.account'),
+            ),
         ], 201);
     }
 
@@ -222,9 +250,10 @@ class BankTransactionController extends Controller
     }
 
     /**
-     * Flag rows that share date + all three amounts with another row. Only the
-     * ids on this page are asked about — a duplicate is still defined against
-     * the whole table, but the answer never carries more rows than are shown.
+     * Flag rows that share a date and every account share with another row.
+     * Only the ids on this page are asked about — a duplicate is still defined
+     * against the whole table, but the answer never carries more rows than are
+     * shown.
      */
     private function flagDuplicates(Collection|\Illuminate\Database\Eloquent\Collection $pageRows): void
     {
@@ -239,18 +268,29 @@ class BankTransactionController extends Controller
         });
     }
 
-    private function deriveMethod(BankTransaction $t): string
+    /**
+     * Which account the matched payment moved through.
+     *
+     * A movement usually has one line and the answer is that line. Where it has
+     * more than one — a transfer — the side that agrees with what is being
+     * settled is the one that moved: paying a supplier is money leaving an
+     * account, receiving from a client is money arriving in one.
+     */
+    private function deriveAccount(BankTransaction $t, string $expected): ?int
     {
-        if ((float) $t->nlb_amount !== 0.0) {
-            return 'nlb';
-        }
-        if ((float) $t->lovcen_amount !== 0.0) {
-            return 'lovcen';
-        }
-        if ((float) $t->cash_amount !== 0.0) {
-            return 'cash';
+        $lines = $t->lines()->orderBy('account_id')->get();
+
+        if ($lines->isEmpty()) {
+            return null;
         }
 
-        return 'other';
+        $side = $lines->filter(fn ($line): bool => $expected === 'expense'
+            ? (float) $line->amount < 0
+            : (float) $line->amount > 0);
+
+        return (int) ($side->isNotEmpty() ? $side : $lines)
+            ->sortByDesc(fn ($line): float => abs((float) $line->amount))
+            ->first()
+            ->account_id;
     }
 }

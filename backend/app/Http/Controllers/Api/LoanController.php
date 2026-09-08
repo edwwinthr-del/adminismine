@@ -164,7 +164,7 @@ class LoanController extends Controller
         activity()->performedOn($loan)->causedBy($request->user())
             ->withProperties([
                 'amount' => $data['amount'],
-                'method' => $data['method'],
+                'account_id' => $data['account_id'] ?? null,
                 'bank_transaction_id' => $payment->bank_transaction_id,
             ])
             ->log('loan.repayment_recorded');
@@ -185,7 +185,7 @@ class LoanController extends Controller
         Loan $loan,
         Payment $payment,
     ): JsonResponse {
-        $before = $payment->only(['amount', 'payment_date', 'method']);
+        $before = $payment->only(['amount', 'payment_date', 'account_id']);
 
         $this->correctSettlement($loan, $payment, $request->paymentData(), $request->booksMovement());
 
@@ -201,7 +201,7 @@ class LoanController extends Controller
     /** Remove a repayment; the obligation's figures follow from the lines that are left. */
     public function deleteRepayment(Request $request, Loan $loan, Payment $payment): JsonResponse
     {
-        $removed = $payment->only(['amount', 'payment_date', 'method']);
+        $removed = $payment->only(['amount', 'payment_date', 'account_id']);
 
         $movement = $this->removeSettlement($loan, $payment);
 

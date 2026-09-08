@@ -132,7 +132,7 @@ class SalaryPaymentController extends Controller
         activity()->performedOn($salaryPayment)->causedBy($request->user())
             ->withProperties([
                 'amount' => $data['amount'],
-                'method' => $data['method'],
+                'account_id' => $data['account_id'] ?? null,
                 'bank_transaction_id' => $payment->bank_transaction_id,
             ])
             ->log('salary_payment.payment_recorded');
@@ -177,7 +177,7 @@ class SalaryPaymentController extends Controller
         SalaryPayment $salaryPayment,
         Payment $payment,
     ): JsonResponse {
-        $before = $payment->only(['amount', 'payment_date', 'method']);
+        $before = $payment->only(['amount', 'payment_date', 'account_id']);
 
         $this->correctSettlement($salaryPayment, $payment, $request->paymentData(), $request->booksMovement());
 
@@ -193,7 +193,7 @@ class SalaryPaymentController extends Controller
     /** Remove a payment; the obligation's figures follow from the lines that are left. */
     public function deletePayment(Request $request, SalaryPayment $salaryPayment, Payment $payment): JsonResponse
     {
-        $removed = $payment->only(['amount', 'payment_date', 'method']);
+        $removed = $payment->only(['amount', 'payment_date', 'account_id']);
 
         $movement = $this->removeSettlement($salaryPayment, $payment);
 

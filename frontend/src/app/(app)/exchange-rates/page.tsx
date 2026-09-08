@@ -59,7 +59,6 @@ export default function ExchangeRatesPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("rates.title")}</h1>
           <p className="text-sm text-zinc-500">{t("rates.subtitle")}</p>
         </div>
         <div className="flex gap-2">
@@ -97,45 +96,45 @@ export default function ExchangeRatesPage() {
         )}
       </div>
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("rates.date")}</th>
-              <th className="px-4 py-3">{t("rates.pair")}</th>
-              <th className="px-4 py-3 text-right">{t("rates.rate")}</th>
-              <th className="px-4 py-3">{t("rates.source")}</th>
-              <th className="px-4 py-3">{t("rates.reason")}</th>
+              <th>{t("rates.date")}</th>
+              <th>{t("rates.pair")}</th>
+              <th className="text-right">{t("rates.rate")}</th>
+              <th>{t("rates.source")}</th>
+              <th>{t("rates.reason")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : rates.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("rates.noneYet")}
                 </td>
               </tr>
             ) : (
               rates.map((rate) => (
                 <tr key={rate.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3">{formatDate(rate.rate_date)}</td>
-                  <td className="px-4 py-3 font-medium">
+                  <td>{formatDate(rate.rate_date)}</td>
+                  <td className="font-medium">
                     {rate.base_currency}/{rate.quote_currency}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatRate(rate.rate)}</td>
-                  <td className="px-4 py-3">
+                  <td className="text-right tabular-nums">{formatRate(rate.rate)}</td>
+                  <td>
                     <Badge tone={rate.is_manual ? "amber" : "gray"}>
                       {rate.is_manual ? t("rates.manual") : rate.provider ?? t("rates.automatic")}
                     </Badge>
                   </td>
                   {/* The reason is the operator's own words — shown verbatim. */}
-                  <td className="px-4 py-3 text-zinc-500">{rate.override_reason ?? "—"}</td>
+                  <td className="text-zinc-500">{rate.override_reason ?? "—"}</td>
                 </tr>
               ))
             )}

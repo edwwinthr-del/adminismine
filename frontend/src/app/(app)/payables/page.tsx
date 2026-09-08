@@ -15,6 +15,7 @@ import {
   type BankRecordMode,
 } from "@/components/bank-record-field";
 import { AsyncSelect } from "@/components/ui/async-select";
+import { AccountField } from "@/components/account-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -29,7 +30,8 @@ interface Payment {
   id: number;
   amount: number;
   payment_date: string | null;
-  method: string;
+  account_id: number | null;
+  account: { id: number; name: string } | null;
   reference: string | null;
   bank_transaction_id: number | null;
 }
@@ -53,7 +55,6 @@ interface PayableInvoice {
   payments?: Payment[];
 }
 
-const METHODS = ["cash", "nlb", "lovcen", "other"] as const;
 const PER_PAGE = 25;
 
 function statusTone(status: string): "gray" | "amber" | "green" {
@@ -98,7 +99,6 @@ export default function PayablesPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("payables.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("payables.new")}</Button>
       </div>
 
@@ -129,55 +129,55 @@ export default function PayablesPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("payables.supplier")}</th>
-              <th className="px-4 py-3">{t("payables.invoiceNumber")}</th>
-              <th className="px-4 py-3">{t("payables.invoiceDate")}</th>
-              <th className="px-4 py-3">{t("payables.dueDate")}</th>
-              <th className="px-4 py-3 text-right">{t("payables.original")}</th>
-              <th className="px-4 py-3 text-right">{t("payables.paid")}</th>
-              <th className="px-4 py-3 text-right">{t("payables.remaining")}</th>
-              <th className="px-4 py-3">{t("payables.status")}</th>
-              <th className="px-4 py-3 text-right">{t("payables.actions")}</th>
+              <th>{t("payables.supplier")}</th>
+              <th>{t("payables.invoiceNumber")}</th>
+              <th>{t("payables.invoiceDate")}</th>
+              <th>{t("payables.dueDate")}</th>
+              <th className="text-right">{t("payables.original")}</th>
+              <th className="text-right">{t("payables.paid")}</th>
+              <th className="text-right">{t("payables.remaining")}</th>
+              <th>{t("payables.status")}</th>
+              <th className="text-right">{t("payables.actions")}</th>
             </tr>
           </thead>
           <tbody className={refreshing ? "divide-y divide-zinc-100 opacity-60 dark:divide-zinc-800" : "divide-y divide-zinc-900/5 dark:divide-white/8"}>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : invoices.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("payables.none")}
                 </td>
               </tr>
             ) : (
               invoices.map((inv) => (
                 <tr key={inv.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{inv.supplier?.name ?? "—"}</td>
-                  <td className="px-4 py-3">{inv.invoice_number ?? "—"}</td>
-                  <td className="px-4 py-3">{formatDate(inv.invoice_date)}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium">{inv.supplier?.name ?? "—"}</td>
+                  <td>{inv.invoice_number ?? "—"}</td>
+                  <td>{formatDate(inv.invoice_date)}</td>
+                  <td>
                     <span className="flex items-center gap-1">
                       {formatDate(inv.due_date)}
                       {inv.is_overdue && <Badge tone="red">{t("payables.overdue")}</Badge>}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(inv.original_amount, inv.currency)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(inv.paid_amount, inv.currency)}</td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">
+                  <td className="text-right tabular-nums">{formatMoney(inv.original_amount, inv.currency)}</td>
+                  <td className="text-right tabular-nums">{formatMoney(inv.paid_amount, inv.currency)}</td>
+                  <td className="text-right font-medium tabular-nums">
                     {formatMoney(inv.remaining_amount, inv.currency)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={statusTone(inv.status)}>{t(`status.${inv.status}`)}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     {/*
                       Available whatever the status: a paid invoice is still a
                       record that can have been entered wrong, and the fix is to
@@ -464,7 +464,7 @@ function SettlementModal({
                       {formatMoney(payment.amount, invoice.currency)}
                     </span>
                     <span className="text-xs text-zinc-500">
-                      {formatDate(payment.payment_date)} · {t(`method.${payment.method}`)}
+                      {formatDate(payment.payment_date)} · {payment.account?.name ?? "—"}
                       {payment.bank_transaction_id ? ` · ${t("payables.matchedTo")}` : ""}
                     </span>
                   </span>
@@ -612,7 +612,7 @@ function PaymentForm({
     payment ? String(payment.amount) : String(invoice.remaining_amount),
   );
   const [paymentDate, setPaymentDate] = useState(payment?.payment_date ?? todayISO());
-  const [method, setMethod] = useState(payment?.method ?? "cash");
+  const [accountId, setAccountId] = useState<number | null>(payment?.account_id ?? null);
   const [reference, setReference] = useState(payment?.reference ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -624,14 +624,15 @@ function PaymentForm({
    * by choosing cash/NLB/Lovćen; an edit defaults to changing nothing.
    */
   const [bankMode, setBankMode] = useState<BankRecordMode>(
-    editing ? "keep" : canBook(method) ? "book" : "none",
+    editing ? "keep" : "none",
   );
   const [movementId, setMovementId] = useState<number | null>(payment?.bank_transaction_id ?? null);
 
-  function changeMethod(next: string) {
-    setMethod(next);
+  function changeAccount(next: number | null) {
+    setAccountId(next);
 
-    // `other` names no account, so there is nothing to book into.
+    // A settlement naming no account moved no money through one, so
+    // there is nothing to book into.
     if (!canBook(next) && bankMode === "book") setBankMode("none");
     if (canBook(next) && bankMode === "none" && !editing) setBankMode("book");
   }
@@ -649,7 +650,7 @@ function PaymentForm({
           json: {
             amount: Number(amount),
             payment_date: paymentDate,
-            method,
+            account_id: accountId,
             reference: reference || null,
             ...bankRecordPayload(bankMode, movementId),
           },
@@ -685,22 +686,13 @@ function PaymentForm({
             <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required />
           </div>
         </div>
-        <div>
-          <label className={label}>{t("payables.method")}</label>
-          <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
-            {METHODS.map((m) => (
-              <option key={m} value={m}>
-                {t(`method.${m}`)}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <AccountField value={accountId} onChange={changeAccount} />
         <BankRecordField
           mode={bankMode}
           onModeChange={setBankMode}
           movementId={movementId}
           onMovementChange={setMovementId}
-          method={method}
+          accountId={accountId}
           editing={editing}
         />
         <div>

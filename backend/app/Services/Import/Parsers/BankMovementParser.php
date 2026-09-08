@@ -14,7 +14,10 @@ use App\Support\Import\LabelNormalizer;
  *       | FATURA NO | FATURA TARİHİ | GİDER KALEMİ | NOTLAR
  *
  * The three account columns are already signed in the sheet (+ in, − out), which
- * is exactly how `bank_transactions` stores them.
+ * is exactly how a movement's lines store them. The workbook's three columns are
+ * this company's three accounts, so they are emitted by name and resolved to
+ * account rows on commit — a sheet written before the accounts were rows still
+ * lands on the right ones.
  */
 class BankMovementParser extends SheetParser
 {
@@ -58,9 +61,11 @@ class BankMovementParser extends SheetParser
                 'date' => $date,
                 'description_1' => CellValue::string($this->cell($cells, 1)),
                 'description_2' => CellValue::string($this->cell($cells, 2)),
-                'cash_amount' => $cash ?? 0,
-                'nlb_amount' => $nlb ?? 0,
-                'lovcen_amount' => $lovcen ?? 0,
+                'lines' => array_values(array_filter([
+                    ['account' => 'Cash', 'amount' => $cash ?? 0],
+                    ['account' => 'NLB', 'amount' => $nlb ?? 0],
+                    ['account' => 'Lovćen', 'amount' => $lovcen ?? 0],
+                ], fn (array $line): bool => (float) $line['amount'] !== 0.0)),
                 'category' => LabelNormalizer::category($categoryLabel),
                 'currency' => 'EUR',
                 'invoice_number' => CellValue::string($this->cell($cells, 6)),

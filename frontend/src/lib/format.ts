@@ -38,7 +38,10 @@ export function amountTone(amount: number | null | undefined): string {
   if (value > 0) return "text-green-600 dark:text-green-400";
   if (value < 0) return "text-red-600 dark:text-red-400";
 
-  return "text-zinc-400";
+  // A zero balance is still a figure someone is reading off the screen, not a
+  // placeholder: zinc-400 put it at 2.2:1 on the light surfaces. Muted enough
+  // to stay out of the way of the signed amounts around it, dark enough to read.
+  return "text-zinc-500 dark:text-zinc-400";
 }
 
 /**

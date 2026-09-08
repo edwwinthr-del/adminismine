@@ -49,7 +49,6 @@ export default function ProjectsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("projects.title")}</h1>
           <p className="text-sm text-zinc-500">{t("projects.subtitle")}</p>
         </div>
         <Button onClick={() => setCreating(true)}>{t("projects.new")}</Button>
@@ -66,48 +65,48 @@ export default function ProjectsPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[860px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("projects.name")}</th>
-              <th className="px-4 py-3">{t("projects.code")}</th>
-              <th className="px-4 py-3">{t("projects.client")}</th>
-              <th className="px-4 py-3">{t("projects.start")}</th>
-              <th className="px-4 py-3">{t("projects.end")}</th>
-              <th className="px-4 py-3 text-right">{t("projects.worksites")}</th>
-              <th className="px-4 py-3">{t("projects.status")}</th>
-              <th className="px-4 py-3 text-right">{t("common.actions")}</th>
+              <th>{t("projects.name")}</th>
+              <th>{t("projects.code")}</th>
+              <th>{t("projects.client")}</th>
+              <th>{t("projects.start")}</th>
+              <th>{t("projects.end")}</th>
+              <th className="text-right">{t("projects.worksites")}</th>
+              <th>{t("projects.status")}</th>
+              <th className="text-right">{t("common.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : projects.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("projects.none")}
                 </td>
               </tr>
             ) : (
               projects.map((project) => (
                 <tr key={project.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{project.name}</td>
-                  <td className="px-4 py-3">{project.code ?? "—"}</td>
-                  <td className="px-4 py-3">{project.client?.name ?? "—"}</td>
-                  <td className="px-4 py-3">{formatDate(project.start_date)}</td>
-                  <td className="px-4 py-3">{formatDate(project.end_date)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{project.worksite_count ?? 0}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium">{project.name}</td>
+                  <td>{project.code ?? "—"}</td>
+                  <td>{project.client?.name ?? "—"}</td>
+                  <td>{formatDate(project.start_date)}</td>
+                  <td>{formatDate(project.end_date)}</td>
+                  <td className="text-right tabular-nums">{project.worksite_count ?? 0}</td>
+                  <td>
                     <Badge tone={project.is_active ? "green" : "gray"}>
                       {project.is_active ? t("projects.active") : t("projects.inactive")}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setEditing(project)}>
                         {t("common.edit")}

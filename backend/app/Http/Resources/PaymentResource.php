@@ -14,7 +14,12 @@ class PaymentResource extends JsonResource
             'amount' => (float) $this->amount,
             'currency' => $this->currency,
             'payment_date' => optional($this->payment_date)->toDateString(),
-            'method' => $this->method,
+            'account_id' => $this->account_id,
+            'account' => $this->whenLoaded('account', fn () => $this->account ? [
+                'id' => $this->account->id,
+                'name' => $this->account->name,
+                'kind' => $this->account->kind,
+            ] : null),
             // Both invoice pages read this to show whether a payment reached the
             // bank ledger, and to reopen an edit form on the movement it points
             // at. Leaving it out made `payment.bank_transaction_id !== null`

@@ -14,6 +14,7 @@ import {
   type BankRecordMode,
 } from "@/components/bank-record-field";
 import { AsyncSelect } from "@/components/ui/async-select";
+import { AccountField } from "@/components/account-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -27,7 +28,8 @@ interface Payment {
   id: number;
   amount: number;
   payment_date: string | null;
-  method: string;
+  account_id: number | null;
+  account: { id: number; name: string } | null;
   reference: string | null;
   bank_transaction_id: number | null;
 }
@@ -68,7 +70,6 @@ interface StatementEntry {
   balance: number;
 }
 
-const METHODS = ["cash", "nlb", "lovcen", "other"] as const;
 const PER_PAGE = 25;
 
 function statusTone(status: string): "gray" | "amber" | "green" {
@@ -107,7 +108,6 @@ export default function ReceivablesPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("receivables.title")}</h1>
         <div className="flex gap-2">
           <StatementButton />
           <Button onClick={() => setCreating(true)}>{t("receivables.new")}</Button>
@@ -137,20 +137,20 @@ export default function ReceivablesPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[960px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("receivables.client")}</th>
-              <th className="px-4 py-3">{t("receivables.invoiceNumber")}</th>
-              <th className="px-4 py-3">{t("receivables.invoiceDate")}</th>
-              <th className="px-4 py-3">{t("receivables.dueDate")}</th>
-              <th className="px-4 py-3 text-right">{t("receivables.amount")}</th>
-              <th className="px-4 py-3 text-right">{t("receivables.received")}</th>
-              <th className="px-4 py-3 text-right">{t("receivables.deducted")}</th>
-              <th className="px-4 py-3 text-right">{t("receivables.remaining")}</th>
-              <th className="px-4 py-3">{t("receivables.status")}</th>
-              <th className="px-4 py-3 text-right">{t("receivables.actions")}</th>
+              <th>{t("receivables.client")}</th>
+              <th>{t("receivables.invoiceNumber")}</th>
+              <th>{t("receivables.invoiceDate")}</th>
+              <th>{t("receivables.dueDate")}</th>
+              <th className="text-right">{t("receivables.amount")}</th>
+              <th className="text-right">{t("receivables.received")}</th>
+              <th className="text-right">{t("receivables.deducted")}</th>
+              <th className="text-right">{t("receivables.remaining")}</th>
+              <th>{t("receivables.status")}</th>
+              <th className="text-right">{t("receivables.actions")}</th>
             </tr>
           </thead>
           <tbody
@@ -162,38 +162,38 @@ export default function ReceivablesPage() {
           >
             {loading ? (
               <tr>
-                <td colSpan={10} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={10} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : invoices.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={10} className="py-14 text-center text-sm text-zinc-500">
                   {t("receivables.none")}
                 </td>
               </tr>
             ) : (
               invoices.map((inv) => (
                 <tr key={inv.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{inv.client?.name ?? "—"}</td>
-                  <td className="px-4 py-3">{inv.invoice_number ?? "—"}</td>
-                  <td className="px-4 py-3">{formatDate(inv.invoice_date)}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium">{inv.client?.name ?? "—"}</td>
+                  <td>{inv.invoice_number ?? "—"}</td>
+                  <td>{formatDate(inv.invoice_date)}</td>
+                  <td>
                     <span className="flex items-center gap-1">
                       {formatDate(inv.due_date)}
                       {inv.is_overdue && <Badge tone="red">{t("payables.overdue")}</Badge>}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(inv.invoice_amount, inv.currency)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(inv.received_amount, inv.currency)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(inv.deducted_amount, inv.currency)}</td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">
+                  <td className="text-right tabular-nums">{formatMoney(inv.invoice_amount, inv.currency)}</td>
+                  <td className="text-right tabular-nums">{formatMoney(inv.received_amount, inv.currency)}</td>
+                  <td className="text-right tabular-nums">{formatMoney(inv.deducted_amount, inv.currency)}</td>
+                  <td className="text-right font-medium tabular-nums">
                     {formatMoney(inv.remaining_amount, inv.currency)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={statusTone(inv.status)}>{t(`status.${inv.status}`)}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     {/* Offered on every row: a settled invoice still has to be correctable. */}
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setEditing(inv)}>
@@ -439,7 +439,7 @@ function SettlementModal({ invoiceId, onClose }: { invoiceId: number; onClose: (
                         {formatMoney(payment.amount, invoice.currency)}
                       </span>
                       <span className="text-xs text-zinc-500">
-                        {formatDate(payment.payment_date)} · {t(`method.${payment.method}`)}
+                        {formatDate(payment.payment_date)} · {payment.account?.name ?? "—"}
                         {payment.bank_transaction_id ? ` · ${t("payables.matchedTo")}` : ""}
                       </span>
                     </span>
@@ -596,7 +596,7 @@ function SettleForm({
   const [date, setDate] = useState(
     (payment?.payment_date ?? deduction?.deduction_date) || todayISO(),
   );
-  const [method, setMethod] = useState(payment?.method ?? "cash");
+  const [accountId, setAccountId] = useState<number | null>(payment?.account_id ?? null);
   const [reason, setReason] = useState(deduction?.reason ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -608,14 +608,15 @@ function SettleForm({
    * by choosing cash/NLB/Lovćen; an edit defaults to changing nothing.
    */
   const [bankMode, setBankMode] = useState<BankRecordMode>(
-    editing ? "keep" : canBook(method) ? "book" : "none",
+    editing ? "keep" : "none",
   );
   const [movementId, setMovementId] = useState<number | null>(payment?.bank_transaction_id ?? null);
 
-  function changeMethod(next: string) {
-    setMethod(next);
+  function changeAccount(next: number | null) {
+    setAccountId(next);
 
-    // `other` names no account, so there is nothing to book into.
+    // A settlement naming no account moved no money through one, so
+    // there is nothing to book into.
     if (!canBook(next) && bankMode === "book") setBankMode("none");
     if (canBook(next) && bankMode === "none" && !editing) setBankMode("book");
   }
@@ -638,7 +639,7 @@ function SettleForm({
       ? {
           amount: Number(amount),
           payment_date: date,
-          method,
+          account_id: accountId,
           ...bankRecordPayload(bankMode, movementId),
         }
       : { amount: Number(amount), deduction_date: date, reason: reason || null };
@@ -685,22 +686,13 @@ function SettleForm({
 
         {isPayment ? (
           <>
-            <div>
-              <label className={label}>{t("payables.method")}</label>
-              <Select value={method} onChange={(e) => changeMethod(e.target.value)}>
-                {METHODS.map((m) => (
-                  <option key={m} value={m}>
-                    {t(`method.${m}`)}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <AccountField value={accountId} onChange={changeAccount} />
             <BankRecordField
               mode={bankMode}
               onModeChange={setBankMode}
               movementId={movementId}
               onMovementChange={setMovementId}
-              method={method}
+              accountId={accountId}
               editing={editing}
             />
           </>
@@ -753,7 +745,7 @@ function StatementButton() {
       <Button variant="secondary" onClick={() => setOpen(true)}>
         {t("receivables.statement")}
       </Button>
-      <Modal open={open} onClose={() => setOpen(false)} title={t("receivables.statement")}>
+      <Modal open={open} onClose={() => setOpen(false)} title={t("receivables.statement")} wide>
         <div className="space-y-4">
           <AsyncSelect
             resource="clients"
@@ -776,29 +768,29 @@ function StatementButton() {
                   </div>
                 ))}
               </div>
-              <div className="max-h-72 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-zinc-50 text-left text-xs uppercase text-zinc-500 dark:bg-zinc-900">
+              <div className="scroll-quiet max-h-72 overflow-y-auto rounded-[var(--vui-r-md)] border border-[var(--table-rule)] px-3 pb-3">
+                <table className="vui-table vui-table-flush w-full text-sm">
+                  <thead className="sticky top-0 bg-[var(--vui-menu-solid)]">
                     <tr>
-                      <th className="px-3 py-2">{t("receivables.date")}</th>
-                      <th className="px-3 py-2">{t("receivables.type")}</th>
-                      <th className="px-3 py-2 text-right">{t("receivables.debit")}</th>
-                      <th className="px-3 py-2 text-right">{t("receivables.credit")}</th>
-                      <th className="px-3 py-2 text-right">{t("receivables.balance")}</th>
+                      <th>{t("receivables.date")}</th>
+                      <th>{t("receivables.type")}</th>
+                      <th className="text-right">{t("receivables.debit")}</th>
+                      <th className="text-right">{t("receivables.credit")}</th>
+                      <th className="text-right">{t("receivables.balance")}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+                  <tbody>
                     {statement.entries.map((entry, i) => (
                       <tr key={i}>
-                        <td className="px-3 py-2">{formatDate(entry.date)}</td>
-                        <td className="px-3 py-2">{entryLabel(entry.type)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">
+                        <td className="whitespace-nowrap">{formatDate(entry.date)}</td>
+                        <td>{entryLabel(entry.type)}</td>
+                        <td className="text-right tabular-nums">
                           {entry.debit ? formatMoney(entry.debit) : "—"}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
+                        <td className="text-right tabular-nums">
                           {entry.credit ? formatMoney(entry.credit) : "—"}
                         </td>
-                        <td className="px-3 py-2 text-right font-medium tabular-nums">{formatMoney(entry.balance)}</td>
+                        <td className="text-right font-medium tabular-nums">{formatMoney(entry.balance)}</td>
                       </tr>
                     ))}
                   </tbody>

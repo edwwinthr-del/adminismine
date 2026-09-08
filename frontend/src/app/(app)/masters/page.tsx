@@ -56,49 +56,48 @@ export default function MastersPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("masters.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("masters.new")}</Button>
       </div>
 
       <p className="text-sm text-zinc-500">{t("masters.hint")}</p>
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[780px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("masters.master")}</th>
-              <th className="px-4 py-3">{t("masters.login")}</th>
-              <th className="px-4 py-3">{t("masters.worksites")}</th>
-              <th className="px-4 py-3">{t("masters.status")}</th>
-              <th className="px-4 py-3 text-right">{t("masters.actions")}</th>
+              <th>{t("masters.master")}</th>
+              <th>{t("masters.login")}</th>
+              <th>{t("masters.worksites")}</th>
+              <th>{t("masters.status")}</th>
+              <th className="text-right">{t("masters.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : masters.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("masters.none")}
                 </td>
               </tr>
             ) : (
               masters.map((master) => (
                 <tr key={master.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">
+                  <td className="font-medium">
                     {master.employee?.full_name ?? `#${master.employee_id}`}
                     {master.employee?.job_role && (
                       <span className="ml-2 text-xs text-zinc-500">{master.employee.job_role}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     {master.user ? master.user.email : <span className="text-zinc-500">{t("masters.noLogin")}</span>}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     {master.worksites && master.worksites.length > 0 ? (
                       <span className="flex flex-wrap gap-1">
                         {master.worksites.map((worksite) => (
@@ -111,12 +110,12 @@ export default function MastersPage() {
                       <span className="text-zinc-500">{t("masters.noWorksites")}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={master.is_active ? "green" : "gray"}>
                       {master.is_active ? t("masters.active") : t("masters.inactive")}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setEditing(master)}>
                         {t("masters.edit")}

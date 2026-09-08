@@ -29,8 +29,12 @@ interface SettlementLine
 
     public function lineExchangeRateDate(): ?string;
 
-    /** `cash`, `nlb`, `lovcen` or `other` — `other` names no account and books nothing. */
-    public function lineMethod(): ?string;
+    /**
+     * The account the money moved through, or null for a settlement that moved
+     * none through an account this app tracks — an offset, a correction, cash
+     * outside the till. Null books nothing.
+     */
+    public function lineAccountId(): ?int;
 
     /** The operator's own reference for this line, copied to the movement. */
     public function lineReference(): ?string;

@@ -122,7 +122,7 @@ class NotificationTest extends TestCase
             'amount' => 500,
             'currency' => 'EUR',
             'payment_date' => now()->toDateString(),
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ]);
         $invoice->recalculate();
 
@@ -144,7 +144,7 @@ class NotificationTest extends TestCase
             'amount' => 500,
             'currency' => 'EUR',
             'payment_date' => now()->toDateString(),
-            'method' => 'cash',
+            'account_id' => $this->cashAccount()->id,
         ]);
         $invoice->recalculate();
         $this->dispatcher()->scan();

@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Travel;
 
 use App\Http\Requests\Concerns\ValidatesBankRecord;
-use App\Models\SocialAssistancePayment;
 use App\Support\Currencies;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -41,7 +40,7 @@ class StoreSocialAssistanceRequest extends FormRequest
             'currency' => Currencies::rules(),
             'amount' => ['required', 'numeric', 'gt:0'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
-            'method' => ['nullable', Rule::in(SocialAssistancePayment::METHODS)],
+            'account_id' => ['nullable', 'integer', Rule::exists('bankovni_racuni', 'id')->where('is_active', true)],
             'reason' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
             ...$this->bankRecordRules(),

@@ -132,8 +132,8 @@ class LookupTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $cash = BankTransaction::factory()->create(['cash_amount' => -120, 'nlb_amount' => 0, 'lovcen_amount' => 0]);
-        $bank = BankTransaction::factory()->create(['cash_amount' => 0, 'nlb_amount' => -400, 'lovcen_amount' => 0]);
+        $cash = BankTransaction::factory()->onAccount($this->cashAccount(), -120)->create([]);
+        $bank = BankTransaction::factory()->onAccount($this->nlbAccount(), -400)->create([]);
 
         $cashOptions = $this->getJson('/api/lookups/bank-transactions?account=cash')->json('data');
         $bankOptions = $this->getJson('/api/lookups/bank-transactions?account=bank')->json('data');

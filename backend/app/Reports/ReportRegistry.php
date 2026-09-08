@@ -16,6 +16,7 @@ use App\Models\TravelExpense;
 use App\Models\User;
 use App\Models\UtilityBill;
 use App\Models\WorkerNeed;
+use App\Support\CompanyConfig;
 use App\Support\MonthPeriod;
 use Illuminate\Support\Collection;
 
@@ -43,13 +44,21 @@ class ReportRegistry
     }
 
     /**
-     * Reports the user may run, by named permission (rule 6).
+     * Reports the user may run: their named permission (rule 6), and the module
+     * behind that permission being one this company has.
+     *
+     * The module is derived from the permission rather than declared per report
+     * — every report already names the permission of the module it belongs to,
+     * so a second label here would only be something to keep in step.
      *
      * @return array<string, Report>
      */
     public function availableTo(User $user): array
     {
-        return array_filter($this->all(), fn (Report $report): bool => $user->can($report->permission()));
+        $config = app(CompanyConfig::class);
+
+        return array_filter($this->all(), fn (Report $report): bool => $user->can($report->permission())
+            && $config->permissionEnabled($report->permission()));
     }
 
     /** @return list<Report> */

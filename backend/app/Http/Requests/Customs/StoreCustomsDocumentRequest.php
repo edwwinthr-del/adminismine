@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Customs;
 
 use App\Models\CustomsDocument;
+use App\Support\Vocabulary;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,7 +17,7 @@ class StoreCustomsDocumentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'document_type' => ['required', Rule::in(CustomsDocument::TYPES)],
+            'document_type' => ['required', Rule::in(Vocabulary::values('customs_document_type'))],
             'document_number' => ['nullable', 'string', 'max:255'],
             // A CMR without its number is not much use as proof of carriage.
             'cmr_number' => ['nullable', 'required_if:document_type,cmr', 'string', 'max:255'],

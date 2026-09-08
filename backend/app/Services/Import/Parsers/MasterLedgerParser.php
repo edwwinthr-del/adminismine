@@ -102,9 +102,7 @@ class MasterLedgerParser extends SheetParser
                 'date' => $date,
                 'description_1' => "{$this->masterName} — cash drawn",
                 // Money leaving the cash box.
-                'cash_amount' => -abs($amount),
-                'nlb_amount' => 0,
-                'lovcen_amount' => 0,
+                'lines' => [['account' => 'Cash', 'amount' => -abs($amount)]],
                 'category' => 'expense',
                 'currency' => 'EUR',
                 'notes' => "{$this->masterName} sheet",

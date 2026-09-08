@@ -63,7 +63,6 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("notifications.title")}</h1>
 
       <div className="control-surface inline-flex flex-wrap gap-1 rounded-full p-1">
         {tabs.map((value) => (
@@ -427,28 +426,28 @@ function RulesTab() {
     <div className="space-y-4">
       <p className="text-sm text-zinc-500">{t("notifications.rulesHint")}</p>
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("notifications.type")}</th>
-              <th className="px-4 py-3">{t("notifications.enabled")}</th>
-              <th className="px-4 py-3">{t("notifications.timing")}</th>
-              <th className="px-4 py-3">{t("notifications.daysBefore")}</th>
-              <th className="px-4 py-3">{t("notifications.severity")}</th>
-              <th className="px-4 py-3">{t("notifications.recipientRoles")}</th>
+              <th>{t("notifications.type")}</th>
+              <th>{t("notifications.enabled")}</th>
+              <th>{t("notifications.timing")}</th>
+              <th>{t("notifications.daysBefore")}</th>
+              <th>{t("notifications.severity")}</th>
+              <th>{t("notifications.recipientRoles")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {rules.map((rule) => (
               <tr key={rule.type} className="text-zinc-800 dark:text-zinc-200">
-                <td className="px-4 py-3">
+                <td>
                   <span className="flex flex-col">
                     <span className="font-medium">{t(`notifType.${rule.type}`)}</span>
                     <span className="text-xs text-zinc-500">{rule.type}</span>
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <Checkbox
                       size="sm"
                       checked={rule.is_enabled}
@@ -457,7 +456,7 @@ function RulesTab() {
                       }
                   />
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <Select
                     className="w-44"
                     value={rule.timing}
@@ -470,7 +469,7 @@ function RulesTab() {
                     ))}
                   </Select>
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <Input
                     type="number"
                     min="0"
@@ -483,7 +482,7 @@ function RulesTab() {
                     }
                   />
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <Select
                     className="w-32"
                     value={rule.severity}
@@ -496,7 +495,7 @@ function RulesTab() {
                     ))}
                   </Select>
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   <div className="flex flex-wrap gap-2">
                     {roles.map((role) => (
                         <label

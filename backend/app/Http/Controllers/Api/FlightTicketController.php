@@ -134,7 +134,7 @@ class FlightTicketController extends Controller
         activity()->performedOn($ticket)->causedBy($request->user())
             ->withProperties([
                 'amount' => $data['amount'],
-                'method' => $data['method'],
+                'account_id' => $data['account_id'] ?? null,
                 'bank_transaction_id' => $payment->bank_transaction_id,
             ])
             ->log('flight_ticket.payment_recorded');
@@ -155,7 +155,7 @@ class FlightTicketController extends Controller
         FlightTicket $ticket,
         Payment $payment,
     ): JsonResponse {
-        $before = $payment->only(['amount', 'payment_date', 'method']);
+        $before = $payment->only(['amount', 'payment_date', 'account_id']);
 
         $this->correctSettlement($ticket, $payment, $request->paymentData(), $request->booksMovement());
 
@@ -171,7 +171,7 @@ class FlightTicketController extends Controller
     /** Remove a payment; the obligation's figures follow from the lines that are left. */
     public function deletePayment(Request $request, FlightTicket $ticket, Payment $payment): JsonResponse
     {
-        $removed = $payment->only(['amount', 'payment_date', 'method']);
+        $removed = $payment->only(['amount', 'payment_date', 'account_id']);
 
         $movement = $this->removeSettlement($ticket, $payment);
 

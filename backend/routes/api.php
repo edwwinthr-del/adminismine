@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AssistantController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BankAccountController;
 use App\Http\Controllers\Api\BankTransactionController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\CompanySettingsController;
@@ -31,6 +32,7 @@ use App\Http\Controllers\Api\NotificationRuleController;
 use App\Http\Controllers\Api\PayableController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\ProductionRecordController;
+use App\Http\Controllers\Api\ProfileSetupController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ReceivableController;
 use App\Http\Controllers\Api\RentPaymentController;
@@ -39,12 +41,14 @@ use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\SalaryPaymentController;
 use App\Http\Controllers\Api\SocialAssistanceController;
 use App\Http\Controllers\Api\SupplierController;
+use App\Http\Controllers\Api\TerminologyController;
 use App\Http\Controllers\Api\TravelExpenseAttachmentController;
 use App\Http\Controllers\Api\TravelExpenseController;
 use App\Http\Controllers\Api\TravelSummaryController;
 use App\Http\Controllers\Api\UserAccessController;
 use App\Http\Controllers\Api\UtilityBillAttachmentController;
 use App\Http\Controllers\Api\UtilityBillController;
+use App\Http\Controllers\Api\VocabularyController;
 use App\Http\Controllers\Api\WorkerNeedController;
 use App\Http\Controllers\Api\WorkingDayController;
 use App\Http\Controllers\Api\WorksiteController;
@@ -77,6 +81,32 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
     // Company settings (name shown app-wide; editing gated).
     Route::get('/company-settings', [CompanySettingsController::class, 'show']);
     Route::put('/company-settings', [CompanySettingsController::class, 'update'])->middleware('can:company.settings.manage');
+    // What this company has, and what each part currently holds. Its own
+    // permission: switching a module off for everybody is not the same power as
+    // correcting the company's address.
+    Route::get('/company-settings/modules', [CompanySettingsController::class, 'modules'])
+        ->middleware('can:company.modules.manage');
+    Route::put('/company-settings/modules', [CompanySettingsController::class, 'updateModules'])
+        ->middleware('can:company.modules.manage');
+
+    // What this company calls things. Readable by anyone signed in — the whole
+    // app renders through these, so gating them would leave everyone but an
+    // admin looking at different words.
+    Route::get('/company-settings/terminology', [TerminologyController::class, 'show']);
+    Route::put('/company-settings/terminology', [TerminologyController::class, 'update'])
+        ->middleware('can:company.terminology.manage');
+
+    // Setting the install up as one shape of company. Readable by anyone signed
+    // in — the setup prompt keys on whether a profile has been applied at all.
+    Route::get('/company-settings/profiles', [ProfileSetupController::class, 'index']);
+    Route::post('/company-settings/profile', [ProfileSetupController::class, 'apply'])
+        ->middleware('can:company.profile.manage');
+
+    // The open-ended lists — the ones nothing branches on. Readable by anyone
+    // signed in, because every form that offers one has to know what is in it.
+    Route::get('/company-settings/vocabularies', [VocabularyController::class, 'index']);
+    Route::put('/company-settings/vocabularies/{vocabulary}', [VocabularyController::class, 'update'])
+        ->middleware('can:company.vocabularies.manage');
 
     // Exchange rates (EUR base; TRY auto-pulled, manual override needs a reason).
     Route::get('/exchange-rates', [ExchangeRateController::class, 'index']);
@@ -126,6 +156,16 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         ->middleware('can:receivables.manage');
 
     // Bank & cash movements (replaces BANKA HAREKETLERİ).
+    // The accounts money moves through. Gated with the ledger itself: opening
+    // or closing an account is a statement about where money can go.
+    Route::middleware('can:bank_transactions.manage')->group(function () {
+        Route::get('/bank-accounts', [BankAccountController::class, 'index']);
+        Route::post('/bank-accounts', [BankAccountController::class, 'store']);
+        Route::get('/bank-accounts/{bankAccount}', [BankAccountController::class, 'show']);
+        Route::put('/bank-accounts/{bankAccount}', [BankAccountController::class, 'update']);
+        Route::delete('/bank-accounts/{bankAccount}', [BankAccountController::class, 'destroy']);
+    });
+
     Route::get('/bank-transactions/balances', [BankTransactionController::class, 'balances'])->middleware('can:bank_transactions.manage');
     Route::get('/bank-transactions', [BankTransactionController::class, 'index'])->middleware('can:bank_transactions.manage');
     Route::post('/bank-transactions', [BankTransactionController::class, 'store'])->middleware('can:bank_transactions.manage');
@@ -136,7 +176,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
 
     // Workers / employee profiles (replaces ISCILER ICIN BANKA HESAPLARI + worker lists).
     // `expiring-documents` must precede the {employee} binding.
-    Route::middleware('can:employees.manage')->group(function () {
+    Route::middleware(['can:employees.manage', 'module:workers'])->group(function () {
         Route::get('/employees/expiring-documents', [EmployeeController::class, 'expiringDocuments']);
         Route::get('/employees', [EmployeeController::class, 'index']);
         Route::post('/employees', [EmployeeController::class, 'store']);
@@ -149,7 +189,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
 
     // Employee salary payments (monthly obligations, tracked apart from other
     // worker expenses). Static segments precede the {salaryPayment} binding.
-    Route::middleware('can:salary_payments.manage')->group(function () {
+    Route::middleware(['can:salary_payments.manage', 'module:salaries'])->group(function () {
         Route::get('/salary-payments/summary', [SalaryPaymentController::class, 'summary']);
         Route::post('/salary-payments/generate', [SalaryPaymentController::class, 'generate']);
         Route::get('/salary-payments', [SalaryPaymentController::class, 'index']);
@@ -165,18 +205,22 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
     // Work structure: mines (the deposit), projects (the billed work) and
     // worksites (where people clock in). All three share one permission — they
     // are one org chart, and a user who may edit a site may edit its structure.
-    Route::middleware('can:worksites.manage')->group(function () {
-        Route::get('/mines', [MineController::class, 'index']);
-        Route::post('/mines', [MineController::class, 'store']);
-        Route::get('/mines/{mine}', [MineController::class, 'show']);
-        Route::put('/mines/{mine}', [MineController::class, 'update']);
-        Route::delete('/mines/{mine}', [MineController::class, 'destroy']);
+    Route::middleware(['can:worksites.manage', 'module:worksites'])->group(function () {
+        Route::middleware('structure:mine')->group(function () {
+            Route::get('/mines', [MineController::class, 'index']);
+            Route::post('/mines', [MineController::class, 'store']);
+            Route::get('/mines/{mine}', [MineController::class, 'show']);
+            Route::put('/mines/{mine}', [MineController::class, 'update']);
+            Route::delete('/mines/{mine}', [MineController::class, 'destroy']);
+        });
 
-        Route::get('/projects', [ProjectController::class, 'index']);
-        Route::post('/projects', [ProjectController::class, 'store']);
-        Route::get('/projects/{project}', [ProjectController::class, 'show']);
-        Route::put('/projects/{project}', [ProjectController::class, 'update']);
-        Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+        Route::middleware('structure:project')->group(function () {
+            Route::get('/projects', [ProjectController::class, 'index']);
+            Route::post('/projects', [ProjectController::class, 'store']);
+            Route::get('/projects/{project}', [ProjectController::class, 'show']);
+            Route::put('/projects/{project}', [ProjectController::class, 'update']);
+            Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+        });
 
         Route::get('/worksites', [WorksiteController::class, 'index']);
         Route::post('/worksites', [WorksiteController::class, 'store']);
@@ -187,7 +231,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
     });
 
     // Masters / supervisors and the worksites they cover.
-    Route::middleware('can:masters.manage')->group(function () {
+    Route::middleware(['can:masters.manage', 'module:masters'])->group(function () {
         Route::get('/masters', [MasterController::class, 'index']);
         Route::post('/masters', [MasterController::class, 'store']);
         Route::get('/masters/{master}', [MasterController::class, 'show']);
@@ -197,43 +241,48 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
 
     // Daily attendance + daily earned pay. Masters are limited to their own
     // worksites (MasterAccessService); approval is what releases a day to payroll.
-    Route::get('/attendance/roster', [AttendanceController::class, 'roster'])->middleware('can:attendance.submit');
-    Route::get('/attendance/summary', [AttendanceController::class, 'summary'])->middleware('can:attendance.submit');
-    Route::get('/attendance/payroll-preparation', [AttendanceController::class, 'payrollPreparation'])
-        ->middleware('can:salary_payments.manage');
-    Route::get('/attendance', [AttendanceController::class, 'index'])->middleware('can:attendance.submit');
-    Route::post('/attendance', [AttendanceController::class, 'storeDay'])->middleware('can:attendance.submit');
-    Route::post('/attendance/submit', [AttendanceController::class, 'submit'])->middleware('can:attendance.submit');
-    Route::post('/attendance/approve', [AttendanceController::class, 'approve'])->middleware('can:attendance.approve');
-    Route::post('/attendance/reject', [AttendanceController::class, 'reject'])->middleware('can:attendance.approve');
-    Route::put('/attendance/{attendance}', [AttendanceController::class, 'update'])->middleware('can:attendance.submit');
-    Route::delete('/attendance/{attendance}', [AttendanceController::class, 'destroy'])->middleware('can:attendance.submit');
-    Route::post('/attendance/{attendance}/adjust', [AttendanceController::class, 'adjust'])
-        ->middleware('can:attendance.approve');
+    // The working-days divisor lives here too: it exists to price attendance.
+    Route::middleware('module:attendance')->group(function () {
+        Route::get('/attendance/roster', [AttendanceController::class, 'roster'])->middleware('can:attendance.submit');
+        Route::get('/attendance/summary', [AttendanceController::class, 'summary'])->middleware('can:attendance.submit');
+        Route::get('/attendance/payroll-preparation', [AttendanceController::class, 'payrollPreparation'])
+            ->middleware('can:salary_payments.manage');
+        Route::get('/attendance', [AttendanceController::class, 'index'])->middleware('can:attendance.submit');
+        Route::post('/attendance', [AttendanceController::class, 'storeDay'])->middleware('can:attendance.submit');
+        Route::post('/attendance/submit', [AttendanceController::class, 'submit'])->middleware('can:attendance.submit');
+        Route::post('/attendance/approve', [AttendanceController::class, 'approve'])->middleware('can:attendance.approve');
+        Route::post('/attendance/reject', [AttendanceController::class, 'reject'])->middleware('can:attendance.approve');
+        Route::put('/attendance/{attendance}', [AttendanceController::class, 'update'])->middleware('can:attendance.submit');
+        Route::delete('/attendance/{attendance}', [AttendanceController::class, 'destroy'])->middleware('can:attendance.submit');
+        Route::post('/attendance/{attendance}/adjust', [AttendanceController::class, 'adjust'])
+            ->middleware('can:attendance.approve');
 
-    // Working days per month (the daily-pay divisor); overriding needs a reason.
-    Route::get('/working-days', [WorkingDayController::class, 'show'])->middleware('can:attendance.submit');
-    Route::put('/working-days', [WorkingDayController::class, 'update'])->middleware('can:attendance.approve');
-    Route::delete('/working-days', [WorkingDayController::class, 'destroy'])->middleware('can:attendance.approve');
+        // Working days per month (the daily-pay divisor); overriding needs a reason.
+        Route::get('/working-days', [WorkingDayController::class, 'show'])->middleware('can:attendance.submit');
+        Route::put('/working-days', [WorkingDayController::class, 'update'])->middleware('can:attendance.approve');
+        Route::delete('/working-days', [WorkingDayController::class, 'destroy'])->middleware('can:attendance.approve');
+    });
 
     // Mining production (tons of bauxite ore per day / per month).
-    Route::get('/production/totals', [ProductionRecordController::class, 'totals'])
-        ->middleware('can:mining_production.submit');
-    Route::get('/production', [ProductionRecordController::class, 'index'])->middleware('can:mining_production.submit');
-    Route::post('/production', [ProductionRecordController::class, 'store'])->middleware('can:mining_production.submit');
-    Route::get('/production/{production}', [ProductionRecordController::class, 'show'])
-        ->middleware('can:mining_production.submit');
-    Route::put('/production/{production}', [ProductionRecordController::class, 'update'])
-        ->middleware('can:mining_production.submit');
-    Route::delete('/production/{production}', [ProductionRecordController::class, 'destroy'])
-        ->middleware('can:mining_production.submit');
-    Route::post('/production/{production}/approve', [ProductionRecordController::class, 'approve'])
-        ->middleware('can:mining_production.approve');
-    Route::post('/production/{production}/reject', [ProductionRecordController::class, 'reject'])
-        ->middleware('can:mining_production.approve');
+    Route::middleware('module:production')->group(function () {
+        Route::get('/production/totals', [ProductionRecordController::class, 'totals'])
+            ->middleware('can:mining_production.submit');
+        Route::get('/production', [ProductionRecordController::class, 'index'])->middleware('can:mining_production.submit');
+        Route::post('/production', [ProductionRecordController::class, 'store'])->middleware('can:mining_production.submit');
+        Route::get('/production/{production}', [ProductionRecordController::class, 'show'])
+            ->middleware('can:mining_production.submit');
+        Route::put('/production/{production}', [ProductionRecordController::class, 'update'])
+            ->middleware('can:mining_production.submit');
+        Route::delete('/production/{production}', [ProductionRecordController::class, 'destroy'])
+            ->middleware('can:mining_production.submit');
+        Route::post('/production/{production}/approve', [ProductionRecordController::class, 'approve'])
+            ->middleware('can:mining_production.approve');
+        Route::post('/production/{production}/reject', [ProductionRecordController::class, 'reject'])
+            ->middleware('can:mining_production.approve');
+    });
 
     // Machines / company equipment and their paperwork.
-    Route::middleware('can:machines.manage')->group(function () {
+    Route::middleware(['can:machines.manage', 'module:machines'])->group(function () {
         Route::get('/machines/register', [MachineController::class, 'register']);
         Route::get('/machines', [MachineController::class, 'index']);
         Route::post('/machines', [MachineController::class, 'store']);
@@ -248,7 +297,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
     });
 
     // Customs & transport documents (CMR first), primarily tied to machine invoices.
-    Route::middleware('can:customs_documents.manage')->group(function () {
+    Route::middleware(['can:customs_documents.manage', 'module:customs'])->group(function () {
         Route::get('/customs-documents/register', [CustomsDocumentController::class, 'register']);
         Route::get('/customs-documents', [CustomsDocumentController::class, 'index']);
         Route::post('/customs-documents', [CustomsDocumentController::class, 'store']);
@@ -264,7 +313,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
 
     // Worker housing: houses, dated occupancy, rent, utility bills and the
     // (exceptional) worker deductions. Rent and bills are company costs by default.
-    Route::middleware('can:housing.manage')->group(function () {
+    Route::middleware(['can:housing.manage', 'module:housing'])->group(function () {
         Route::get('/housing/summary', HousingSummaryController::class);
 
         Route::get('/houses', [HouseController::class, 'index']);
@@ -312,7 +361,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
     // Travel: flight tickets, road/car costs and social assistance. Tickets are
     // bought in TRY, so every row keeps its original amount plus the EUR value
     // and the rate that produced it.
-    Route::middleware('can:travel.manage')->group(function () {
+    Route::middleware(['can:travel.manage', 'module:travel'])->group(function () {
         Route::get('/travel/summary', TravelSummaryController::class);
 
         Route::get('/travel/tickets', [FlightTicketController::class, 'index']);
@@ -355,7 +404,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
 
     // Loans and advances (North-Ex and the like). Repayments are ordinary
     // polymorphic payments, so they match to bank/cash movements like any other.
-    Route::middleware('can:loans.manage')->group(function () {
+    Route::middleware(['can:loans.manage', 'module:loans'])->group(function () {
         Route::get('/loans', [LoanController::class, 'index']);
         Route::post('/loans', [LoanController::class, 'store']);
         Route::get('/loans/{loan}', [LoanController::class, 'show']);
@@ -367,7 +416,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
     });
 
     // Worker needs raised from the field and handled by the office.
-    Route::middleware('can:worker_needs.manage')->group(function () {
+    Route::middleware(['can:worker_needs.manage', 'module:worker_needs'])->group(function () {
         Route::get('/worker-needs', [WorkerNeedController::class, 'index']);
         Route::post('/worker-needs', [WorkerNeedController::class, 'store']);
         Route::get('/worker-needs/{workerNeed}', [WorkerNeedController::class, 'show']);
@@ -424,7 +473,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
 
     // LLM assistant. Asking never writes; `confirm` is the only route that can
     // turn a proposal into a record, and only for the user who was shown it.
-    Route::middleware('can:assistant.use')->group(function () {
+    Route::middleware(['can:assistant.use', 'module:assistant'])->group(function () {
         Route::get('/assistant/messages', [AssistantController::class, 'history']);
         Route::post('/assistant/ask', [AssistantController::class, 'ask']);
         Route::delete('/assistant/messages', [AssistantController::class, 'clear']);

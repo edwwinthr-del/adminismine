@@ -5,6 +5,7 @@ import { apiFetch, errorMessage } from "@/lib/api";
 import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
+import { permissionGroupLabel, permissionLabel, roleLabel } from "@/lib/labels";
 import { LOCALES, LOCALE_LABELS } from "@/lib/i18n/dictionaries";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,25 @@ function generatePassword(): string {
  * Permissions are named `module.action`, so grouping on the prefix gives the
  * module list for free — no second catalogue to keep in step with the backend.
  */
+/**
+ * Marks a permission whose module the company has switched off.
+ *
+ * Shown and still grantable rather than hidden: disabling a module hides it and
+ * revokes nothing, so a grant has to survive the module being switched back on.
+ * Removing these from the list would push an administrator to un-grant exactly
+ * what they should keep. What they were missing is the reason — offered with no
+ * explanation, `housing.manage` looks broken rather than dormant.
+ */
+function HiddenModuleTag() {
+  const { t } = useI18n();
+
+  return (
+    <span className="ml-1 whitespace-nowrap rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-500">
+      {t("roles.moduleHidden")}
+    </span>
+  );
+}
+
 function groupByModule(permissions: string[]): [string, string[]][] {
   const groups = new Map<string, string[]>();
   for (const permission of permissions) {
@@ -71,7 +91,6 @@ export default function RolesPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("roles.title")}</h1>
         <p className="text-sm text-zinc-500">{t("roles.subtitle")}</p>
       </div>
 
@@ -106,9 +125,12 @@ function RolesTab() {
   const [error, setError] = useState<string | null>(null);
 
   const { data: rolesData, loading } = useResource<{ data: Role[] }>("/roles");
-  const { data: permissionsData } = useResource<{ data: string[] }>("/permissions");
+  const { data: permissionsData } = useResource<{ data: string[]; unavailable?: string[] }>(
+    "/permissions",
+  );
 
   const permissions = permissionsData?.data ?? [];
+  const hiddenPermissions = permissionsData?.unavailable ?? [];
   const term = search.trim().toLowerCase();
   const roles = (rolesData?.data ?? []).filter(
     (role) =>
@@ -118,7 +140,7 @@ function RolesTab() {
   );
 
   async function remove(role: Role) {
-    if (!window.confirm(t("roles.deleteConfirm", { name: role.name }))) return;
+    if (!window.confirm(t("roles.deleteConfirm", { name: roleLabel(role.name, t) }))) return;
     setError(null);
     try {
       await apiFetch(`/roles/${role.id}`, { method: "DELETE" });
@@ -141,42 +163,42 @@ function RolesTab() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("roles.name")}</th>
-              <th className="px-4 py-3 text-right">{t("roles.users")}</th>
-              <th className="px-4 py-3 text-right">{t("roles.permissionCount")}</th>
-              <th className="px-4 py-3">{t("roles.kind")}</th>
-              <th className="px-4 py-3 text-right">{t("common.actions")}</th>
+              <th>{t("roles.name")}</th>
+              <th className="text-right">{t("roles.users")}</th>
+              <th className="text-right">{t("roles.permissionCount")}</th>
+              <th>{t("roles.kind")}</th>
+              <th className="text-right">{t("common.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : roles.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("roles.none")}
                 </td>
               </tr>
             ) : (
               roles.map((role) => (
                 <tr key={role.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{role.name}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{role.users_count}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{role.permissions.length}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium">{roleLabel(role.name, t)}</td>
+                  <td className="text-right tabular-nums">{role.users_count}</td>
+                  <td className="text-right tabular-nums">{role.permissions.length}</td>
+                  <td>
                     <Badge tone={role.is_system ? "indigo" : "gray"}>
                       {role.is_system ? t("roles.system") : t("roles.custom")}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setEditing(role)}>
                         {t("common.edit")}
@@ -202,8 +224,21 @@ function RolesTab() {
         </table>
       </Card>
 
-      {creating && <RoleModal permissions={permissions} onClose={() => setCreating(false)} />}
-      {editing && <RoleModal role={editing} permissions={permissions} onClose={() => setEditing(null)} />}
+      {creating && (
+        <RoleModal
+          permissions={permissions}
+          hiddenPermissions={hiddenPermissions}
+          onClose={() => setCreating(false)}
+        />
+      )}
+      {editing && (
+        <RoleModal
+          role={editing}
+          permissions={permissions}
+          hiddenPermissions={hiddenPermissions}
+          onClose={() => setEditing(null)}
+        />
+      )}
       {cloning && <CloneModal role={cloning} onClose={() => setCloning(null)} />}
     </div>
   );
@@ -212,13 +247,17 @@ function RolesTab() {
 function RoleModal({
   role,
   permissions,
+  hiddenPermissions = [],
   onClose,
 }: {
   role?: Role;
   permissions: string[];
+  /** Permissions whose module is switched off — grantable, but labelled. */
+  hiddenPermissions?: string[];
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const hidden = useMemo(() => new Set(hiddenPermissions), [hiddenPermissions]);
   const [name, setName] = useState(role?.name ?? "");
   const [selected, setSelected] = useState<string[]>(role?.permissions ?? []);
   const [filter, setFilter] = useState("");
@@ -302,7 +341,7 @@ function RoleModal({
                     onClick={() => toggleModule(modulePermissions)}
                     className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:text-indigo-600"
                   >
-                    {moduleName}
+                    {permissionGroupLabel(moduleName, t)}
                   </button>
                   <div className="grid gap-1 sm:grid-cols-2">
                     {modulePermissions.map((permission) => (
@@ -315,7 +354,10 @@ function RoleModal({
                               checked={selected.includes(permission)}
                               onChange={() => toggle(permission)}
                           />
-                          <span className="font-mono text-xs">{permission}</span>
+                          <span className={hidden.has(permission) ? "text-xs text-zinc-500 dark:text-zinc-400" : "text-xs"}>
+                            {permissionLabel(permission, t)}
+                          </span>
+                          {hidden.has(permission) && <HiddenModuleTag />}
                         </label>
                     ))}
                   </div>
@@ -430,36 +472,36 @@ function UsersTab() {
         <Button onClick={() => setCreating(true)}>{t("users.new")}</Button>
       </div>
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[960px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("roles.user")}</th>
-              <th className="px-4 py-3">{t("roles.email")}</th>
-              <th className="px-4 py-3">{t("roles.assignedRoles")}</th>
-              <th className="px-4 py-3">{t("roles.userStatus")}</th>
-              <th className="px-4 py-3 text-right">{t("common.actions")}</th>
+              <th>{t("roles.user")}</th>
+              <th>{t("roles.email")}</th>
+              <th>{t("roles.assignedRoles")}</th>
+              <th>{t("roles.userStatus")}</th>
+              <th className="text-right">{t("common.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("roles.noUsers")}
                 </td>
               </tr>
             ) : (
               users.map((user) => (
                 <tr key={user.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{user.name}</td>
-                  <td className="px-4 py-3 text-zinc-500">{user.email}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium">{user.name}</td>
+                  <td className="text-zinc-500">{user.email}</td>
+                  <td>
                     <div className="flex flex-wrap gap-1">
                       {user.roles.length === 0 ? (
                         <span className="text-zinc-400">—</span>
@@ -472,12 +514,12 @@ function UsersTab() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <Badge tone={user.is_active ? "green" : "gray"}>
                       {user.is_active ? t("roles.userActive") : t("roles.userInactive")}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setAccount(user)}>
                         {t("common.edit")}
@@ -550,7 +592,11 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
   const [saving, setSaving] = useState(false);
 
   const { data: rolesData } = useResource<{ data: Role[] }>("/roles", { enabled: !user });
-  const { data: permissionsData } = useResource<{ data: string[] }>("/permissions", { enabled: !user });
+  const { data: permissionsData } = useResource<{ data: string[]; unavailable?: string[] }>(
+    "/permissions",
+    { enabled: !user },
+  );
+  const hidden = useMemo(() => new Set(permissionsData?.unavailable ?? []), [permissionsData]);
   const allRoles = rolesData?.data ?? [];
   const isSelf = currentUser?.id === user?.id;
 
@@ -669,7 +715,7 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
                                 )
                             }
                         />
-                        <span>{role.name}</span>
+                        <span>{roleLabel(role.name, t)}</span>
                       </label>
                   ))}
                 </div>
@@ -695,7 +741,7 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
               <div className="max-h-56 space-y-3 overflow-y-auto rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
                 {permissionGroups.map(([moduleName, modulePermissions]) => (
                   <div key={moduleName}>
-                    <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">{moduleName}</p>
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">{permissionGroupLabel(moduleName, t)}</p>
                     <div className="grid gap-1 sm:grid-cols-2">
                       {modulePermissions.map((permission) => {
                         const covered = fromRoles.has(permission);
@@ -716,11 +762,12 @@ function UserModal({ user, onClose }: { user?: UserRow; onClose: () => void }) {
                                       )
                                   }
                               />
+                              {hidden.has(permission) && <HiddenModuleTag />}
                               <span
                                   className={
-                                    covered
-                                        ? "font-mono text-xs text-zinc-400"
-                                        : "font-mono text-xs"}>{permission}
+                                    covered || hidden.has(permission)
+                                        ? "font-mono text-xs text-zinc-500 dark:text-zinc-400"
+                                        : "text-xs"}>{permissionLabel(permission, t)}
                               </span>
                             </label>
                         );
@@ -827,10 +874,13 @@ function UserAccessModal({ user, onClose }: { user: UserRow; onClose: () => void
   const [saving, setSaving] = useState(false);
 
   const { data: rolesData } = useResource<{ data: Role[] }>("/roles");
-  const { data: permissionsData } = useResource<{ data: string[] }>("/permissions");
+  const { data: permissionsData } = useResource<{ data: string[]; unavailable?: string[] }>(
+    "/permissions",
+  );
 
   const allRoles = rolesData?.data ?? [];
   const permissions = permissionsData?.data ?? [];
+  const hidden = useMemo(() => new Set(permissionsData?.unavailable ?? []), [permissionsData]);
 
   const groups = useMemo(() => {
     const term = filter.trim().toLowerCase();
@@ -891,7 +941,7 @@ function UserAccessModal({ user, onClose }: { user: UserRow; onClose: () => void
                       checked={roles.includes(role.name)}
                       onChange={() => toggleRole(role.name)}
                   />
-                  <span>{role.name}</span>
+                  <span>{roleLabel(role.name, t)}</span>
                 </label>
             ))}
           </div>
@@ -911,7 +961,7 @@ function UserAccessModal({ user, onClose }: { user: UserRow; onClose: () => void
           <div className="max-h-64 space-y-3 overflow-y-auto rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
             {groups.map(([moduleName, modulePermissions]) => (
               <div key={moduleName}>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">{moduleName}</p>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">{permissionGroupLabel(moduleName, t)}</p>
                 <div className="grid gap-1 sm:grid-cols-2">
                   {modulePermissions.map((permission) => {
                     const covered = fromRoles.has(permission);
@@ -926,15 +976,10 @@ function UserAccessModal({ user, onClose }: { user: UserRow; onClose: () => void
                               disabled={covered}
                               onChange={() => toggleExtra(permission)}
                           />
-                          <span
-                              className={
-                                covered
-                                    ? "font-mono text-xs text-zinc-400"
-                                    : "font-mono text-xs"
-                              }
-                          >
-    {permission}
-  </span>
+                          {hidden.has(permission) && <HiddenModuleTag />}
+                          <span className={covered || hidden.has(permission) ? "text-xs text-zinc-500 dark:text-zinc-400" : "text-xs"}>
+                            {permissionLabel(permission, t)}
+                          </span>
                         </label>
                     );
                   })}

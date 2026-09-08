@@ -5,6 +5,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useEmployeeOptions, type EmployeeOption } from "@/lib/data/use-options";
 import { useI18n } from "@/lib/i18n/context";
+import { useStructureLevel } from "@/lib/modules";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { AsyncSelect } from "@/components/ui/async-select";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +34,7 @@ interface Worksite {
 
 export default function WorksitesPage() {
   const { t } = useI18n();
+  const levelEnabled = useStructureLevel();
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Worksite | null>(null);
@@ -57,7 +59,6 @@ export default function WorksitesPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("worksites.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("worksites.new")}</Button>
       </div>
 
@@ -70,50 +71,50 @@ export default function WorksitesPage() {
         />
       </Card>
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("worksites.name")}</th>
-              <th className="px-4 py-3">{t("worksites.location")}</th>
-              <th className="px-4 py-3">{t("worksites.mine")}</th>
-              <th className="px-4 py-3">{t("worksites.project")}</th>
-              <th className="px-4 py-3">{t("worksites.client")}</th>
-              <th className="px-4 py-3 text-right">{t("worksites.workers")}</th>
-              <th className="px-4 py-3 text-right">{t("worksites.masters")}</th>
-              <th className="px-4 py-3">{t("worksites.status")}</th>
-              <th className="px-4 py-3 text-right">{t("worksites.actions")}</th>
+              <th>{t("worksites.name")}</th>
+              <th>{t("worksites.location")}</th>
+              {levelEnabled("mine") && <th>{t("worksites.mine")}</th>}
+              <th>{t("worksites.project")}</th>
+              <th>{t("worksites.client")}</th>
+              <th className="text-right">{t("worksites.workers")}</th>
+              <th className="text-right">{t("worksites.masters")}</th>
+              <th>{t("worksites.status")}</th>
+              <th className="text-right">{t("worksites.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : worksites.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={9} className="py-14 text-center text-sm text-zinc-500">
                   {t("worksites.none")}
                 </td>
               </tr>
             ) : (
               worksites.map((worksite) => (
                 <tr key={worksite.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3 font-medium">{worksite.name}</td>
-                  <td className="px-4 py-3">{worksite.location ?? "—"}</td>
-                  <td className="px-4 py-3">{worksite.mine?.name ?? "—"}</td>
-                  <td className="px-4 py-3">{worksite.project?.name ?? "—"}</td>
-                  <td className="px-4 py-3">{worksite.client?.name ?? "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{worksite.employee_count ?? 0}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{worksite.master_count ?? 0}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium">{worksite.name}</td>
+                  <td>{worksite.location ?? "—"}</td>
+                  {levelEnabled("mine") && <td>{worksite.mine?.name ?? "—"}</td>}
+                  <td>{worksite.project?.name ?? "—"}</td>
+                  <td>{worksite.client?.name ?? "—"}</td>
+                  <td className="text-right tabular-nums">{worksite.employee_count ?? 0}</td>
+                  <td className="text-right tabular-nums">{worksite.master_count ?? 0}</td>
+                  <td>
                     <Badge tone={worksite.is_active ? "green" : "gray"}>
                       {worksite.is_active ? t("worksites.active") : t("worksites.inactive")}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setAssigning(worksite)}>
                         {t("worksites.roster")}
@@ -154,6 +155,7 @@ function WorksiteModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const levelEnabled = useStructureLevel();
   const [name, setName] = useState(worksite?.name ?? "");
   const [location, setLocation] = useState(worksite?.location ?? "");
   const [mineId, setMineId] = useState<number | null>(worksite?.mine_id ?? null);
@@ -203,15 +205,22 @@ function WorksiteModal({
           <Input value={location} onChange={(e) => setLocation(e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={label}>{t("worksites.mine")}</label>
-            <AsyncSelect
-              resource="mines"
-              value={mineId}
-              onChange={(value) => setMineId(value)}
-              emptyLabel={t("worksites.noMine")}
-            />
-          </div>
+          {/*
+            The hierarchy is three levels in the database whatever a company
+            uses — both parent keys are nullable — so a two-level company simply
+            never sets this, and the field is not shown to be left blank.
+          */}
+          {levelEnabled("mine") && (
+            <div>
+              <label className={label}>{t("worksites.mine")}</label>
+              <AsyncSelect
+                resource="mines"
+                value={mineId}
+                onChange={(value) => setMineId(value)}
+                emptyLabel={t("worksites.noMine")}
+              />
+            </div>
+          )}
           <div>
             <label className={label}>{t("worksites.project")}</label>
             <AsyncSelect

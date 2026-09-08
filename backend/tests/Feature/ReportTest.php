@@ -125,7 +125,7 @@ class ReportTest extends TestCase
             'amount' => 400,
             'currency' => 'EUR',
             'payment_date' => '2026-04-22',
-            'method' => 'nlb',
+            'account_id' => $this->nlbAccount()->id,
         ]);
         $invoice->recalculate();
 
@@ -153,17 +153,14 @@ class ReportTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        BankTransaction::factory()->create([
-            'date' => '2026-03-10', 'cash_amount' => 5000, 'nlb_amount' => 0, 'lovcen_amount' => 0,
-            'category' => 'income',
+        BankTransaction::factory()->onAccount($this->cashAccount(), 5000)->create([
+            'date' => '2026-03-10', 'category' => 'income',
         ]);
-        BankTransaction::factory()->create([
-            'date' => '2026-03-15', 'cash_amount' => -2000, 'nlb_amount' => 0, 'lovcen_amount' => 0,
-            'category' => 'expense',
+        BankTransaction::factory()->onAccount($this->cashAccount(), -2000)->create([
+            'date' => '2026-03-15', 'category' => 'expense',
         ]);
-        BankTransaction::factory()->create([
-            'date' => '2026-03-20', 'cash_amount' => -900, 'nlb_amount' => 900, 'lovcen_amount' => 0,
-            'category' => 'transfer',
+        BankTransaction::factory()->transfer($this->cashAccount(), $this->nlbAccount(), 900)->create([
+            'date' => '2026-03-20', 'category' => 'transfer',
         ]);
 
         $rows = $this->getJson('/api/reports/monthly_cashflow?year=2026')->assertOk()->json('data.rows');
@@ -186,7 +183,7 @@ class ReportTest extends TestCase
             'remaining_amount' => 1000,
         ]);
         $loan->repayments()->create([
-            'amount' => 400, 'currency' => 'EUR', 'payment_date' => '2026-07-10', 'method' => 'cash',
+            'amount' => 400, 'currency' => 'EUR', 'payment_date' => '2026-07-10', 'account_id' => $this->cashAccount()->id,
         ]);
         $loan->recalculate();
 

@@ -154,7 +154,6 @@ export default function CustomsPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("customs.title")}</h1>
         <Button onClick={() => setCreating(true)}>{t("customs.new")}</Button>
       </div>
 
@@ -202,37 +201,37 @@ export default function CustomsPage() {
 
       {(error ?? listError) && <p className="text-sm text-red-600">{error ?? listError}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[1100px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("customs.document")}</th>
-              <th className="px-4 py-3">{t("customs.dates")}</th>
-              <th className="px-4 py-3">{t("customs.route")}</th>
-              <th className="px-4 py-3">{t("customs.carrier")}</th>
-              <th className="px-4 py-3">{t("customs.goods")}</th>
-              <th className="px-4 py-3">{t("customs.links")}</th>
-              <th className="px-4 py-3">{t("customs.status")}</th>
-              <th className="px-4 py-3 text-right">{t("customs.actions")}</th>
+              <th>{t("customs.document")}</th>
+              <th>{t("customs.dates")}</th>
+              <th>{t("customs.route")}</th>
+              <th>{t("customs.carrier")}</th>
+              <th>{t("customs.goods")}</th>
+              <th>{t("customs.links")}</th>
+              <th>{t("customs.status")}</th>
+              <th className="text-right">{t("customs.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : documents.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="py-14 text-center text-sm text-zinc-500">
                   {t("customs.none")}
                 </td>
               </tr>
             ) : (
               documents.map((document) => (
                 <tr key={document.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col">
                       <span className="flex items-center gap-2">
                         <Badge tone="gray">{t(`documentType.${document.document_type}`)}</Badge>
@@ -248,7 +247,7 @@ export default function CustomsPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-300">
+                  <td className="text-xs text-zinc-600 dark:text-zinc-300">
                     <span className="flex flex-col">
                       {document.cmr_date && <span>{t("customs.cmrDateShort", { date: formatDate(document.cmr_date) })}</span>}
                       {document.shipment_date && (
@@ -256,7 +255,7 @@ export default function CustomsPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col text-xs text-zinc-600 dark:text-zinc-300">
                       <span>{document.sender ?? "—"} →</span>
                       <span>{document.receiver ?? "—"}</span>
@@ -267,14 +266,14 @@ export default function CustomsPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col text-xs text-zinc-600 dark:text-zinc-300">
                       <span>{document.carrier_name ?? "—"}</span>
                       {document.vehicle_plate && <span className="font-medium">{document.vehicle_plate}</span>}
                       {document.driver_name && <span className="text-zinc-500">{document.driver_name}</span>}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col text-xs text-zinc-600 dark:text-zinc-300">
                       <span>{document.goods_description ?? "—"}</span>
                       {document.quantity !== null && (
@@ -284,7 +283,7 @@ export default function CustomsPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col gap-1">
                       {document.machine && <Badge tone="indigo">{document.machine.display_name}</Badge>}
                       {document.payable_invoice && (
@@ -297,13 +296,13 @@ export default function CustomsPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <span className="flex flex-col gap-1">
                       <Badge tone={statusTone(document.status)}>{t(`documentStatus.${document.status}`)}</Badge>
                       {!document.has_scan && <Badge tone="red">{t("customs.noScan")}</Badge>}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button variant="secondary" className="h-8 px-3" onClick={() => setManagingFiles(document)}>
                         {t("customs.scans")}

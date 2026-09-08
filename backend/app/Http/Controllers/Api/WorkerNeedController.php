@@ -7,6 +7,7 @@ use App\Http\Requests\WorkerNeed\StoreWorkerNeedRequest;
 use App\Http\Requests\WorkerNeed\UpdateWorkerNeedRequest;
 use App\Http\Resources\WorkerNeedResource;
 use App\Models\WorkerNeed;
+use App\Support\Vocabulary;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ class WorkerNeedController extends Controller
         $request->validate([
             'status' => ['nullable', Rule::in(WorkerNeed::STATUSES)],
             'priority' => ['nullable', Rule::in(WorkerNeed::PRIORITIES)],
-            'need_type' => ['nullable', Rule::in(WorkerNeed::TYPES)],
+            'need_type' => ['nullable', Rule::in(Vocabulary::values('worker_need_type'))],
             'view' => ['nullable', Rule::in(['active', 'archive'])],
             'sort' => ['nullable', Rule::in(self::SORTABLE)],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],

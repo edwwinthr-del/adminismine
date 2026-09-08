@@ -6,6 +6,7 @@ use App\Models\Notification;
 use App\Models\NotificationRule;
 use App\Models\User;
 use App\Models\UserNotificationPreference;
+use App\Support\CompanyConfig;
 use App\Support\NotificationTypes;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -33,10 +34,17 @@ class NotificationDispatcher
         $resolved = 0;
         $byType = [];
 
+        $config = app(CompanyConfig::class);
+
         $rules = NotificationRule::query()
             ->enabled()
             ->whereIn('type', NotificationTypes::scannable())
-            ->get();
+            ->get()
+            // A module this company does not have has nothing to notify about.
+            // Existing rows for it are left alone rather than resolved: the
+            // module is hidden, not deleted, and re-enabling it should find its
+            // notifications where it left them.
+            ->filter(fn ($rule): bool => $config->permissionEnabled(NotificationTypes::permission($rule->type)));
 
         foreach ($rules as $rule) {
             $result = $this->runRule($rule, $today);

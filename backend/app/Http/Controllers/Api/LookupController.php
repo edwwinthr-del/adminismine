@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\CompanyConfig;
 use App\Support\LookupRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -28,6 +29,17 @@ class LookupController extends Controller
         $definition = LookupRegistry::find($resource);
 
         abort_if($definition === null, 404, 'Unknown lookup.');
+
+        // A lookup into a module this company does not have is not a lookup it
+        // can answer — 404 like the module's own routes, not 403.
+        $config = app(CompanyConfig::class);
+        abort_unless($config->permissionEnabled($definition['permission']), 404, 'Unknown lookup.');
+
+        // Same for a level of the work structure it does not use: a form with no
+        // mine field has no use for a list of mines.
+        $level = ['mines' => 'mine', 'projects' => 'project'][$resource] ?? null;
+        abort_if($level !== null && ! $config->structureLevelEnabled($level), 404, 'Unknown lookup.');
+
         abort_unless($request->user()?->can($definition['permission']), 403);
 
         $request->validate([

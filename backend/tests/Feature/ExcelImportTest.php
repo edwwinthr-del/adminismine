@@ -155,9 +155,9 @@ class ExcelImportTest extends TestCase
 
         // The opening-balance line is a position, not a movement.
         $this->assertCount(2, $rows);
-        $this->assertSame(2200.0, $rows[0]->mapped['nlb_amount']);
+        $this->assertSame([['account' => 'NLB', 'amount' => 2200.0]], $rows[0]->mapped['lines']);
         $this->assertSame('income', $rows[0]->mapped['category']);
-        $this->assertSame(-1000.0, $rows[1]->mapped['nlb_amount']);
+        $this->assertSame([['account' => 'NLB', 'amount' => -1000.0]], $rows[1]->mapped['lines']);
         $this->assertSame('expense', $rows[1]->mapped['category']);
     }
 
@@ -539,9 +539,9 @@ class ExcelImportTest extends TestCase
 
         $this->postJson("/api/imports/{$batchId}/commit")->assertOk();
 
-        $cash = BankTransaction::query()->first();
-        // Money leaving the cash box is negative.
-        $this->assertSame('-1000.00', $cash->cash_amount);
+        $movement = BankTransaction::query()->first();
+        // Money leaving the cash box is negative, on the till's own line.
+        $this->assertSame(-1000.0, $this->amountOn($movement, $this->cashAccount()));
     }
 
     public function test_import_endpoints_require_the_imports_permission(): void

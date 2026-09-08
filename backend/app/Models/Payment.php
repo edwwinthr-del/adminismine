@@ -30,7 +30,7 @@ class Payment extends Model implements SettlementLine
         'exchange_rate',
         'exchange_rate_date',
         'payment_date',
-        'method',
+        'account_id',
         'bank_transaction_id',
         'reference',
         'source',
@@ -55,6 +55,12 @@ class Payment extends Model implements SettlementLine
     public function bankTransaction(): BelongsTo
     {
         return $this->belongsTo(BankTransaction::class, 'bank_transaction_id');
+    }
+
+    /** The account the money moved through, or none. */
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(BankAccount::class, 'account_id');
     }
 
     protected function eurSourceColumn(): string
@@ -92,9 +98,9 @@ class Payment extends Model implements SettlementLine
         return optional($this->exchange_rate_date)->toDateString();
     }
 
-    public function lineMethod(): ?string
+    public function lineAccountId(): ?int
     {
-        return $this->method;
+        return $this->account_id === null ? null : (int) $this->account_id;
     }
 
     public function lineReference(): ?string

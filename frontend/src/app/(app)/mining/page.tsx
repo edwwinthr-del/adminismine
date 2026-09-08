@@ -7,6 +7,7 @@ import { useEmployeeOptions, useWorksiteOptions, type EmployeeOption, type Works
 import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
 import { formatDate, todayISO } from "@/lib/format";
+import { useVocabularies, useVocabularyLabel } from "@/lib/vocabulary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -47,8 +48,6 @@ interface Totals {
   pending_approval: number;
 }
 
-const MATERIALS = ["bauxite_ore", "overburden", "limestone", "other"] as const;
-const UNITS = ["tons", "m3", "kg"] as const;
 const PERIOD_TYPES = ["daily", "monthly"] as const;
 
 function currentMonth(): string {
@@ -67,6 +66,8 @@ function approvalTone(status: string): "gray" | "green" | "red" {
 
 export default function MiningPage() {
   const { t } = useI18n();
+  const vocabularyLabel = useVocabularyLabel();
+  const vocabularies = useVocabularies();
   const { hasPermission } = useAuth();
   const canApprove = hasPermission("mining_production.approve");
 
@@ -130,7 +131,6 @@ export default function MiningPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("mining.title")}</h1>
         <div className="flex items-center gap-3">
           <Input className="w-[10rem]" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           <Button onClick={() => setCreating(true)}>{t("mining.new")}</Button>
@@ -140,7 +140,7 @@ export default function MiningPage() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Tile
           label={t("mining.monthTotal")}
-          value={`${formatQuantity(totals?.month_total ?? 0)} ${t(`unit.${unit}`)}`}
+          value={`${formatQuantity(totals?.month_total ?? 0)} ${vocabularyLabel("production_unit", "unit", unit)}`}
           hint={t("mining.dailyPlusMonthly", {
             daily: formatQuantity(totals?.daily_total ?? 0),
             monthly: formatQuantity(totals?.monthly_entries_total ?? 0),
@@ -148,7 +148,7 @@ export default function MiningPage() {
         />
         <Tile
           label={t("mining.ytdTotal", { year: totals?.year ?? new Date().getFullYear() })}
-          value={`${formatQuantity(totals?.year_to_date_total ?? 0)} ${t(`unit.${unit}`)}`}
+          value={`${formatQuantity(totals?.year_to_date_total ?? 0)} ${vocabularyLabel("production_unit", "unit", unit)}`}
         />
         <Tile label={t("mining.entries")} value={String(records.length)} />
         <Tile label={t("mining.pendingApproval")} value={String(totals?.pending_approval ?? 0)} />
@@ -166,9 +166,9 @@ export default function MiningPage() {
           </Select>
           <Select className="max-w-[13rem]" value={material} onChange={(e) => setMaterial(e.target.value)}>
             <option value="">{t("mining.allMaterials")}</option>
-            {MATERIALS.map((value) => (
+            {vocabularies.values("material_type").map((value) => (
               <option key={value} value={value}>
-                {t(`material.${value}`)}
+                {vocabularyLabel("material_type", "material", value)}
               </option>
             ))}
           </Select>
@@ -200,7 +200,7 @@ export default function MiningPage() {
                 <li key={row.worksite_id} className="flex items-center justify-between gap-3">
                   <span className="text-zinc-700 dark:text-zinc-200">{row.name ?? `#${row.worksite_id}`}</span>
                   <span className="tabular-nums text-zinc-900 dark:text-zinc-50">
-                    {formatQuantity(row.quantity)} {t(`unit.${unit}`)}
+                    {formatQuantity(row.quantity)} {vocabularyLabel("production_unit", "unit", unit)}
                   </span>
                 </li>
               ))}
@@ -216,9 +216,9 @@ export default function MiningPage() {
             <ul className="space-y-2 text-sm">
               {totals.by_material.map((row) => (
                 <li key={row.material_type} className="flex items-center justify-between gap-3">
-                  <span className="text-zinc-700 dark:text-zinc-200">{t(`material.${row.material_type}`)}</span>
+                  <span className="text-zinc-700 dark:text-zinc-200">{vocabularyLabel("material_type", "material", row.material_type)}</span>
                   <span className="tabular-nums text-zinc-900 dark:text-zinc-50">
-                    {formatQuantity(row.quantity)} {t(`unit.${unit}`)}
+                    {formatQuantity(row.quantity)} {vocabularyLabel("production_unit", "unit", unit)}
                   </span>
                 </li>
               ))}
@@ -228,36 +228,36 @@ export default function MiningPage() {
           )}
         </Card>
 
-        <Card className="table-quiet overflow-x-auto p-0 lg:col-span-2">
+        <Card className="vui-table scroll-quiet overflow-x-auto p-0">
           <table className="w-full min-w-[820px] text-sm">
-            <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+            <thead>
               <tr>
-                <th className="px-4 py-3">{t("mining.period")}</th>
-                <th className="px-4 py-3">{t("mining.worksite")}</th>
-                <th className="px-4 py-3">{t("mining.engineer")}</th>
-                <th className="px-4 py-3">{t("mining.material")}</th>
-                <th className="px-4 py-3 text-right">{t("mining.quantity")}</th>
-                <th className="px-4 py-3">{t("mining.approval")}</th>
-                <th className="px-4 py-3 text-right">{t("mining.actions")}</th>
+                <th>{t("mining.period")}</th>
+                <th>{t("mining.worksite")}</th>
+                <th>{t("mining.engineer")}</th>
+                <th>{t("mining.material")}</th>
+                <th className="text-right">{t("mining.quantity")}</th>
+                <th>{t("mining.approval")}</th>
+                <th className="text-right">{t("mining.actions")}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+            <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
+                  <td colSpan={7} className="py-14 text-center text-sm text-zinc-500">
                     {t("common.loading")}
                   </td>
                 </tr>
               ) : records.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-14 text-center text-sm text-zinc-500">
+                  <td colSpan={7} className="py-14 text-center text-sm text-zinc-500">
                     {t("mining.none")}
                   </td>
                 </tr>
               ) : (
                 records.map((record) => (
                   <tr key={record.id} className="text-zinc-800 dark:text-zinc-200">
-                    <td className="px-4 py-3">
+                    <td>
                       {record.period_type === "daily" ? (
                         formatDate(record.date)
                       ) : (
@@ -267,18 +267,18 @@ export default function MiningPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-medium">{record.worksite?.name ?? `#${record.worksite_id}`}</td>
-                    <td className="px-4 py-3">{record.engineer?.full_name ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      {t(`material.${record.material_type}`)}
+                    <td className="font-medium">{record.worksite?.name ?? `#${record.worksite_id}`}</td>
+                    <td>{record.engineer?.full_name ?? "—"}</td>
+                    <td>
+                      {vocabularyLabel("material_type", "material", record.material_type)}
                       {record.quality_grade && (
                         <span className="ml-2 text-xs text-zinc-500">{record.quality_grade}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium tabular-nums">
-                      {formatQuantity(record.quantity)} {t(`unit.${record.unit}`)}
+                    <td className="text-right font-medium tabular-nums">
+                      {formatQuantity(record.quantity)} {vocabularyLabel("production_unit", "unit", record.unit)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <span className="flex flex-col gap-1">
                         <Badge tone={approvalTone(record.approval_status)}>
                           {t(`approval.${record.approval_status}`)}
@@ -288,7 +288,7 @@ export default function MiningPage() {
                         )}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="text-right">
                       <div className="flex justify-end gap-2">
                         {canApprove && record.approval_status !== "approved" && (
                           <Button variant="secondary" className="h-8 px-3" onClick={() => void approve(record)}>
@@ -385,6 +385,8 @@ function RecordModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const vocabularyLabel = useVocabularyLabel();
+  const vocabularies = useVocabularies();
   const [periodType, setPeriodType] = useState(record?.period_type ?? "daily");
   const [date, setDate] = useState(record?.date ?? todayISO());
   const [periodMonth, setPeriodMonth] = useState(record?.period_month?.slice(0, 7) ?? defaultMonth);
@@ -499,9 +501,9 @@ function RecordModal({
           <div>
             <label className={label}>{t("mining.material")}</label>
             <Select value={materialType} onChange={(e) => setMaterialType(e.target.value)}>
-              {MATERIALS.map((value) => (
+              {vocabularies.values("material_type").map((value) => (
                 <option key={value} value={value}>
-                  {t(`material.${value}`)}
+                  {vocabularyLabel("material_type", "material", value)}
                 </option>
               ))}
             </Select>
@@ -509,9 +511,9 @@ function RecordModal({
           <div>
             <label className={label}>{t("mining.unit")}</label>
             <Select value={unit} onChange={(e) => setUnit(e.target.value)}>
-              {UNITS.map((value) => (
+              {vocabularies.values("production_unit").map((value) => (
                 <option key={value} value={value}>
-                  {t(`unit.${value}`)}
+                  {vocabularyLabel("production_unit", "unit", value)}
                 </option>
               ))}
             </Select>

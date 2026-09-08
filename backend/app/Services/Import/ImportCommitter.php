@@ -2,6 +2,7 @@
 
 namespace App\Services\Import;
 
+use App\Models\BankAccount;
 use App\Models\BankTransaction;
 use App\Models\Client;
 use App\Models\Employee;
@@ -195,7 +196,7 @@ class ImportCommitter
                 'amount' => min($paid, (float) $mapped['original_amount']),
                 'currency' => $mapped['currency'] ?? 'EUR',
                 'payment_date' => $mapped['invoice_date'] ?? now()->toDateString(),
-                'method' => 'other',
+                'account_id' => null,
                 'reference' => 'opening balance (import)',
                 'source' => self::SOURCE,
             ]);
@@ -262,7 +263,7 @@ class ImportCommitter
             'amount' => min((float) $amount, (float) $invoice->remaining_amount),
             'currency' => $mapped['currency'] ?? 'EUR',
             'payment_date' => $mapped['payment_date'] ?? now()->toDateString(),
-            'method' => 'other',
+            'account_id' => null,
             'reference' => $mapped['reference'] ?? null,
             'source' => self::SOURCE,
             'notes' => $mapped['notes'] ?? null,
@@ -278,19 +279,88 @@ class ImportCommitter
             return null;
         }
 
-        return BankTransaction::create([
+        $lines = $this->movementLines($mapped);
+
+        if ($lines === []) {
+            return null;
+        }
+
+        $movement = BankTransaction::create([
             'date' => $mapped['date'],
             'description_1' => $mapped['description_1'] ?? null,
             'description_2' => $mapped['description_2'] ?? null,
-            'cash_amount' => $mapped['cash_amount'] ?? 0,
-            'nlb_amount' => $mapped['nlb_amount'] ?? 0,
-            'lovcen_amount' => $mapped['lovcen_amount'] ?? 0,
             'category' => $mapped['category'] ?? null,
             'currency' => $mapped['currency'] ?? 'EUR',
             'import_source' => self::SOURCE,
             'source' => self::SOURCE,
             'notes' => $mapped['notes'] ?? null,
         ]);
+
+        $movement->setLines($lines);
+
+        return $movement;
+    }
+
+    /**
+     * The movement's lines, from either shape the importer sees: the workbook
+     * parsers emit `lines` by account name, the entity template emits one or two
+     * account/amount pairs.
+     *
+     * @return list<array{account_id: int, amount: float}>
+     */
+    private function movementLines(array $mapped): array
+    {
+        $pairs = $mapped['lines'] ?? array_values(array_filter([
+            ['account' => $mapped['account'] ?? null, 'amount' => $mapped['amount'] ?? 0],
+            ['account' => $mapped['account_2'] ?? null, 'amount' => $mapped['amount_2'] ?? 0],
+        ], fn (array $line): bool => $line['account'] !== null && (float) $line['amount'] !== 0.0));
+
+        $lines = [];
+
+        foreach ($pairs as $pair) {
+            $account = $this->resolveAccount((string) ($pair['account'] ?? ''));
+
+            if ($account === null) {
+                continue;
+            }
+
+            $lines[] = ['account_id' => $account, 'amount' => (float) $pair['amount']];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The till, for the one import block that says money was handed over in
+     * cash. Null where this company keeps no cash account — the settlement is
+     * still recorded, it simply names no account.
+     */
+    private function cashAccountId(): ?int
+    {
+        return BankAccount::query()->active()->where('kind', 'cash')->ordered()->value('id');
+    }
+
+    /**
+     * The account with this name, opened if the import names one that does not
+     * exist yet — the same treatment a supplier gets, and what lets a workbook
+     * written years ago land on the accounts it was written against.
+     */
+    private function resolveAccount(string $name): ?int
+    {
+        $name = trim($name);
+
+        if ($name === '') {
+            return null;
+        }
+
+        return BankAccount::query()->where('name', $name)->value('id')
+            ?? BankAccount::create([
+                'name' => $name,
+                // The till is the only account whose kind is guessable from the
+                // name the workbook uses for it.
+                'kind' => strcasecmp($name, 'Cash') === 0 ? 'cash' : 'bank',
+                'source' => self::SOURCE,
+            ])->id;
     }
 
     private function loan(array $mapped): ?Model
@@ -317,7 +387,7 @@ class ImportCommitter
                 'amount' => $mapped['original_amount'],
                 'currency' => 'EUR',
                 'payment_date' => $mapped['loan_date'],
-                'method' => 'other',
+                'account_id' => null,
                 'reference' => 'VRACENO (import)',
                 'source' => self::SOURCE,
             ]);
@@ -380,7 +450,7 @@ class ImportCommitter
                 'amount' => $mapped['amount'],
                 'currency' => 'EUR',
                 'payment_date' => $mapped['expense_date'] ?? now()->toDateString(),
-                'method' => 'cash',
+                'account_id' => $this->cashAccountId(),
                 'reference' => 'paid on import',
                 'source' => self::SOURCE,
             ]);

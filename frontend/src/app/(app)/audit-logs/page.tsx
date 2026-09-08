@@ -5,6 +5,7 @@ import { usePage } from "@/lib/data/use-page";
 import { useResource, withQuery } from "@/lib/data/use-resource";
 import { useI18n } from "@/lib/i18n/context";
 import { auditEventLabel } from "@/lib/audit";
+import { recordTypeLabel } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { AsyncSelect } from "@/components/ui/async-select";
@@ -96,7 +97,6 @@ export default function AuditLogsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[2.5rem] font-light leading-none tracking-[-0.02em] text-zinc-900 dark:text-zinc-50">{t("audit.title")}</h1>
         <p className="text-sm text-zinc-500">{t("audit.subtitle")}</p>
       </div>
 
@@ -111,7 +111,7 @@ export default function AuditLogsPage() {
             <option value="">{t("audit.allTypes")}</option>
             {subjectTypes.map((type) => (
               <option key={type.value} value={type.value}>
-                {type.label}
+                {recordTypeLabel(type.value, t)}
               </option>
             ))}
           </Select>
@@ -140,36 +140,36 @@ export default function AuditLogsPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card className="table-quiet scroll-quiet overflow-x-auto p-0">
+      <Card className="vui-table scroll-quiet overflow-x-auto p-0">
         <table className="w-full min-w-[860px] text-sm">
-          <thead className="border-b border-zinc-900/8 text-left text-[11px] uppercase tracking-[0.1em] text-zinc-500 dark:border-white/10">
+          <thead>
             <tr>
-              <th className="px-4 py-3">{t("audit.when")}</th>
-              <th className="px-4 py-3">{t("audit.actor")}</th>
-              <th className="px-4 py-3">{t("audit.event")}</th>
-              <th className="px-4 py-3">{t("audit.record")}</th>
-              <th className="px-4 py-3 text-right">{t("common.actions")}</th>
+              <th>{t("audit.when")}</th>
+              <th>{t("audit.actor")}</th>
+              <th>{t("audit.event")}</th>
+              <th>{t("audit.record")}</th>
+              <th className="text-right">{t("common.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-900/5 dark:divide-white/8">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("common.loading")}
                 </td>
               </tr>
             ) : logs.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-14 text-center text-sm text-zinc-500">
+                <td colSpan={5} className="py-14 text-center text-sm text-zinc-500">
                   {t("audit.none")}
                 </td>
               </tr>
             ) : (
               logs.map((log) => (
                 <tr key={log.id} className="text-zinc-800 dark:text-zinc-200">
-                  <td className="whitespace-nowrap px-4 py-3 text-zinc-500">{formatTimestamp(log.created_at)}</td>
-                  <td className="px-4 py-3">{log.causer?.name ?? t("audit.system")}</td>
-                  <td className="px-4 py-3">
+                  <td className="whitespace-nowrap text-zinc-500">{formatTimestamp(log.created_at)}</td>
+                  <td>{log.causer?.name ?? t("audit.system")}</td>
+                  <td>
                     {/* The stored key is what the row *is*; the label is how it
                         reads. Kept as a title so the neutral key stays
                         recoverable when someone is comparing against the API. */}
@@ -179,10 +179,10 @@ export default function AuditLogsPage() {
                       </span>
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-zinc-500">
+                  <td className="text-zinc-500">
                     {log.subject_label ? `${log.subject_label} #${log.subject_id}` : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <Button variant="secondary" className="h-8 px-3" onClick={() => setInspecting(log)}>
                       {t("common.details")}
                     </Button>

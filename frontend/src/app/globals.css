@@ -2,6 +2,29 @@
 
 /*
  * ---------------------------------------------------------------------------
+ * Which theme is on
+ * ---------------------------------------------------------------------------
+ *
+ * Both themes have always existed here — light on `:root`, dark in a
+ * `prefers-color-scheme` block. What did not exist was a **choice**: the app
+ * followed the operating system and there was no way to disagree with it, so a
+ * user whose laptop is set to dark had one theme.
+ *
+ * The switch is now an explicit `data-theme` on `<html>`, and the 444 `dark:`
+ * utilities across the pages resolve against that instead of the media query.
+ *
+ * **`data-theme` is always set to a resolved `light` or `dark`, never left off
+ * and never set to `system`.** "System" is a stored *preference*, resolved in
+ * `lib/theme.tsx` and kept in sync with a `matchMedia` listener — so the CSS
+ * has one dark block instead of two near-identical ones that could drift, and
+ * the app still follows the OS live for anyone who has not chosen. The cost is
+ * that with JavaScript off the app renders light; it is an authenticated client
+ * app that does nothing at all without JavaScript, so there is no case to serve.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * ---------------------------------------------------------------------------
  * AdminisMine visual language
  * ---------------------------------------------------------------------------
  *
@@ -70,6 +93,9 @@
 }
 
 :root {
+  /* Native scrollbars, form controls and the canvas behind the page. */
+  color-scheme: light;
+
   --background: #ecebe4;
   --foreground: #0d0c0b;
 
@@ -90,23 +116,252 @@
   --control-bg: rgb(255 255 255 / 0.72);
   --control-border: rgb(13 12 11 / 0.1);
   --control-shadow: inset 0 1px 2px rgb(13 12 11 / 0.06), 0 1px 0 rgb(255 255 255 / 0.7);
+
+  /*
+   * The rest of what the theme decides, as tokens rather than as their own
+   * `prefers-color-scheme` blocks. Four rules used to carry a dark twin each —
+   * the ambient wash, the table row hover and two scrollbar sets — which meant
+   * five places to keep in step every time the palette moved. They read a token
+   * now, so the whole theme is these two blocks and nothing else.
+   */
+  --app-ambient:
+    radial-gradient(80% 55% at 8% -6%, rgb(245 237 49 / 0.28), transparent 60%),
+    radial-gradient(65% 48% at 95% 12%, rgb(255 147 79 / 0.16), transparent 62%),
+    radial-gradient(70% 55% at 50% 104%, rgb(255 255 255 / 0.5), transparent 60%),
+    var(--background);
+
+  --row-hover: rgb(255 255 255 / 0.45);
+
+  /* The header hairline, and the quieter rule between rows. */
+  --table-rule: rgb(13 12 11 / 0.08);
+  --table-rule-row: rgb(13 12 11 / 0.05);
+
+  --scrollbar-thumb: rgb(13 12 11 / 0.24);
+  --scrollbar-thumb-hover: rgb(13 12 11 / 0.36);
+  --scrollbar-thumb-active: rgb(13 12 11 / 0.48);
+
+  /*
+   * Muted text, darkened for light mode only.
+   *
+   * `zinc-500` is the app's secondary ink — 383 uses: every table header, page
+   * subtitle, timestamp, row count and hint. At the palette's `#8a8579` it
+   * measures **3.4:1** on a white card and 3.1:1 on the page wash, against the
+   * 4.5:1 that normal text needs. It was never wrong on the dark surfaces it
+   * was chosen against; it simply had not been read on a light one, because
+   * until the theme became a choice most people never saw a light one.
+   *
+   * `#69675c` is the same hue two steps down. **Measured against the page wash
+   * `#ecebe4`, not against a white card** — that is the darkest surface muted
+   * text sits on, so it is the one that binds. A first attempt tuned to the
+   * lightest surface passed there and still failed at 4.14:1 on the wash, which
+   * is where every page subtitle and row count actually lives. This measures
+   * 4.8:1 on the wash and better on every card above it.
+   *
+   * Overridden here rather than in `@theme` because the dark theme wants the
+   * lighter value back — see below.
+   */
+  --color-zinc-500: #69675c;
+
+  /*
+   * ---- Vision UI surfaces, in this company's colours ------------------
+   *
+   * The template's signature card is a two-stop gradient whose *alpha falls*
+   * across it — `rgba(6,11,40,.94) 19.41%` to `rgba(10,14,35,.49) 76.65%` at
+   * 127.09deg — sitting on a 120px backdrop blur. That ramp is what makes its
+   * cards read as glass lit from the upper left rather than as flat panels.
+   *
+   * The geometry is the template's and is reproduced exactly: same angle, same
+   * stop positions, same alpha ramp, same blur. The *hue* is ours (rule: keep
+   * the existing palette), so the two stops are the app's own surface colours
+   * instead of the template's navy.
+   */
+  --vui-card: linear-gradient(127.09deg, rgb(255 255 255 / 0.94) 19.41%, rgb(252 251 247 / 0.55) 76.65%);
+  --vui-card-quiet: linear-gradient(126.97deg, rgb(255 255 255 / 0.74) 28.26%, rgb(252 251 247 / 0.71) 91.2%);
+  --vui-sidenav: linear-gradient(127.09deg, rgb(255 255 255 / 0.94) 19.41%, rgb(250 249 245 / 0.49) 76.65%);
+
+  /*
+   * The template's navbar gradient, **over a base tint**.
+   *
+   * Vision UI's bar is `rgba(255,255,255,0) → rgba(255,255,255,.039)` and
+   * nothing else — 3.9% white, effectively transparent, relying on a 42px
+   * backdrop blur. That works on its near-black ground, where anything passing
+   * underneath is already dark and low-contrast.
+   *
+   * It does not work here. The page is a warm light wash carrying high-contrast
+   * cards, so a scrolling dashboard read straight *through* the bar: figures,
+   * yellow icon tiles and the ink card were all legible across it, and the
+   * account name was unreadable against whatever happened to be behind it.
+   *
+   * The gradient is kept exactly and composited over a surface tint, which is
+   * what makes the blur behave as frosted glass rather than as a tinted window.
+   */
+  --vui-navbar:
+    linear-gradient(123.64deg, rgb(255 255 255 / 0) -22.38%, rgb(255 255 255 / 0.039) 70.38%),
+    rgb(250 249 245 / 0.72);
+
+  /*
+   * The glow edge. In the template this is a 2px-padded wrapper element whose
+   * background is this radial gradient, with the card drawn on top — a hairline
+   * that fades out as it rounds the corners. Reproduced later as a ::before
+   * ring so no extra element is needed.
+   */
+  --vui-glow-edge: radial-gradient(94.43% 69.43% at 50% 50%, rgb(255 255 255 / 0.9) 0%, rgb(255 255 255 / 0) 100%);
+
+  --vui-shadow-card: 0 20px 27px 0 rgb(13 12 11 / 0.05);
+  --vui-shadow-lg: 0 8px 26px -4px rgb(13 12 11 / 0.15), 0 8px 9px -5px rgb(13 12 11 / 0.06);
+  --vui-shadow-xl: 0 23px 45px -11px rgb(13 12 11 / 0.25);
+  --vui-shadow-button: 0 4px 7px -1px rgb(13 12 11 / 0.11), 0 2px 4px -1px rgb(13 12 11 / 0.07);
+  --vui-shadow-button-active: 0 3px 5px -1px rgb(13 12 11 / 0.09), 0 2px 5px -1px rgb(13 12 11 / 0.07);
+  --vui-shadow-inset: inset 0 1px 2px 0 rgb(13 12 11 / 0.075);
+
+  /*
+   * The navbar's own shadow. The template pairs a drop shadow with an *inset*
+   * white hairline — `inset 0 0 1px 1px rgba(255,255,255,.9)` — which is what
+   * gives its floating bar a lit top edge instead of a flat border.
+   */
+  --vui-shadow-navbar: inset 0 0 1px 1px rgb(255 255 255 / 0.9), 0 20px 27px 0 rgb(13 12 11 / 0.05);
+  --vui-navbar-border: rgb(226 232 240 / 0.3);
+  --vui-blur-navbar: 42px;
+
+  /*
+   * Menus are **opaque**, and that is the template's own choice: its card
+   * gradient is rgba, but `gradients.menu` is two solid hex stops
+   * (`#05153f → #072561`). The reason shows up the moment a translucent menu is
+   * nested inside the navbar — an element with `backdrop-filter` becomes a
+   * backdrop root, so a child's blur can only sample what its parent already
+   * composited. The menu's blur does nothing, its low-alpha stop simply shows
+   * through, and the page reads straight through the menu.
+   */
+  --vui-menu: linear-gradient(126.97deg, #ffffff 28.26%, #f7f5f0 91.2%);
+
+  /*
+   * The same surface as a flat colour, for the one thing a gradient cannot do:
+   * a `background-color`. A sticky table header needs one — it is painted over
+   * the rows scrolling under it, and `background: <gradient>` on a colour
+   * property is simply dropped, which is transparent and unreadable.
+   */
+  --vui-menu-solid: #ffffff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #14130f;
-    --foreground: #f3f1ea;
+/*
+ * ---- Vision UI geometry and motion, one definition for both themes ----
+ *
+ * Radii and durations do not change with the theme, so they are declared once
+ * rather than twice. Values are the template's own, converted from its
+ * `pxToRem()` scale and MUI's transition defaults, which is what its sidenav,
+ * drawers and menus are actually timed on.
+ */
+:root {
+  --vui-r-xs: 0.125rem;    /* 2px  */
+  --vui-r-sm: 0.25rem;     /* 4px  */
+  --vui-r-md: 0.5rem;      /* 8px  */
+  --vui-r-button: 0.75rem; /* 12px */
+  --vui-r-lg: 0.9375rem;   /* 15px */
+  --vui-r-xl: 1.25rem;     /* 20px — the card radius */
+  --vui-r-xxl: 1.5rem;     /* 24px — forms */
 
-    --surface: rgb(46 44 39 / 0.6);
-    --surface-strong: rgb(38 36 32 / 0.9);
-    --surface-border: rgb(255 255 255 / 0.08);
-    --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
-    --surface-shadow-lg: 0 2px 4px rgb(0 0 0 / 0.4), 0 24px 56px -20px rgb(0 0 0 / 0.7);
+  /*
+   * The sign-in cover panel. The template's is a three-stop linear gradient at
+   * 159.02deg (`#0f123b → #090d2e → #020515`) carrying bright text.
+   *
+   * Deliberately the same in both themes, and deliberately dark: it is the one
+   * panel in the app that is a *poster* rather than a surface, and the app
+   * already does this — the logo tile and the primary button are ink-on-yellow
+   * whichever theme is on. Inverting it in light mode would leave pale text on
+   * pale ground with nothing to sit against.
+   */
+  --vui-cover: linear-gradient(159.02deg, #22201b 14.25%, #14130f 56.45%, #0a0908 86.14%);
 
-    --control-bg: rgb(13 12 11 / 0.4);
-    --control-border: rgb(255 255 255 / 0.14);
-    --control-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35), 0 1px 0 rgb(255 255 255 / 0.04);
-  }
+  --vui-blur: 120px;
+  --vui-pad-card: 22px;
+
+  --vui-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --vui-dur-shortest: 150ms;
+  --vui-dur-shorter: 200ms;
+  --vui-dur-standard: 300ms;
+  --vui-dur-enter: 225ms;
+  --vui-dur-leave: 195ms;
+
+  /* The template rings focus at 3.2px. The hue is ours — see .focus-ink. */
+  --vui-focus-width: 3.2px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: #14130f;
+  --foreground: #f3f1ea;
+
+  --surface: rgb(46 44 39 / 0.6);
+  --surface-strong: rgb(38 36 32 / 0.9);
+  --surface-border: rgb(255 255 255 / 0.08);
+  --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --surface-shadow-lg: 0 2px 4px rgb(0 0 0 / 0.4), 0 24px 56px -20px rgb(0 0 0 / 0.7);
+
+  --control-bg: rgb(13 12 11 / 0.4);
+  --control-border: rgb(255 255 255 / 0.14);
+  --control-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35), 0 1px 0 rgb(255 255 255 / 0.04);
+
+  /* Dimmer blooms and no white floor lamp: at this background the light one
+     reads as fog rather than as a light source. */
+  --app-ambient:
+    radial-gradient(80% 55% at 8% -6%, rgb(245 237 49 / 0.09), transparent 60%),
+    radial-gradient(65% 48% at 95% 12%, rgb(255 147 79 / 0.08), transparent 62%),
+    var(--background);
+
+  --row-hover: rgb(255 255 255 / 0.04);
+
+  --table-rule: rgb(255 255 255 / 0.1);
+  --table-rule-row: rgb(255 255 255 / 0.08);
+
+  --scrollbar-thumb: rgb(255 255 255 / 0.24);
+  --scrollbar-thumb-hover: rgb(255 255 255 / 0.36);
+  --scrollbar-thumb-active: rgb(255 255 255 / 0.4);
+
+  /*
+   * The muted ink, lifted a step for the same reason the light one was dropped.
+   *
+   * The palette's `#8a8579` measures **4.33:1** on the `#24221d` card — under
+   * the 4.5:1 normal text needs, and it has been that way since the dark theme
+   * shipped. Nobody caught it because until light became a choice there was
+   * nothing to compare it against, and 4.33 looks fine. `#8f8a7e` is the same
+   * hue one step up and measures 4.7:1.
+   */
+  --color-zinc-500: #8f8a7e;
+
+  /*
+   * The same ramp against the dark ground. The template's two stops are two
+   * near-identical navies; ours are two near-identical warm darks, so the
+   * gradient reads as a light source rather than as a colour change.
+   */
+  --vui-card: linear-gradient(127.09deg, rgb(46 44 39 / 0.94) 19.41%, rgb(30 28 24 / 0.55) 76.65%);
+  --vui-card-quiet: linear-gradient(126.97deg, rgb(46 44 39 / 0.74) 28.26%, rgb(30 28 24 / 0.71) 91.2%);
+  --vui-sidenav: linear-gradient(127.09deg, rgb(38 36 32 / 0.94) 19.41%, rgb(26 24 21 / 0.49) 76.65%);
+
+  /* Same gradient, same reason for the tint under it — see the light block. */
+  --vui-navbar:
+    linear-gradient(123.64deg, rgb(255 255 255 / 0) -22.38%, rgb(255 255 255 / 0.039) 70.38%),
+    rgb(26 24 21 / 0.72);
+
+  /* Dimmer on the dark ground: at full strength the white hairline reads as a
+     seam rather than as a lit edge. */
+  --vui-glow-edge: radial-gradient(94.43% 69.43% at 50% 50%, rgb(255 255 255 / 0.28) 0%, rgb(255 255 255 / 0) 100%);
+
+  --vui-shadow-card: 0 20px 27px 0 rgb(0 0 0 / 0.32);
+  --vui-shadow-lg: 0 8px 26px -4px rgb(0 0 0 / 0.5), 0 8px 9px -5px rgb(0 0 0 / 0.35);
+  --vui-shadow-xl: 0 23px 45px -11px rgb(0 0 0 / 0.62);
+  --vui-shadow-button: 0 4px 7px -1px rgb(0 0 0 / 0.4), 0 2px 4px -1px rgb(0 0 0 / 0.3);
+  --vui-shadow-button-active: 0 3px 5px -1px rgb(0 0 0 / 0.36), 0 2px 5px -1px rgb(0 0 0 / 0.3);
+  --vui-shadow-inset: inset 0 1px 2px 0 rgb(0 0 0 / 0.35);
+
+  /* At .9 the lit edge reads as a white outline on this ground rather than as
+     a highlight, so it is dimmed. The drop shadow deepens to match. */
+  --vui-shadow-navbar: inset 0 0 1px 1px rgb(255 255 255 / 0.1), 0 20px 27px 0 rgb(0 0 0 / 0.32);
+  --vui-navbar-border: rgb(255 255 255 / 0.09);
+
+  --vui-menu: linear-gradient(126.97deg, #2b2924 28.26%, #1e1c18 91.2%);
+
+  --vui-menu-solid: #2b2924;
 }
 
 body {
@@ -119,8 +374,15 @@ body {
 
 /*
  * The ambient wash behind the whole app: a warm yellow bloom in one corner and
- * a peach one in the other, over sand. Fixed rather than scrolling, so the
- * light source does not move when a long table does.
+ * a peach one in the other, over sand.
+ *
+ * Anchored to the **document**, not to the viewport — `absolute`, spanning the
+ * shell, with the blooms sized in percentages so they stretch to whatever the
+ * page turns out to be tall. That is what the template does: its body carries
+ * `background: url(body-background.png); background-size: cover`, so the image
+ * covers the whole scroll height and moving down the page moves through the
+ * light. Pinned to the viewport instead — which this was — the wash is a
+ * backdrop that never reacts, and a long page reads as flat.
  */
 .app-ambient {
   position: relative;
@@ -129,22 +391,114 @@ body {
 
 .app-ambient::before {
   content: "";
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: -1;
-  background:
-    radial-gradient(70rem 45rem at 8% -10%, rgb(245 237 49 / 0.28), transparent 60%),
-    radial-gradient(55rem 40rem at 95% 8%, rgb(255 147 79 / 0.16), transparent 62%),
-    radial-gradient(60rem 50rem at 50% 110%, rgb(255 255 255 / 0.5), transparent 60%),
-    var(--background);
+  background: var(--app-ambient);
 }
 
-@media (prefers-color-scheme: dark) {
-  .app-ambient::before {
-    background:
-      radial-gradient(70rem 45rem at 8% -10%, rgb(245 237 49 / 0.09), transparent 60%),
-      radial-gradient(55rem 40rem at 95% 8%, rgb(255 147 79 / 0.08), transparent 62%),
-      var(--background);
+/*
+ * ---- Vision UI surfaces -------------------------------------------------
+ *
+ * The template's panel: a two-stop gradient whose alpha falls across it, over a
+ * heavy backdrop blur, with no border and one soft drop shadow. That
+ * combination — not the navy — is what makes its cards read as lit glass, so it
+ * is reproduced exactly and given this company's hue.
+ */
+/*
+ * ---- Declared in `components`, on purpose ---------------------------------
+ *
+ * Tailwind v4 orders its layers `theme, base, components, utilities`, and
+ * **unlayered CSS beats all of them**. Written bare, `.vui-edge`'s
+ * `position: relative` therefore won against Tailwind's `.absolute` — so an
+ * account menu marked `vui-edge absolute` computed as `relative`, dropped back
+ * into flow, and doubled the height of the navbar it was supposed to hang from.
+ *
+ * In `components` these lose to any utility, which is the whole point of the
+ * layer: a class here is a starting point a utility is free to override.
+ */
+@layer components {
+  .vui-surface {
+    background: var(--vui-card);
+    backdrop-filter: blur(var(--vui-blur)) saturate(1.1);
+    -webkit-backdrop-filter: blur(var(--vui-blur)) saturate(1.1);
+    border: none;
+    box-shadow: var(--vui-shadow-card);
+  }
+
+  .vui-surface-nav {
+    background: var(--vui-sidenav);
+    backdrop-filter: blur(var(--vui-blur)) saturate(1.1);
+    -webkit-backdrop-filter: blur(var(--vui-blur)) saturate(1.1);
+    border: none;
+    box-shadow: var(--vui-shadow-card);
+  }
+
+  /*
+   * Menus, popovers and dropdowns. Opaque and deliberately so — see
+   * `--vui-menu`. No backdrop blur, because anything nested inside a blurred
+   * ancestor cannot use one anyway, and pretending otherwise is what made a
+   * menu you could read the page through.
+   */
+  .vui-menu {
+    background: var(--vui-menu);
+    border: none;
+    box-shadow: var(--vui-shadow-xl);
+  }
+}
+
+/*
+ * The lit edge.
+ *
+ * In the template this is a wrapper element padded 2px whose background is a
+ * radial gradient, with the panel drawn on top — so the hairline is bright at
+ * the middle of each side and fades out around the corners. Done here as a
+ * masked ring instead: same result, no extra element in the markup, and it
+ * inherits whatever radius the panel has.
+ */
+@layer components {
+  /*
+   * `relative` here is only a default for the common case of an unpositioned
+   * panel — the ring needs *some* positioned ancestor and the element itself is
+   * the natural one. An element that is already `absolute` or `fixed` supplies
+   * that itself, and in this layer its own utility wins.
+   */
+  .vui-edge {
+    position: relative;
+  }
+
+  .vui-edge::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: var(--vui-glow-edge);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+/*
+ * Menus and popovers enter the way the template's do: a short rise with the
+ * fade, on the standard easing, so they read as arriving from the control that
+ * opened them rather than appearing on top of it.
+ */
+@keyframes vui-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
@@ -175,25 +529,97 @@ body {
 }
 
 /*
+ * The table, in the template proportions.
+ *
  * Tables inherit the page wash instead of painting their own white, so a long
  * list reads as part of the surface it floats on rather than a box inside it.
+ * What is new is the chrome: Vision UI sets a header at 10.4px bold uppercase
+ * over a single hairline, gives its outer columns the card own padding, and
+ * separates rows with a rule rather than a fill. Those proportions are the
+ * template ones.
+ *
+ * The ink and the two rules are this palette instead of the template values:
+ * its header is `text` at 0.7 opacity, a grey picked against navy that misses
+ * 4.5:1 on a light wash. The muted ink token is the colour that was measured
+ * for exactly this job.
+ *
+ * It lives here rather than in the 37 tables that repeated it as utilities —
+ * and inside `@layer components` on purpose, so a page that needs a different
+ * padding on one cell can still say so with a utility. Unlayered, this would
+ * have vetoed them, which is the bug the navbar shipped with once already.
  */
-.table-quiet thead th {
-  font-weight: 500;
-  letter-spacing: 0.04em;
-}
+@layer components {
+  .vui-table th,
+  .vui-table td {
+    padding: 0.75rem 1rem;
+  }
 
-.table-quiet tbody tr {
-  transition: background-color 120ms ease;
-}
+  /* The outer columns line up with the padding of the card they sit in. */
+  .vui-table tr > *:first-child {
+    padding-left: var(--vui-pad-card);
+  }
 
-.table-quiet tbody tr:hover {
-  background: rgb(255 255 255 / 0.45);
-}
+  .vui-table tr > *:last-child {
+    padding-right: var(--vui-pad-card);
+  }
 
-@media (prefers-color-scheme: dark) {
-  .table-quiet tbody tr:hover {
-    background: rgb(255 255 255 / 0.04);
+  /*
+   * The header keeps the card own inset above it, and the last row the same
+   * below — in the template the table sits inside a padded card, so its first
+   * and last rows are as far from the edge as its columns are.
+   */
+  .vui-table thead th {
+    padding-top: var(--vui-pad-card);
+    padding-bottom: 0.625rem;
+    font-size: 0.65rem; /* 10.4px — the template `size.xxs` */
+    font-weight: 700;
+    line-height: 1.5;
+    letter-spacing: 0.06em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--color-zinc-500);
+    border-bottom: 1px solid var(--table-rule);
+  }
+
+  .vui-table tbody tr + tr > * {
+    border-top: 1px solid var(--table-rule-row);
+  }
+
+  .vui-table tbody:last-child tr:last-child > *,
+  .vui-table tfoot tr:last-child > * {
+    padding-bottom: var(--vui-pad-card);
+  }
+
+  .vui-table tbody tr {
+    transition: background-color var(--vui-dur-shorter) var(--vui-ease);
+  }
+
+  .vui-table tbody tr:hover {
+    background: var(--row-hover);
+  }
+
+  /*
+   * A table that already sits inside a padded box — the chart card, the
+   * statement box in a modal — takes the padding of that box and adds none of
+   * its own, so its first column lines up with the heading above it. Without
+   * this the inset is applied twice: the column stands 44px in while the
+   * heading starts at 22.
+   */
+  .vui-table-flush tr > *:first-child {
+    padding-left: 0;
+  }
+
+  .vui-table-flush tr > *:last-child {
+    padding-right: 0;
+  }
+
+  .vui-table-flush thead th {
+    padding-top: 0.75rem;
+  }
+
+  .vui-table-flush tbody:last-child tr:last-child > * {
+    padding-bottom: 0.75rem;
   }
 }
 
@@ -225,13 +651,7 @@ body {
 @supports not selector(::-webkit-scrollbar) {
   .scroll-quiet {
     scrollbar-width: thin;
-    scrollbar-color: rgb(13 12 11 / 0.22) transparent;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    .scroll-quiet {
-      scrollbar-color: rgb(255 255 255 / 0.24) transparent;
-    }
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 }
 
@@ -245,7 +665,7 @@ body {
 }
 
 .scroll-quiet::-webkit-scrollbar-thumb {
-  background-color: rgb(13 12 11 / 0.24);
+  background-color: var(--scrollbar-thumb);
   border-radius: 9999px;
   /* Transparent border + background-clip is what insets the thumb from the
      track edge; a margin has no effect on a scrollbar part. */
@@ -255,29 +675,15 @@ body {
 }
 
 .scroll-quiet:hover::-webkit-scrollbar-thumb {
-  background-color: rgb(13 12 11 / 0.36);
+  background-color: var(--scrollbar-thumb-hover);
 }
 
 .scroll-quiet::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(13 12 11 / 0.48);
+  background-color: var(--scrollbar-thumb-active);
 }
 
 .scroll-quiet::-webkit-scrollbar-corner {
   background: transparent;
-}
-
-@media (prefers-color-scheme: dark) {
-  .scroll-quiet::-webkit-scrollbar-thumb {
-    background-color: rgb(255 255 255 / 0.24);
-  }
-
-  .scroll-quiet:hover::-webkit-scrollbar-thumb {
-    background-color: rgb(255 255 255 / 0.36);
-  }
-
-  .scroll-quiet::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(255 255 255 / 0.4);
-  }
 }
 
 /* Focus ring, once, so every control agrees. */

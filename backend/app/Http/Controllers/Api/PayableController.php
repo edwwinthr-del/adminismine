@@ -148,7 +148,7 @@ class PayableController extends Controller
         activity()->performedOn($payable)->causedBy($request->user())
             ->withProperties([
                 'amount' => $data['amount'],
-                'method' => $data['method'],
+                'account_id' => $data['account_id'] ?? null,
                 'bank_transaction_id' => $payment->fresh()->bank_transaction_id,
                 'booked_bank_transaction' => $booking,
             ])
@@ -165,7 +165,7 @@ class PayableController extends Controller
         PayableInvoice $payable,
         Payment $payment,
     ): PayableInvoiceResource {
-        $before = $payment->only(['amount', 'payment_date', 'method']);
+        $before = $payment->only(['amount', 'payment_date', 'account_id']);
 
         $this->settlements->updatePayment(
             $payable,
@@ -191,7 +191,7 @@ class PayableController extends Controller
     {
         $this->confirmPassword($request);
 
-        $removed = $payment->only(['amount', 'payment_date', 'method', 'bank_transaction_id']);
+        $removed = $payment->only(['amount', 'payment_date', 'account_id', 'bank_transaction_id']);
         $alsoDeleteMovement = $request->boolean('delete_bank_transaction');
 
         $this->settlements->deletePayment($payable, $payment, $alsoDeleteMovement);

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, apiFetch, downloadToDisk } from "@/lib/api";
 import { useI18n } from "@/lib/i18n/context";
+import { useVocabularies, useVocabularyLabel } from "@/lib/vocabulary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +21,6 @@ export interface FileAttachment {
   created_at: string;
 }
 
-export const ATTACHMENT_KINDS = ["invoice", "warranty", "customs", "cmr", "photo", "other"] as const;
-
 export function formatFileSize(bytes: number | null): string {
   if (bytes === null) return "—";
   if (bytes < 1024) return `${bytes} B`;
@@ -38,18 +37,23 @@ export function AttachmentsModal({
   title,
   basePath,
   defaultKind = "other",
-  kinds = ATTACHMENT_KINDS,
+  kinds,
   onClose,
   onChanged,
 }: {
   title: string;
   basePath: string;
   defaultKind?: string;
+  /** A narrower set than the company's, where a record only takes some kinds. */
   kinds?: readonly string[];
   onClose: () => void;
   onChanged?: () => Promise<void>;
 }) {
   const { t } = useI18n();
+  const vocabularyLabel = useVocabularyLabel();
+  const vocabularies = useVocabularies();
+  // The company's own list, unless a caller asked for a narrower one.
+  const offeredKinds = kinds ?? vocabularies.values("attachment_kind");
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [kind, setKind] = useState<string>(defaultKind);
@@ -138,7 +142,7 @@ export function AttachmentsModal({
               >
                 <span className="min-w-0">
                   <span className="flex items-center gap-2">
-                    <Badge tone="gray">{t(`attachmentKind.${attachment.kind}`)}</Badge>
+                    <Badge tone="gray">{vocabularyLabel("attachment_kind", "attachmentKind", attachment.kind)}</Badge>
                     <span className="truncate text-sm text-zinc-800 dark:text-zinc-100">
                       {attachment.label ?? attachment.original_name}
                     </span>
@@ -171,9 +175,9 @@ export function AttachmentsModal({
             <div>
               <label className={labelClass}>{t("files.kind")}</label>
               <Select value={kind} onChange={(e) => setKind(e.target.value)}>
-                {kinds.map((value) => (
+                {offeredKinds.map((value) => (
                   <option key={value} value={value}>
-                    {t(`attachmentKind.${value}`)}
+                    {vocabularyLabel("attachment_kind", "attachmentKind", value)}
                   </option>
                 ))}
               </Select>

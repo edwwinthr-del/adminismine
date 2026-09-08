@@ -5,6 +5,7 @@ namespace App\Http\Requests\Housing;
 use App\Http\Requests\Concerns\ValidatesBankRecord;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Settling rent or a utility bill, booked into the bank ledger or matched to a
@@ -24,7 +25,10 @@ class RecordHousingPaymentRequest extends FormRequest
         return [
             'amount' => ['required', 'numeric', 'gt:0'],
             'payment_date' => ['required', 'date'],
-            'method' => ['required', 'string', 'in:cash,nlb,lovcen,other'],
+            // The account the money moved through. Null is what 'other' meant:
+            // settled, but not through an account this app tracks, so there is
+            // nothing to book.
+            'account_id' => ['present', 'nullable', 'integer', Rule::exists('bankovni_racuni', 'id')->where('is_active', true)],
             'reference' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
             ...$this->bankRecordRules(),
