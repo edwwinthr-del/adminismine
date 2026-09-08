@@ -1,7 +1,6 @@
 # AdminisMine — Finance Operations
 
-An internal finance and operations system for **AdminisMine DOO**, replacing the
-`GLOBAL MINE DOO KASA-BANKA HAREKETLERİ-ET2.xlsx` workbook that the company runs
+An internal finance and operations system for **AdminisMine DOO**, replacing the workbook that the company runs
 on today. It covers supplier debt, client receivables, bank and cash movements,
 workers and payroll, attendance and daily earned pay, mining production,
 machines, customs paperwork, worker housing, travel and loans — with an audit
